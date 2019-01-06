@@ -1,6 +1,8 @@
 import asyncio
 import logging
 
+from os import path
+from datetime import datetime
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import Dispatcher, FSMContext
@@ -8,6 +10,10 @@ from aiogram.utils import exceptions, executor
 
 import config
 from states import Form
+from mailer import Mailer
+
+
+mailer = Mailer(config.SIB_ACCESS_KEY)
 
 
 def setup_logging():
@@ -21,7 +27,7 @@ def setup_logging():
 
     # create console handler with a higher log level
     ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
+    ch.setLevel(logging.DEBUG)
 
     # create formatter and add it to the handlers
     formatter = logging.Formatter(
@@ -87,8 +93,9 @@ async def set_default_sender_info(state):
             if user_info not in data:
                 data[user_info] = ''
 
+
 async def compose_summary(data):
-    text = 'Отправим письмо по адресу pismo_guvd_minsk@mia.by (копия вам) ' +\
+    text = 'Отправим письмо на ящик ' + config.EMAIL_TO + ' (и копия вам)' +\
         'с прикрепленными фото и следующими данными:' + '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
@@ -100,9 +107,26 @@ async def compose_summary(data):
         'Нарушитель: ' + '\n' +\
         'Гос.номер транспортного средства: ' + data['vehicle_number'] + '\n' +\
         'Место нарушения(адрес): ' + data['violation_location'] + '\n' +\
-        'Дата и время нарушения: ' + data['violation_datetime'] + '\n'
+        'Дата и время нарушения: ' + data['violation_datetime']
 
     return text
+
+
+async def compose_letter_body(data):
+    template = path.join('letters', 'minsk.html')
+
+    with open(template, 'r') as file:
+        text = file.read()
+
+    text = text.replace('__ГОСНОМЕРТС__', data['vehicle_number'])
+    text = text.replace('__МЕСТОНАРУШЕНИЯ__', data['violation_location'])
+    text = text.replace('__ДАТАИВРЕМЯ__', data['violation_datetime'])
+    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', data['sender_full_name'])
+    text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__', data['sender_adress'])
+    text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__', data['sender_phone'])
+
+    return text
+
 
 async def approve_sending(chat_id, state):
     async with state.proxy() as data:
@@ -113,6 +137,37 @@ async def approve_sending(chat_id, state):
     markup.add("Отправить письмо", "Отмена")
 
     await bot.send_message(chat_id, text, reply_markup=markup)
+
+
+async def prepare_mail_parameters(state):
+    async with state.proxy() as data:
+        parameters = {}
+
+        parameters['to'] = {config.EMAIL_TO: config.NAME_TO}
+        parameters['bcc'] = {data['sender_email']: data['sender_name']}
+        parameters['from'] = [data['sender_email'], data['sender_name']]
+        parameters['html'] = await compose_letter_body(data)
+        parameters['attachment'] = data['attachments']
+
+        return parameters
+
+
+def get_str_current_time():
+    current_time = datetime.now()
+
+    day = str(current_time.day).rjust(2, '0')
+    month = str(current_time.month).rjust(2, '0')
+    year = str(current_time.year)
+    hour = str(current_time.hour).rjust(2, '0')
+    minute = str(current_time.minute).rjust(2, '0')
+
+    formated_current_time = '{}.{}.{} {}:{}'.format(day,
+                                                    month,
+                                                    year,
+                                                    hour,
+                                                    minute)
+
+    return formated_current_time
 
 
 @dp.message_handler(commands=['start'])
@@ -147,6 +202,7 @@ async def setup_sender(message: types.Message, state: FSMContext):
 
     text = 'Введите свое ФИО. Оставить как есть можно, ' +\
         'если ввести точку ".". ' + '\n' +\
+        '\n' +\
         'Пример: Зенон Станиславович Позняк.'
 
     await bot.send_message(message.chat.id, text)
@@ -165,6 +221,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     text = 'Введите свой email, с него будут отправляться письма в ГАИ. ' +\
         'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
+        '\n' +\
         'Пример: example@example.com'
 
     await bot.send_message(message.chat.id, text)
@@ -183,6 +240,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     text = 'Введите свой адрес проживания, на него придет ответ из ГАИ. ' +\
         'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
+        '\n' +\
         'Пример: г. Минск, пр. Независимости 17, кв. 25.'
 
     await bot.send_message(message.chat.id, text)
@@ -201,6 +259,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     text = 'Введите свой номер телефона. ' +\
         'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
+        '\n' +\
         'Пример: +375221111111.'
 
     await bot.send_message(message.chat.id, text)
@@ -279,6 +338,7 @@ async def cancel_violation_input(message: types.Message):
                 ' от пользователя ' + str(message.from_user.id))
 
     text = 'Введите гос. номер транспортного средства.' + '\n' +\
+        '\n' +\
         'Пример: 9999 АА-9'
 
     # Configure ReplyKeyboardMarkup
@@ -288,6 +348,30 @@ async def cancel_violation_input(message: types.Message):
     await message.reply(text, reply_markup=markup)
 
     await Form.vehicle_number.set()
+
+
+@dp.message_handler(lambda message: message.text == 'Отправить письмо',
+                    content_types=types.ContentTypes.TEXT,
+                    state=Form.violation_sending)
+async def send_letter(message: types.Message, state: FSMContext):
+    logger.info('Отправляем письмо в ГАИ от пользователя ' +
+                str(message.from_user.id))
+
+    parameters = await prepare_mail_parameters(state)
+
+    try:
+        mailer.send_mail(parameters)
+        text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
+    except Exception as exc:
+        text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
+                str(exc)
+
+    await bot.send_message(message.chat.id,
+                           text,
+                           reply_markup=types.ReplyKeyboardRemove())
+
+    await delete_prepared_violation(state)
+    await Form.operational_mode.set()
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -300,6 +384,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         data['vehicle_number'] = message.text
 
     text = 'Введите адрес, где произошло нарушение.' + '\n' +\
+        '\n' +\
         'Пример: г. Минск, пр. Независимости 17.'
 
     await bot.send_message(message.chat.id, text)
@@ -315,10 +400,17 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['violation_location'] = message.text
 
-    text = 'Введите дату и время нарушения.' + '\n' +\
-        'Пример: 06.01.2019 19-46.'
+    current_time = get_str_current_time()
 
-    await bot.send_message(message.chat.id, text)
+    text = 'Введите дату и время нарушения.' + '\n' +\
+        '\n' +\
+        'Пример: ' + current_time + '.'
+
+    # Configure ReplyKeyboardMarkup
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+    markup.add(current_time, "Отмена")
+
+    await bot.send_message(message.chat.id, text, reply_markup=markup)
     await Form.violation_datetime.set()
 
 

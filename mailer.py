@@ -10,17 +10,20 @@ class Mailer:
                              timeout=5)
 
     def send_mail(self, parameters):
+        subject = 'Обращение о нарушении правил остановки и стоянки ' +\
+                  'транспортных средств'
+
         data = {
-            "to": {"example@example.com": "Kate Test"},
-            "bcc": {"example@example.com": "Andrei Test"},
-            "from": ["example@example.com", "Andrei Test"],
-            "subject": "testtttt",
-            "html": "This is the <h1>test HTML</h1>",
-            "attachment": [
-                "https://domain.com/path-to-file/filename1.pdf",
-                "https://domain.com/path-to-file/filename2.jpg"
-            ]
+            'to': parameters['to'],
+            'bcc': parameters['bcc'],
+            'from': parameters['from'],
+            'subject': subject,
+            'html': parameters['html'],
+            'attachment': parameters['attachment']
         }
 
+        # TODO разобрать это вот и написать на асинхронных реквестах
         result = self.mailin.send_email(data)
-        print(result)
+
+        if result['code'] != 'success':
+            raise Exception(str(result))
