@@ -95,7 +95,7 @@ async def set_default_sender_info(state):
 
 
 async def compose_summary(data):
-    text = 'Отправим письмо на ящик ' + config.EMAIL_TO + ' (и копия вам)' +\
+    text = 'Отправим письмо на ящик ' + config.EMAIL_TO + ' (и копия вам) ' +\
         'с прикрепленными фото и следующими данными:' + '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
@@ -105,8 +105,9 @@ async def compose_summary(data):
         'Телефон: ' + data['sender_phone'] + '\n' +\
         '\n' +\
         'Нарушитель: ' + '\n' +\
-        'Гос.номер транспортного средства: ' + data['vehicle_number'] + '\n' +\
-        'Место нарушения(адрес): ' + data['violation_location'] + '\n' +\
+        'Гос. номер транспортного средства: ' +\
+        data['vehicle_number'] + '\n' +\
+        'Место нарушения (адрес): ' + data['violation_location'] + '\n' +\
         'Дата и время нарушения: ' + data['violation_datetime']
 
     return text
