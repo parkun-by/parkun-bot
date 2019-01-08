@@ -4,7 +4,7 @@ import logging
 from os import path
 from datetime import datetime
 from aiogram import Bot, types
-from aiogram.contrib.fsm_storage.redis import RedisStorage
+from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils import exceptions, executor
 
@@ -44,8 +44,8 @@ def setup_logging():
 loop = asyncio.get_event_loop()
 bot = Bot(token=config.API_TOKEN, loop=loop)
 
-storage = RedisStorage(host=config.REDIS_HOST,
-                       port=config.REDIS_PORT)
+storage = RedisStorage2(host=config.REDIS_HOST,
+                        port=config.REDIS_PORT)
 
 dp = Dispatcher(bot, storage=storage)
 
