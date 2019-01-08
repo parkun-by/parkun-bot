@@ -99,7 +99,7 @@ async def compose_summary(data):
         'с прикрепленными фото и следующими данными:' + '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
-        'Имя: ' + data['sender_full_name'] + '\n' +\
+        'Имя: ' + data['sender_name'] + '\n' +\
         'Email: ' + data['sender_email'] + '\n' +\
         'Адрес: ' + data['sender_adress'] + '\n' +\
         'Телефон: ' + data['sender_phone'] + '\n' +\
@@ -122,7 +122,7 @@ async def compose_letter_body(data):
     text = text.replace('__ГОСНОМЕРТС__', data['vehicle_number'])
     text = text.replace('__МЕСТОНАРУШЕНИЯ__', data['violation_location'])
     text = text.replace('__ДАТАИВРЕМЯ__', data['violation_datetime'])
-    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', data['sender_full_name'])
+    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', data['sender_name'])
     text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__', data['sender_adress'])
     text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__', data['sender_phone'])
 
@@ -217,7 +217,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         if message.text != '.':
-            data['sender_full_name'] = message.text
+            data['sender_name'] = message.text
 
     text = 'Введите свой email, с него будут отправляться письма в ГАИ. ' +\
         'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
