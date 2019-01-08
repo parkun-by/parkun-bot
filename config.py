@@ -11,3 +11,6 @@ NAME_TO = 'имя получателя'
 REDIS_HOST = 'localhost'
 REDIS_PORT = '6379'
 REDIS_PASSWORD = ''
+
+# admin
+ADMIN_ID = 00000000
