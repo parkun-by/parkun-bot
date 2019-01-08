@@ -97,7 +97,7 @@ async def set_default_sender_info(state):
 async def compose_summary(data):
     text = 'Перед тем, как мы отправим письмо на ящик ' + config.EMAIL_TO +\
         ' (и копию вам на ' + data['sender_email'] +\
-        ') прошу проверить основную информацию' +\
+        ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
@@ -191,7 +191,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     text = 'Привет, этот бот упрощает посылку обращения в ГАИ о нарушении ' +\
-        'правил парковки . Для работы ему потеребуется от вас ' +\
+        'правил парковки. Для работы ему потребуется от вас ' +\
         'имя, адрес, email, телефон. '
 
     await bot.send_message(message.chat.id,
@@ -211,8 +211,8 @@ async def setup_sender(message: types.Message, state: FSMContext):
 
     await set_default_sender_info(state)
 
-    text = 'Введите свое ФИО. Оставить как есть можно, ' +\
-        'если ввести точку ".". ' + '\n' +\
+    text = 'Введите свое ФИО (при повторном вводе можно пропустить этот ' +\
+        'шаг отправив точку "."). ' + '\n' +\
         '\n' +\
         'Пример: Зенон Станиславович Позняк.'
 
@@ -230,8 +230,9 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         if message.text != '.':
             data['sender_name'] = message.text
 
-    text = 'Введите свой email, с него будут отправляться письма в ГАИ. ' +\
-        'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
+    text = 'Введите свой email, с него будут отправляться письма в ГАИ (' +\
+        'при повторном вводе можно пропустить этот ' +\
+        'шаг отправив точку "."). ' + '\n' +\
         '\n' +\
         'Пример: example@example.com'
 
@@ -249,10 +250,11 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         if message.text != '.':
             data['sender_email'] = message.text
 
-    text = 'Введите свой адрес проживания, на него придет ответ из ГАИ. ' +\
-        'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
+    text = 'Введите свой адрес проживания, на него придет ответ из ГАИ (' +\
+        'при повторном вводе можно пропустить этот ' +\
+        'шаг отправив точку "."). ' + '\n' +\
         '\n' +\
-        'Пример: г. Минск, пр. Независимости 17, кв. 25.'
+        'Пример: г. Минск, пр. Независимости, д. 17, кв. 25.'
 
     await bot.send_message(message.chat.id, text)
     await Form.sender_adress.set()
@@ -268,8 +270,9 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         if message.text != '.':
             data['sender_adress'] = message.text
 
-    text = 'Введите свой номер телефона. ' +\
-        'Оставить как есть можно, если ввести точку ".". ' + '\n' +\
+    text = 'Введите свой номер телефона (' +\
+        'при повторном вводе можно пропустить этот ' +\
+        'шаг отправив точку "."). ' + '\n' +\
         '\n' +\
         'Пример: +375221111111.'
 
@@ -290,7 +293,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
     if await invalid_credentials(state):
         text = 'Без ввода полной информации о себе вы не сможете отправить ' +\
                'обращение в ГАИ. Зато уже можете загрузить фото и ' +\
-               'посмотреть как все работает.'
+               'посмотреть, как все работает.'
     else:
         text = 'Все готово, можно слать фото нарушителей парковки.'
 
@@ -414,7 +417,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     text = 'Введите адрес, где произошло нарушение.' + '\n' +\
         '\n' +\
-        'Пример: г. Минск, пр. Независимости 17.'
+        'Пример: г. Минск, пр. Независимости, д. 17.'
 
     await bot.send_message(message.chat.id, text)
     await Form.violation_location.set()
@@ -431,7 +434,8 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     current_time = get_str_current_time()
 
-    text = 'Введите дату и время нарушения.' + '\n' +\
+    text = 'Введите дату и время нарушения. Ввести текущее время ' +\
+        'можно кнопкой снизу.' + '\n' +\
         '\n' +\
         'Пример: ' + current_time + '.'
 
