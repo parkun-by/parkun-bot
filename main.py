@@ -51,6 +51,11 @@ dp = Dispatcher(bot, storage=storage)
 
 logger = setup_logging()
 
+CREDENTIALS = ['sender_name',
+               'sender_email',
+               'sender_adress',
+               'sender_phone']
+
 
 async def invite_to_fill_credentials(chat_id):
     message = 'Первым делом нужно заполнить информацию о себе ' +\
@@ -83,13 +88,8 @@ async def delete_prepared_violation(state):
 
 
 async def set_default_sender_info(state):
-    credentials = ['sender_name',
-                   'sender_email',
-                   'sender_adress',
-                   'sender_phone']
-
     async with state.proxy() as data:
-        for user_info in credentials:
+        for user_info in CREDENTIALS:
             if user_info not in data:
                 data[user_info] = ''
 
@@ -169,6 +169,15 @@ def get_str_current_time():
                                                     minute)
 
     return formated_current_time
+
+
+async def invalid_credentials(state):
+    async with state.proxy() as data:
+        for user_info in CREDENTIALS:
+            if (user_info not in data) or (data[user_info] == ''):
+                return True
+
+    return False
 
 
 @dp.message_handler(commands=['start'])
@@ -276,7 +285,13 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         if message.text != '.':
             data['sender_phone'] = message.text
 
-    text = 'Все готово, можно слать фото нарушителей парковки.'
+    if await invalid_credentials(state):
+        text = 'Без ввода полной информации о себе вы не сможете отправить ' +\
+               'обращение в ГАИ. Зато уже можете загрузить фото и ' +\
+               'посмотреть как все работает.'
+    else:
+        text = 'Все готово, можно слать фото нарушителей парковки.'
+
     await bot.send_message(message.chat.id, text)
     await Form.operational_mode.set()
 
@@ -296,7 +311,8 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
                     state=Form.operational_mode)
 async def process_operational_photo(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем посылку фотки нарушения.')
+    logger.info('Обрабатываем посылку фотки нарушения. ' +
+                str(message.from_user.id))
 
     # Добавляем фотку наилучшего качества(последнюю в массиве) в список
     # прикрепления в письме
@@ -357,14 +373,25 @@ async def send_letter(message: types.Message, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ от пользователя ' +
                 str(message.from_user.id))
 
-    parameters = await prepare_mail_parameters(state)
+    if await invalid_credentials(state):
+        text = 'Для отправки нарушений нужно заполнить информацию ' +\
+            'о себе командой /setup_sender'
+    else:
+        parameters = await prepare_mail_parameters(state)
 
-    try:
-        mailer.send_mail(parameters)
-        text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
-    except Exception as exc:
-        text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
-                str(exc)
+        try:
+            mailer.send_mail(parameters)
+            text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
+
+            logger.info('Письмо отправлено у пользователя ' +
+                        str(message.from_user.id))
+        except Exception as exc:
+            text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
+                    str(exc)
+
+            logger.error('Неудачка у пользователя ' +
+                         str(message.from_user.id) + '\n' +
+                         str(exc))
 
     await bot.send_message(message.chat.id,
                            text,
