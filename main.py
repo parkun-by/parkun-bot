@@ -277,7 +277,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.violation_sending)
-async def send_letter(call, state: FSMContext):
+async def send_letter_click(call, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ от пользователя ' +
                 str(call.from_user.id))
 
@@ -357,6 +357,54 @@ async def setup_sender(message: types.Message, state: FSMContext):
     await Form.sender_name.set()
 
 
+@dp.message_handler(commands=['reset'], state='*')
+async def cmd_reset(message: types.Message, state: FSMContext):
+    logger.info('Сброс бота у пользователя ' + str(message.from_user.id))
+
+    await state.finish()
+    await Form.initial.set()
+
+    text = 'Стер себе память, настраивай заново теперь ¯\_(ツ)_/¯'
+    await bot.send_message(message.chat.id, text)
+    await invite_to_fill_credentials(message.chat.id)
+
+
+@dp.message_handler(commands=['feedback'], state='*')
+async def write_feedback(message: types.Message, state: FSMContext):
+    logger.info('Хочет написать фидбэк - ' + str(message.from_user.id))
+
+    async with state.proxy() as data:
+        current_state = await state.get_state()
+
+        if current_state != Form.feedback.state:
+            data['saved_state'] = current_state
+
+    text = 'Введите все, что вы обо мне думаете, а я передам это ' +\
+        'сообщение разработчику.'
+
+    await bot.send_message(message.chat.id, text)
+    await Form.feedback.set()
+
+
+@dp.message_handler(state=Form.feedback)
+async def catch_feedback(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод фидбэка - ' +
+                str(message.from_user.id))
+
+    await bot.forward_message(
+        chat_id=config.ADMIN_ID,
+        from_chat_id=message.from_user.id,
+        message_id=message.message_id,
+        disable_notification=True)
+
+    text = 'Спасибо за отзыв!'
+    await bot.send_message(message.chat.id, text)
+
+    async with state.proxy() as data:
+        saved_state = data['saved_state']
+        await state.set_state(saved_state)
+
+
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_name)
 async def catch_sender_name(message: types.Message, state: FSMContext):
@@ -380,7 +428,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_email)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_sender_email(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод email пользователя ' +
                 str(message.from_user.id))
 
@@ -400,7 +448,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_adress)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_sender_adress(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса пользователя ' +
                 str(message.from_user.id))
 
@@ -420,7 +468,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_phone)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_sender_phone(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод телефона пользователя ' +
                 str(message.from_user.id))
 
@@ -439,22 +487,10 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
     await Form.operational_mode.set()
 
 
-@dp.message_handler(commands=['reset'], state='*')
-async def cmd_reset(message: types.Message, state: FSMContext):
-    logger.info('Сброс бота у пользователя ' + str(message.from_user.id))
-
-    await state.finish()
-    await Form.initial.set()
-
-    text = 'Стер себе память, настраивай заново теперь ¯\_(ツ)_/¯'
-    await bot.send_message(message.chat.id, text)
-    await invite_to_fill_credentials(message.chat.id)
-
-
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
                     state=[Form.operational_mode,
                            Form.violation_photo])
-async def process_operational_photo(message: types.Message, state: FSMContext):
+async def process_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки нарушения. ' +
                 str(message.from_user.id))
 
@@ -484,7 +520,7 @@ async def process_operational_photo(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.vehicle_number)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод гос. номера от пользователя ' +
                 str(message.from_user.id))
 
@@ -564,7 +600,7 @@ async def reject_wrong_input(message: types.Message):
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=Form.violation_photo)
-async def reject_wrong_input(message: types.Message):
+async def reject_wrong_violation_photo_input(message: types.Message):
     text = 'Добавьте еще одно фото или нажмите "Гос. номер, адрес, время".'
 
     # настроим клавиатуру
@@ -587,7 +623,7 @@ async def reject_wrong_input(message: types.Message):
                     state=[Form.vehicle_number,
                            Form.violation_datetime,
                            Form.violation_location])
-async def reject_wrong_input(message: types.Message):
+async def reject_wrong_violation_data_input(message: types.Message):
     text = 'Я ожидаю от вас текстовую информацию.'
 
     await bot.send_message(message.chat.id, text)
