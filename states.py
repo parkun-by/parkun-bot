@@ -6,7 +6,7 @@ class Form(StatesGroup):
     initial = State()  # In storage as 'Form:initial'
     sender_name = State()  # In storage as 'Form:sender_name'
     sender_email = State()  # In storage as 'Form:sender_email'
-    sender_adress = State()  # In storage as 'Form:sender_adress'
+    sender_address = State()  # In storage as 'Form:sender_address'
     sender_phone = State()  # In storage as 'Form:sender_phone'
     operational_mode = State()  # In storage as 'Form:operational_mode'
     violation_photo = State()  # In storage as 'Form:violation_photo'

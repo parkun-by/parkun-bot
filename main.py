@@ -1,25 +1,24 @@
 import asyncio
 import logging
-
-from os import path
 from datetime import datetime
+from os import path
+
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
-from aiogram.utils import exceptions, executor
+from aiogram.utils import executor
 
 import config
-from states import Form
 from mailer import Mailer
-
+from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 
 
 def setup_logging():
     # create logger
-    logger = logging.getLogger('memstrual_log')
-    logger.setLevel(logging.DEBUG)
+    my_logger = logging.getLogger('parkun_log')
+    my_logger.setLevel(logging.DEBUG)
 
     # create file handler which logs even debug messages
     # fh = logging.FileHandler(config.LOG_PATH)
@@ -37,9 +36,10 @@ def setup_logging():
 
     # add the handlers to the logger
     # logger.addHandler(fh)
-    logger.addHandler(ch)
+    my_logger.addHandler(ch)
 
-    return logger
+    return my_logger
+
 
 loop = asyncio.get_event_loop()
 bot = Bot(token=config.API_TOKEN, loop=loop)
@@ -53,7 +53,7 @@ logger = setup_logging()
 
 CREDENTIALS = ['sender_name',
                'sender_email',
-               'sender_adress',
+               'sender_address',
                'sender_phone']
 
 
@@ -67,11 +67,11 @@ async def invite_to_fill_credentials(chat_id):
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
-    setup_sender = types.InlineKeyboardButton(
+    setup_sender_button = types.InlineKeyboardButton(
         text='Ввести информацию о себе',
         callback_data='/setup_sender')
 
-    keyboard.add(setup_sender)
+    keyboard.add(setup_sender_button)
 
     await bot.send_message(chat_id,
                            message,
@@ -116,7 +116,7 @@ async def compose_summary(data):
         'Обращающийся:' + '\n' +\
         'Имя: ' + data['sender_name'] + '\n' +\
         'Email: ' + data['sender_email'] + '\n' +\
-        'Адрес: ' + data['sender_adress'] + '\n' +\
+        'Адрес: ' + data['sender_address'] + '\n' +\
         'Телефон: ' + data['sender_phone'] + '\n' +\
         '\n' +\
         'Нарушитель: ' + '\n' +\
@@ -138,7 +138,7 @@ async def compose_letter_body(data):
     text = text.replace('__МЕСТОНАРУШЕНИЯ__', data['violation_location'])
     text = text.replace('__ДАТАИВРЕМЯ__', data['violation_datetime'])
     text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', data['sender_name'])
-    text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__', data['sender_adress'])
+    text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__', data['sender_address'])
     text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__', data['sender_phone'])
 
     return text
@@ -151,7 +151,7 @@ async def approve_sending(chat_id, state):
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    approve_sending = types.InlineKeyboardButton(
+    approve_sending_button = types.InlineKeyboardButton(
         text='Отправить письмо',
         callback_data='/approve_sending')
 
@@ -159,20 +159,18 @@ async def approve_sending(chat_id, state):
         text='Отмена',
         callback_data='/cancel')
 
-    keyboard.add(approve_sending, cancel)
+    keyboard.add(approve_sending_button, cancel)
 
     await bot.send_message(chat_id, text, reply_markup=keyboard)
 
 
 async def prepare_mail_parameters(state):
     async with state.proxy() as data:
-        parameters = {}
-
-        parameters['to'] = {config.EMAIL_TO: config.NAME_TO}
-        parameters['bcc'] = {data['sender_email']: data['sender_name']}
-        parameters['from'] = [data['sender_email'], data['sender_name']]
-        parameters['html'] = await compose_letter_body(data)
-        parameters['attachment'] = data['attachments']
+        parameters = {'to': {config.EMAIL_TO: config.NAME_TO},
+                      'bcc': {data['sender_email']: data['sender_name']},
+                      'from': [data['sender_email'], data['sender_name']],
+                      'html': await compose_letter_body(data),
+                      'attachment': data['attachments']}
 
         return parameters
 
@@ -186,13 +184,13 @@ def get_str_current_time():
     hour = str(current_time.hour).rjust(2, '0')
     minute = str(current_time.minute).rjust(2, '0')
 
-    formated_current_time = '{}.{}.{} {}:{}'.format(day,
-                                                    month,
-                                                    year,
-                                                    hour,
-                                                    minute)
+    formatted_current_time = '{}.{}.{} {}:{}'.format(day,
+                                                     month,
+                                                     year,
+                                                     hour,
+                                                     minute)
 
-    return formated_current_time
+    return formatted_current_time
 
 
 async def invalid_credentials(state):
@@ -320,7 +318,7 @@ async def reject_button_click(call):
 
 
 @dp.message_handler(commands=['start'])
-async def cmd_start(message: types.Message, state: FSMContext):
+async def cmd_start(message: types.Message):
     """
     Conversation's entry point
     """
@@ -443,18 +441,18 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         'Пример: г. Минск, пр. Независимости, д. 17, кв. 25.'
 
     await bot.send_message(message.chat.id, text)
-    await Form.sender_adress.set()
+    await Form.sender_address.set()
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.sender_adress)
-async def catch_sender_adress(message: types.Message, state: FSMContext):
+                    state=Form.sender_address)
+async def catch_sender_address(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса пользователя ' +
                 str(message.from_user.id))
 
     async with state.proxy() as data:
         if message.text != '.':
-            data['sender_adress'] = message.text
+            data['sender_address'] = message.text
 
     text = 'Введите свой номер телефона (' +\
         'при повторном вводе можно пропустить этот ' +\
