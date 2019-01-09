@@ -14,3 +14,7 @@ REDIS_PASSWORD = ''
 
 # admin
 ADMIN_ID = 00000000
+
+# yandex maps
+YANDEX_MAPS_API_KEY = 'PUT_TOKEN_HERE'
+BASE_YANDEX_MAPS_URL = 'https://geocode-maps.yandex.ru/1.x/'
