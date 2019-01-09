@@ -219,7 +219,7 @@ def get_cancel_keyboard():
 
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
-async def callback_inline(call, state: FSMContext):
+async def setup_sender_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода личных данных - ' +
                 str(call.from_user.id))
 
@@ -229,7 +229,7 @@ async def callback_inline(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/current_time',
                            state=Form.violation_datetime)
-async def callback_inline(call, state: FSMContext):
+async def current_time_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода текущего времени - ' +
                 str(call.from_user.id))
 
@@ -241,7 +241,7 @@ async def callback_inline(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
                            state=Form.violation_photo)
-async def cancel_violation_input(call):
+async def enter_violation_info_click(call):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении ' +
                 ' от пользователя ' + str(call.from_user.id))
 
@@ -258,8 +258,7 @@ async def cancel_violation_input(call):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
-                           state=[Form.operational_mode,
-                                  Form.violation_photo,
+                           state=[Form.violation_photo,
                                   Form.vehicle_number,
                                   Form.violation_datetime,
                                   Form.violation_location,
@@ -307,6 +306,17 @@ async def send_letter(call, state: FSMContext):
 
     await delete_prepared_violation(state)
     await Form.operational_mode.set()
+
+
+@dp.callback_query_handler(state='*')
+async def reject_button_click(call):
+    logger.info('Беспорядочно кликает на кнопки - ' +
+                str(call.from_user.id))
+
+    text = 'Действие неактуально.'
+
+    await bot.answer_callback_query(call.id)
+    await bot.send_message(call.message.chat.id, text)
 
 
 @dp.message_handler(commands=['start'])
