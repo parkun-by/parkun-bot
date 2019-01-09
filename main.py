@@ -9,10 +9,12 @@ from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils import executor
 
 import config
+from geocoder import Geocoder
 from mailer import Mailer
 from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
+geocoder = Geocoder()
 
 
 def setup_logging():
@@ -226,6 +228,31 @@ async def humanize_message(exception):
     return str(exception)
 
 
+async def ask_for_own_address(chat_id):
+    text = 'Введите свой адрес проживания, на него придет ответ из ГАИ ' +\
+        '(при повторном вводе можно пропустить этот ' +\
+        'шаг отправив точку "."). ' + '\n' +\
+        'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
+        '\n' +\
+        'Пример: г. Минск, пр. Независимости, д. 17, кв. 25.'
+
+    await bot.send_message(chat_id, text)
+    await Form.sender_address.set()
+
+
+async def ask_for_violation_address(chat_id):
+    text = 'Введите адрес, где произошло нарушение.' + '\n' +\
+        'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
+        '\n' +\
+        'Пример: г. Минск, пр. Независимости, д. 17.'
+
+    # настроим клавиатуру
+    keyboard = get_cancel_keyboard()
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await Form.violation_location.set()
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -246,6 +273,26 @@ async def current_time_click(call, state: FSMContext):
 
     message = await bot.send_message(call.message.chat.id, current_time)
     await catch_violation_time(message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/enter_sender_address',
+                           state=Form.sender_phone)
+async def sender_address_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ввода своего адреса - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await ask_for_own_address(call.message.chat.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
+                           state=Form.violation_datetime)
+async def violation_address_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ввода адреса нарушения - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await ask_for_violation_address(call.message.chat.id)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
@@ -462,14 +509,7 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         if message.text != '.':
             data['sender_email'] = message.text
 
-    text = 'Введите свой адрес проживания, на него придет ответ из ГАИ (' +\
-        'при повторном вводе можно пропустить этот ' +\
-        'шаг отправив точку "."). ' + '\n' +\
-        '\n' +\
-        'Пример: г. Минск, пр. Независимости, д. 17, кв. 25.'
-
-    await bot.send_message(message.chat.id, text)
-    await Form.sender_address.set()
+    await ask_for_own_address(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -490,6 +530,41 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
 
     await bot.send_message(message.chat.id, text)
     await Form.sender_phone.set()
+
+
+@dp.message_handler(content_types=types.ContentType.LOCATION,
+                    state=Form.sender_address)
+async def catch_gps_sender_address(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод адреса по локации - ' +
+                str(message.from_user.id))
+
+    coordinates = (str(message.location.longitude) + ', ' +
+                   str(message.location.latitude))
+
+    address = await geocoder.get_address(coordinates)
+
+    if address is None:
+        logger.info('Не распознал локацию - ' +
+                    str(message.from_user.id))
+
+        text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
+        await bot.send_message(message.chat.id, text)
+        return
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    enter_sender_address = types.InlineKeyboardButton(
+        text='Изменить адрес',
+        callback_data='/enter_sender_address')
+
+    keyboard.add(enter_sender_address)
+
+    bot_message = await bot.send_message(message.chat.id,
+                                         address,
+                                         reply_markup=keyboard)
+
+    await catch_sender_address(bot_message, state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -553,15 +628,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['vehicle_number'] = message.text
 
-    text = 'Введите адрес, где произошло нарушение.' + '\n' +\
-        '\n' +\
-        'Пример: г. Минск, пр. Независимости, д. 17.'
-
-    # настроим клавиатуру
-    keyboard = get_cancel_keyboard()
-
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
-    await Form.violation_location.set()
+    await ask_for_violation_address(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -595,6 +662,42 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
 
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.violation_datetime.set()
+
+
+@dp.message_handler(content_types=types.ContentType.LOCATION,
+                    state=Form.violation_location)
+async def catch_gps_violation_location(message: types.Message,
+                                       state: FSMContext):
+    logger.info('Обрабатываем ввод локации адреса нарушения - ' +
+                str(message.from_user.id))
+
+    coordinates = (str(message.location.longitude) + ', ' +
+                   str(message.location.latitude))
+
+    address = await geocoder.get_address(coordinates)
+
+    if address is None:
+        logger.info('Не распознал локацию - ' +
+                    str(message.from_user.id))
+
+        text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
+        await bot.send_message(message.chat.id, text)
+        return
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    enter_sender_address = types.InlineKeyboardButton(
+        text='Изменить адрес',
+        callback_data='/enter_violation_addr')
+
+    keyboard.add(enter_sender_address)
+
+    bot_message = await bot.send_message(message.chat.id,
+                                         address,
+                                         reply_markup=keyboard)
+
+    await catch_violation_location(bot_message, state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
