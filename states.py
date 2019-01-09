@@ -9,6 +9,7 @@ class Form(StatesGroup):
     sender_adress = State()  # In storage as 'Form:sender_adress'
     sender_phone = State()  # In storage as 'Form:sender_phone'
     operational_mode = State()  # In storage as 'Form:operational_mode'
+    violation_photo = State()  # In storage as 'Form:violation_photo'
     vehicle_number = State()  # In storage as 'Form:vehicle_number'
     violation_location = State()  # In storage as 'Form:violation_location'
     violation_datetime = State()  # In storage as 'Form:violation_datetime'

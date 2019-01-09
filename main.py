@@ -58,11 +58,24 @@ CREDENTIALS = ['sender_name',
 
 
 async def invite_to_fill_credentials(chat_id):
-    message = 'Первым делом нужно заполнить информацию о себе ' +\
+    message = 'Первым делом нужно ввести информацию о себе ' +\
         '(ФИО, адрес, телефон, которые будут в письме в ГАИ) ' +\
-        'выполнив команду /setup_sender.'
+        'отправив команду /setup_sender. Введенная информация сохранится ' +\
+        'для упрощения ввода нарушений. Очистить информацию о себе можно ' +\
+        'командой /reset.'
 
-    await bot.send_message(chat_id, message)
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    setup_sender = types.InlineKeyboardButton(
+        text='Ввести информацию о себе',
+        callback_data='/setup_sender')
+
+    keyboard.add(setup_sender)
+
+    await bot.send_message(chat_id,
+                           message,
+                           reply_markup=keyboard)
 
 
 async def add_photo_to_attachments(photo, state):
@@ -95,7 +108,7 @@ async def set_default_sender_info(state):
 
 
 async def compose_summary(data):
-    text = 'Перед тем, как мы отправим письмо на ящик ' + config.EMAIL_TO +\
+    text = 'Перед тем, как мы отправим обращение на ящик ' + config.EMAIL_TO +\
         ' (и копию вам на ' + data['sender_email'] +\
         ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
@@ -135,11 +148,20 @@ async def approve_sending(chat_id, state):
     async with state.proxy() as data:
         text = await compose_summary(data)
 
-    # Configure ReplyKeyboardMarkup
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add("Отправить письмо", "Отмена")
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    await bot.send_message(chat_id, text, reply_markup=markup)
+    approve_sending = types.InlineKeyboardButton(
+        text='Отправить письмо',
+        callback_data='/approve_sending')
+
+    cancel = types.InlineKeyboardButton(
+        text='Отмена',
+        callback_data='/cancel')
+
+    keyboard.add(approve_sending, cancel)
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
 
 
 async def prepare_mail_parameters(state):
@@ -180,6 +202,111 @@ async def invalid_credentials(state):
                 return True
 
     return False
+
+
+def get_cancel_keyboard():
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    cancel = types.InlineKeyboardButton(
+        text='Отмена',
+        callback_data='/cancel')
+
+    keyboard.add(cancel)
+
+    return keyboard
+
+
+@dp.callback_query_handler(lambda call: call.data == '/setup_sender',
+                           state='*')
+async def callback_inline(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ввода личных данных - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await setup_sender(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/current_time',
+                           state=Form.violation_datetime)
+async def callback_inline(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ввода текущего времени - ' +
+                str(call.from_user.id))
+
+    current_time = get_str_current_time()
+
+    message = await bot.send_message(call.message.chat.id, current_time)
+    await catch_violation_time(message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
+                           state=Form.violation_photo)
+async def cancel_violation_input(call):
+    logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении ' +
+                ' от пользователя ' + str(call.from_user.id))
+
+    text = 'Введите гос. номер транспортного средства.' + '\n' +\
+        '\n' +\
+        'Пример: 9999 АА-9'
+
+    # настроим клавиатуру
+    keyboard = get_cancel_keyboard()
+
+    await bot.answer_callback_query(call.id)
+    await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
+    await Form.vehicle_number.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/cancel',
+                           state=[Form.operational_mode,
+                                  Form.violation_photo,
+                                  Form.vehicle_number,
+                                  Form.violation_datetime,
+                                  Form.violation_location,
+                                  Form.violation_sending])
+async def cancel_violation_input(call, state: FSMContext):
+    logger.info('Отмена отправки нарушения от пользователя ' +
+                str(call.from_user.id))
+
+    await delete_prepared_violation(state)
+
+    await bot.answer_callback_query(call.id)
+    text = 'Отправка нарушения отменена.'
+    await bot.send_message(call.message.chat.id, text)
+    await Form.operational_mode.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/approve_sending',
+                           state=Form.violation_sending)
+async def send_letter(call, state: FSMContext):
+    logger.info('Отправляем письмо в ГАИ от пользователя ' +
+                str(call.from_user.id))
+
+    if await invalid_credentials(state):
+        text = 'Для отправки нарушений нужно заполнить информацию ' +\
+            'о себе командой /setup_sender'
+    else:
+        parameters = await prepare_mail_parameters(state)
+
+        try:
+            mailer.send_mail(parameters)
+            text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
+
+            logger.info('Письмо отправлено у пользователя ' +
+                        str(call.from_user.id))
+        except Exception as exc:
+            text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
+                str(exc)
+
+            logger.error('Неудачка у пользователя ' +
+                         str(call.from_user.id) + '\n' +
+                         str(exc))
+
+    await bot.answer_callback_query(call.id)
+    await bot.send_message(call.message.chat.id, text)
+
+    await delete_prepared_violation(state)
+    await Form.operational_mode.set()
 
 
 @dp.message_handler(commands=['start'])
@@ -233,6 +360,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
     text = 'Введите свой email, с него будут отправляться письма в ГАИ (' +\
         'при повторном вводе можно пропустить этот ' +\
         'шаг отправив точку "."). ' + '\n' +\
+        'С несуществующего адреса письмо не отправится.' + '\n' +\
         '\n' +\
         'Пример: example@example.com'
 
@@ -314,7 +442,8 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
-                    state=Form.operational_mode)
+                    state=[Form.operational_mode,
+                           Form.violation_photo])
 async def process_operational_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки нарушения. ' +
                 str(message.from_user.id))
@@ -326,84 +455,21 @@ async def process_operational_photo(message: types.Message, state: FSMContext):
     text = 'Добавьте еще одно фото или перейдите ко вводу информации ' +\
         'о нарушении по кнопке "Гос. номер, адрес, время".'
 
-    # Configure ReplyKeyboardMarkup
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add("Гос. номер, адрес, время", "Отмена")
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    await message.reply(text, reply_markup=markup)
+    enter_violation_info = types.InlineKeyboardButton(
+        text='Гос. номер, адрес, время',
+        callback_data='/enter_violation_info')
 
+    cancel = types.InlineKeyboardButton(
+        text='Отмена',
+        callback_data='/cancel')
 
-@dp.message_handler(lambda message: message.text == 'Отмена',
-                    content_types=types.ContentTypes.TEXT,
-                    state=[Form.operational_mode,
-                           Form.vehicle_number,
-                           Form.violation_datetime,
-                           Form.violation_location,
-                           Form.violation_sending])
-async def cancel_violation_input(message: types.Message, state: FSMContext):
-    logger.info('Отмена отправки нарушения от пользователя ' +
-                str(message.from_user.id))
+    keyboard.add(enter_violation_info, cancel)
 
-    await delete_prepared_violation(state)
-
-    text = 'Отправка нарушения отменена.'
-    await message.reply(text, reply_markup=types.ReplyKeyboardRemove())
-    await Form.operational_mode.set()
-
-
-@dp.message_handler(lambda message: message.text == 'Гос. номер, адрес, время',
-                    content_types=types.ContentTypes.TEXT,
-                    state=Form.operational_mode)
-async def cancel_violation_input(message: types.Message):
-    logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении ' +
-                ' от пользователя ' + str(message.from_user.id))
-
-    text = 'Введите гос. номер транспортного средства.' + '\n' +\
-        '\n' +\
-        'Пример: 9999 АА-9'
-
-    # Configure ReplyKeyboardMarkup
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add("Отмена")
-
-    await message.reply(text, reply_markup=markup)
-
-    await Form.vehicle_number.set()
-
-
-@dp.message_handler(lambda message: message.text == 'Отправить письмо',
-                    content_types=types.ContentTypes.TEXT,
-                    state=Form.violation_sending)
-async def send_letter(message: types.Message, state: FSMContext):
-    logger.info('Отправляем письмо в ГАИ от пользователя ' +
-                str(message.from_user.id))
-
-    if await invalid_credentials(state):
-        text = 'Для отправки нарушений нужно заполнить информацию ' +\
-            'о себе командой /setup_sender'
-    else:
-        parameters = await prepare_mail_parameters(state)
-
-        try:
-            mailer.send_mail(parameters)
-            text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
-
-            logger.info('Письмо отправлено у пользователя ' +
-                        str(message.from_user.id))
-        except Exception as exc:
-            text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
-                    str(exc)
-
-            logger.error('Неудачка у пользователя ' +
-                         str(message.from_user.id) + '\n' +
-                         str(exc))
-
-    await bot.send_message(message.chat.id,
-                           text,
-                           reply_markup=types.ReplyKeyboardRemove())
-
-    await delete_prepared_violation(state)
-    await Form.operational_mode.set()
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await Form.violation_photo.set()
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -419,13 +485,16 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         '\n' +\
         'Пример: г. Минск, пр. Независимости, д. 17.'
 
-    await bot.send_message(message.chat.id, text)
+    # настроим клавиатуру
+    keyboard = get_cancel_keyboard()
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.violation_location.set()
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.violation_location)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения от пользователя ' +
                 str(message.from_user.id))
 
@@ -439,17 +508,26 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         '\n' +\
         'Пример: ' + current_time + '.'
 
-    # Configure ReplyKeyboardMarkup
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add(current_time, "Отмена")
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    await bot.send_message(message.chat.id, text, reply_markup=markup)
+    current_time_button = types.InlineKeyboardButton(
+        text='Текущее время',
+        callback_data='/current_time')
+
+    cancel = types.InlineKeyboardButton(
+        text='Отмена',
+        callback_data='/cancel')
+
+    keyboard.add(current_time_button, cancel)
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.violation_datetime.set()
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.violation_datetime)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_violation_time(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод даты и времени нарушения от пользователя ' +
                 str(message.from_user.id))
 
@@ -472,6 +550,27 @@ async def reject_wrong_input(message: types.Message):
         'стоянки транспортных средств.'
 
     await bot.send_message(message.chat.id, text)
+
+
+@dp.message_handler(content_types=types.ContentTypes.ANY,
+                    state=Form.violation_photo)
+async def reject_wrong_input(message: types.Message):
+    text = 'Добавьте еще одно фото или нажмите "Гос. номер, адрес, время".'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    enter_violation_info = types.InlineKeyboardButton(
+        text='Гос. номер, адрес, время',
+        callback_data='/enter_violation_info')
+
+    cancel = types.InlineKeyboardButton(
+        text='Отмена',
+        callback_data='/cancel')
+
+    keyboard.add(enter_violation_info, cancel)
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
