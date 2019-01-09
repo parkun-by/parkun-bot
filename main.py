@@ -368,6 +368,20 @@ async def cmd_reset(message: types.Message, state: FSMContext):
     await invite_to_fill_credentials(message.chat.id)
 
 
+@dp.message_handler(commands=['help'], state='*')
+async def cmd_help(message: types.Message):
+    logger.info('Вызов помощи - ' + str(message.from_user.id))
+
+    text = 'Можно почитать политику конфиденциальности: ' +\
+        'https://telegra.ph/Politika-konfidencialnosti-01-09.' + '\n' +\
+        '\n' +\
+        'По команде /feedback можно спросить разработчика.' + '\n' +\
+        '\n' +\
+        'Больше ничего, вроде бы, нельзя. Спасибо, что пользуетесь ботом.'
+
+    await bot.send_message(message.chat.id, text)
+
+
 @dp.message_handler(commands=['feedback'], state='*')
 async def write_feedback(message: types.Message, state: FSMContext):
     logger.info('Хочет написать фидбэк - ' + str(message.from_user.id))
