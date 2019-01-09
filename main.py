@@ -215,6 +215,17 @@ def get_cancel_keyboard():
     return keyboard
 
 
+async def humanize_message(exception):
+    invalid_email_msg = '\'message\': "valid \'from\' email address required"'
+    invalid_email_humanized = 'Для отправки письма нужно ввести свой ' +\
+        'существующий email командой /setup_sender.'
+
+    if invalid_email_msg in str(exception):
+        return invalid_email_humanized
+
+    return str(exception)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -294,7 +305,7 @@ async def send_letter_click(call, state: FSMContext):
                         str(call.from_user.id))
         except Exception as exc:
             text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
-                str(exc)
+                await humanize_message(exc)
 
             logger.error('Неудачка у пользователя ' +
                          str(call.from_user.id) + '\n' +
