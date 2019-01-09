@@ -260,15 +260,16 @@ async def enter_violation_info_click(call):
                                   Form.vehicle_number,
                                   Form.violation_datetime,
                                   Form.violation_location,
-                                  Form.violation_sending])
+                                  Form.violation_sending,
+                                  Form.feedback])
 async def cancel_violation_input(call, state: FSMContext):
-    logger.info('Отмена отправки нарушения от пользователя ' +
+    logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.id))
 
     await delete_prepared_violation(state)
 
     await bot.answer_callback_query(call.id)
-    text = 'Отправка нарушения отменена.'
+    text = 'Бот вернулся в режим ожидания нарушения.'
     await bot.send_message(call.message.chat.id, text)
     await Form.operational_mode.set()
 
@@ -380,7 +381,9 @@ async def write_feedback(message: types.Message, state: FSMContext):
     text = 'Введите все, что вы обо мне думаете, а я передам это ' +\
         'сообщение разработчику.'
 
-    await bot.send_message(message.chat.id, text)
+    keyboard = get_cancel_keyboard()
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.feedback.set()
 
 
@@ -395,7 +398,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
         message_id=message.message_id,
         disable_notification=True)
 
-    text = 'Спасибо за отзыв!'
+    text = 'Спасибо за отзыв! Можно продолжить работу с того же места.'
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
