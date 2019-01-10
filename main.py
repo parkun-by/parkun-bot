@@ -120,6 +120,9 @@ async def compose_summary(data):
         ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
         '\n' +\
+        'Прикреплено фотографий: ' +\
+        str(len(data['attachments'])) + '.' + '\n' +\
+        '\n' +\
         'Обращающийся:' + '\n' +\
         'Имя: ' + data['sender_name'] + '\n' +\
         'Email: ' + data['sender_email'] + '\n' +\
@@ -166,7 +169,12 @@ async def approve_sending(chat_id, state):
         text='Отмена',
         callback_data='/cancel')
 
+    enter_violation_info = types.InlineKeyboardButton(
+        text='Заново ввести данные о нарушении',
+        callback_data='/enter_violation_info')
+
     keyboard.add(approve_sending_button, cancel)
+    keyboard.add(enter_violation_info)
 
     await bot.send_message(chat_id, text, reply_markup=keyboard)
 
@@ -392,7 +400,8 @@ async def violation_address_click(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
-                           state=Form.violation_photo)
+                           state=[Form.violation_photo,
+                                  Form.violation_sending])
 async def enter_violation_info_click(call):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении ' +
                 ' от пользователя ' + str(call.from_user.id))
@@ -698,7 +707,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     keyboard.add(enter_violation_info, cancel)
 
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await message.reply(text, reply_markup=keyboard)
     await Form.violation_photo.set()
 
 
