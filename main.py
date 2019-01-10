@@ -115,7 +115,7 @@ async def set_default_sender_info(state):
 
 
 async def compose_summary(data):
-    text = 'Перед тем, как мы отправим обращение на ящик ' + config.EMAIL_TO +\
+    text = 'Перед тем, как отправить обращение на ящик ' + config.EMAIL_TO +\
         ' (и копию вам на ' + data['sender_email'] +\
         ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
@@ -228,7 +228,7 @@ def get_skip_keyboard():
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     skip = types.InlineKeyboardButton(
-        text='Пропустить (оставить как было)',
+        text='Пропустить (оставить текущее значение)',
         callback_data='/skip')
 
     keyboard.add(skip)
@@ -518,7 +518,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
     await state.finish()
     await Form.initial.set()
 
-    text = 'Стер себе память, настраивайте заново теперь ¯\_(ツ)_/¯'
+    text = 'Стер себе память ¯\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
     await invite_to_fill_credentials(message.chat.id)
 
