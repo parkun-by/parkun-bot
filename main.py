@@ -58,6 +58,10 @@ CREDENTIALS = ['sender_name',
                'sender_address',
                'sender_phone']
 
+REQUIRED_CREDENTIALS = ['sender_name',
+                        'sender_email',
+                        'sender_address']
+
 
 async def invite_to_fill_credentials(chat_id):
     message = 'Первым делом нужно ввести информацию о себе ' +\
@@ -197,7 +201,7 @@ def get_str_current_time():
 
 async def invalid_credentials(state):
     async with state.proxy() as data:
-        for user_info in CREDENTIALS:
+        for user_info in REQUIRED_CREDENTIALS:
             if (user_info not in data) or (data[user_info] == ''):
                 return True
 
@@ -217,6 +221,19 @@ def get_cancel_keyboard():
     return keyboard
 
 
+def get_skip_keyboard():
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    skip = types.InlineKeyboardButton(
+        text='Пропустить (оставить как было)',
+        callback_data='/skip')
+
+    keyboard.add(skip)
+
+    return keyboard
+
+
 async def humanize_message(exception):
     invalid_email_msg = '\'message\': "valid \'from\' email address required"'
     invalid_email_humanized = 'Для отправки письма нужно ввести свой ' +\
@@ -228,16 +245,53 @@ async def humanize_message(exception):
     return str(exception)
 
 
-async def ask_for_own_address(chat_id):
-    text = 'Введите свой адрес проживания, на него придет ответ из ГАИ ' +\
-        '(при повторном вводе можно пропустить этот ' +\
-        'шаг отправив точку "."). ' + '\n' +\
+async def ask_for_user_address(chat_id):
+    text = 'Введите свой адрес проживания, ' +\
+        'на него придет ответ из ГАИ.' + '\n' +\
         'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
         '\n' +\
         'Пример: г. Минск, пр. Независимости, д. 17, кв. 25.'
 
-    await bot.send_message(chat_id, text)
+    keyboard = get_skip_keyboard()
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
     await Form.sender_address.set()
+
+
+async def ask_for_user_email(chat_id):
+    text = 'Введите свой email, с него будут ' +\
+        'отправляться письма в ГАИ.' + '\n' +\
+        'С несуществующего адреса письмо не отправится.' + '\n' +\
+        '\n' +\
+        'Пример: example@example.com'
+
+    keyboard = get_skip_keyboard()
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await Form.sender_email.set()
+
+
+async def ask_for_user_phone(chat_id):
+    text = 'Введите свой номер телефона (необязательно).' + '\n' +\
+        '\n' +\
+        'Пример: +375221111111.'
+
+    keyboard = get_skip_keyboard()
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await Form.sender_phone.set()
+
+
+async def show_private_info_summary(chat_id, state):
+    if await invalid_credentials(state):
+        text = 'Без ввода полной информации о себе вы не сможете отправить ' +\
+               'обращение в ГАИ. Зато уже можете загрузить фото и ' +\
+               'посмотреть, как все работает.'
+    else:
+        text = 'Все готово, можно слать фото нарушителей парковки.'
+
+    await bot.send_message(chat_id, text)
+    await Form.operational_mode.set()
 
 
 async def ask_for_violation_address(chat_id):
@@ -263,6 +317,46 @@ async def setup_sender_click(call, state: FSMContext):
     await setup_sender(call.message, state)
 
 
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_name)
+async def skip_name_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода ФИО - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await ask_for_user_email(call.message.chat.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_email)
+async def skip_email_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода email - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await ask_for_user_address(call.message.chat.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_address)
+async def skip_address_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода адреса - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await ask_for_user_phone(call.message.chat.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_phone)
+async def skip_phone_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода телефона - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    await show_private_info_summary(call.message.chat.id, state)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/current_time',
                            state=Form.violation_datetime)
 async def current_time_click(call, state: FSMContext):
@@ -282,7 +376,7 @@ async def sender_address_click(call, state: FSMContext):
                 str(call.from_user.id))
 
     await bot.answer_callback_query(call.id)
-    await ask_for_own_address(call.message.chat.id)
+    await ask_for_user_address(call.message.chat.id)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
@@ -405,12 +499,13 @@ async def setup_sender(message: types.Message, state: FSMContext):
 
     await set_default_sender_info(state)
 
-    text = 'Введите свое ФИО (при повторном вводе можно пропустить этот ' +\
-        'шаг отправив точку "."). ' + '\n' +\
+    text = 'Введите свое ФИО.' + '\n' +\
         '\n' +\
         'Пример: Зенон Станиславович Позняк.'
 
-    await bot.send_message(message.chat.id, text)
+    keyboard = get_skip_keyboard()
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.sender_name.set()
 
 
@@ -421,7 +516,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
     await state.finish()
     await Form.initial.set()
 
-    text = 'Стер себе память, настраивай заново теперь ¯\_(ツ)_/¯'
+    text = 'Стер себе память, настраивайте заново теперь ¯\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
     await invite_to_fill_credentials(message.chat.id)
 
@@ -430,14 +525,27 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 async def cmd_help(message: types.Message):
     logger.info('Вызов помощи - ' + str(message.from_user.id))
 
-    text = 'Можно почитать политику конфиденциальности: ' +\
-        'https://telegra.ph/Politika-konfidencialnosti-01-09.' + '\n' +\
-        '\n' +\
+    text = 'Можно почитать политику конфиденциальности. ' + '\n' +\
+        'Можно посмотреть шаблон письма в ГАИ.' + '\n' +\
         'По команде /feedback можно спросить разработчика.' + '\n' +\
         '\n' +\
         'Больше ничего, вроде бы, нельзя. Спасибо, что пользуетесь ботом.'
 
-    await bot.send_message(message.chat.id, text)
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    privacy_policy = types.InlineKeyboardButton(
+        text='Политика конфиденциальности',
+        url='https://telegra.ph/Politika-konfidencialnosti-01-09')
+
+    letter_template = types.InlineKeyboardButton(
+        text='Шаблон письма',
+        url='https://docs.google.com/document/d/' +
+            '11kigeRPEdqbYcMcFVmg1lv66Fy-eOyf5i1PIQpSqcII/edit?usp=sharing')
+
+    keyboard.add(privacy_policy, letter_template)
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 
 @dp.message_handler(commands=['feedback'], state='*')
@@ -485,18 +593,9 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        if message.text != '.':
-            data['sender_name'] = message.text
+        data['sender_name'] = message.text
 
-    text = 'Введите свой email, с него будут отправляться письма в ГАИ (' +\
-        'при повторном вводе можно пропустить этот ' +\
-        'шаг отправив точку "."). ' + '\n' +\
-        'С несуществующего адреса письмо не отправится.' + '\n' +\
-        '\n' +\
-        'Пример: example@example.com'
-
-    await bot.send_message(message.chat.id, text)
-    await Form.sender_email.set()
+    await ask_for_user_email(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -506,10 +605,9 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        if message.text != '.':
-            data['sender_email'] = message.text
+        data['sender_email'] = message.text
 
-    await ask_for_own_address(message.chat.id)
+    await ask_for_user_address(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -519,17 +617,9 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        if message.text != '.':
-            data['sender_address'] = message.text
+        data['sender_address'] = message.text
 
-    text = 'Введите свой номер телефона (' +\
-        'при повторном вводе можно пропустить этот ' +\
-        'шаг отправив точку "."). ' + '\n' +\
-        '\n' +\
-        'Пример: +375221111111.'
-
-    await bot.send_message(message.chat.id, text)
-    await Form.sender_phone.set()
+    await ask_for_user_phone(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
@@ -574,18 +664,9 @@ async def catch_sender_phone(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        if message.text != '.':
-            data['sender_phone'] = message.text
+        data['sender_phone'] = message.text
 
-    if await invalid_credentials(state):
-        text = 'Без ввода полной информации о себе вы не сможете отправить ' +\
-               'обращение в ГАИ. Зато уже можете загрузить фото и ' +\
-               'посмотреть, как все работает.'
-    else:
-        text = 'Все готово, можно слать фото нарушителей парковки.'
-
-    await bot.send_message(message.chat.id, text)
-    await Form.operational_mode.set()
+    await show_private_info_summary(message.chat.id, state)
 
 
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
