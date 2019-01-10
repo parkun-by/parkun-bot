@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import pytz
 from datetime import datetime
 from os import path
 
@@ -182,7 +183,8 @@ async def prepare_mail_parameters(state):
 
 
 def get_str_current_time():
-    current_time = datetime.now()
+    tz_minsk = pytz.timezone('Europe/Minsk')
+    current_time = datetime.now(tz_minsk)
 
     day = str(current_time.day).rjust(2, '0')
     month = str(current_time.month).rjust(2, '0')
