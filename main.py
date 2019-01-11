@@ -403,8 +403,8 @@ async def violation_address_click(call, state: FSMContext):
                            state=[Form.violation_photo,
                                   Form.violation_sending])
 async def enter_violation_info_click(call):
-    logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении ' +
-                ' от пользователя ' + str(call.from_user.id))
+    logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
+                str(call.from_user.id))
 
     text = 'Введите гос. номер транспортного средства.' + '\n' +\
         '\n' +\
@@ -440,12 +440,15 @@ async def cancel_violation_input(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.violation_sending)
 async def send_letter_click(call, state: FSMContext):
-    logger.info('Отправляем письмо в ГАИ от пользователя ' +
+    logger.info('Отправляем письмо в ГАИ - ' +
                 str(call.from_user.id))
 
     if await invalid_credentials(state):
         text = 'Для отправки нарушений нужно заполнить информацию ' +\
             'о себе командой /setup_sender'
+
+        logger.info('Письмо не отправлено, не введены личные данные - ' +
+                    str(call.from_user.id))
     else:
         parameters = await prepare_mail_parameters(state)
 
@@ -714,7 +717,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.vehicle_number)
 async def catch_vehicle_number(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод гос. номера от пользователя ' +
+    logger.info('Обрабатываем ввод гос. номера - ' +
                 str(message.from_user.id))
 
     async with state.proxy() as data:
@@ -726,7 +729,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.violation_location)
 async def catch_violation_location(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод адреса нарушения от пользователя ' +
+    logger.info('Обрабатываем ввод адреса нарушения - ' +
                 str(message.from_user.id))
 
     async with state.proxy() as data:
@@ -795,7 +798,7 @@ async def catch_gps_violation_location(message: types.Message,
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.violation_datetime)
 async def catch_violation_time(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод даты и времени нарушения от пользователя ' +
+    logger.info('Обрабатываем ввод даты и времени нарушения - ' +
                 str(message.from_user.id))
 
     async with state.proxy() as data:
