@@ -113,6 +113,8 @@ async def set_default_sender_info(state):
             if user_info not in data:
                 data[user_info] = ''
 
+        data['letter_lang'] = config.RU
+
 
 async def compose_summary(data):
     text = 'Перед тем, как отправить обращение на ящик ' + config.EMAIL_TO +\
@@ -139,7 +141,7 @@ async def compose_summary(data):
 
 
 async def compose_letter_body(data):
-    template = path.join('letters', 'minsk.html')
+    template = path.join('letters', 'minsk' + data['letter_lang'] + '.html')
 
     with open(template, 'r') as file:
         text = file.read()
@@ -317,6 +319,26 @@ async def ask_for_violation_address(chat_id):
     await Form.violation_location.set()
 
 
+async def send_language_info(chat_id, data):
+    if 'letter_lang' not in data:
+        data['letter_lang'] = config.RU
+
+    lang_name = config.LANG_NAMES[data['letter_lang']]
+
+    text = 'Текущий язык посылаемого письма - ' + lang_name + '.'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    change_language_button = types.InlineKeyboardButton(
+        text='Изменить',
+        callback_data='/change_language')
+
+    keyboard.add(change_language_button)
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -402,9 +424,12 @@ async def violation_address_click(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
                            state=[Form.violation_photo,
                                   Form.violation_sending])
-async def enter_violation_info_click(call):
+async def enter_violation_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
                 str(call.from_user.id))
+
+    async with state.proxy() as data:
+        await send_language_info(call.message.chat.id, data)
 
     text = 'Введите гос. номер транспортного средства.' + '\n' +\
         '\n' +\

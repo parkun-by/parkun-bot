@@ -22,3 +22,8 @@ BASE_YANDEX_MAPS_URL = 'https://geocode-maps.yandex.ru/1.x/'
 # letter language
 BY = '_by'
 RU = '_ru'
+
+LANG_NAMES = {
+    BY: 'беларуский',
+    RU: 'русский'
+}
