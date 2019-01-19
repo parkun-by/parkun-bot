@@ -8,6 +8,7 @@ from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils import executor
+from aiogram.utils.exceptions import InvalidQueryID
 
 import config
 from geocoder import Geocoder
@@ -466,7 +467,13 @@ async def send_letter_click(call, state: FSMContext):
                          str(call.from_user.id) + '\n' +
                          str(exc))
 
-    await bot.answer_callback_query(call.id)
+    # из-за того, что письмо может отправляться долго,
+    # телеграм может погасить кружочек ожидания сам, и тогда будет исключение
+    try:
+        await bot.answer_callback_query(call.id)
+    except InvalidQueryID:
+        pass
+
     await bot.send_message(call.message.chat.id, text)
 
     await delete_prepared_violation(state)
