@@ -10,14 +10,11 @@ class Mailer:
                              timeout=5)
 
     def send_mail(self, parameters):
-        subject = 'Обращение о нарушении правил остановки и стоянки ' +\
-                  'транспортных средств'
-
         data = {
             'to': parameters['to'],
             'bcc': parameters['bcc'],
             'from': parameters['from'],
-            'subject': subject,
+            'subject': parameters['subject'],
             'html': parameters['html'],
             'attachment': parameters['attachment']
         }

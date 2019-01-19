@@ -114,6 +114,8 @@ async def set_default_sender_info(state):
             if user_info not in data:
                 data[user_info] = ''
 
+        data['letter_lang'] = config.RU
+
 
 async def compose_summary(data):
     text = 'Перед тем, как отправить обращение на ящик ' + config.EMAIL_TO +\
@@ -123,6 +125,10 @@ async def compose_summary(data):
         '\n' +\
         'Прикреплено фотографий: ' +\
         str(len(data['attachments'])) + '.' + '\n' +\
+        '\n' +\
+        'Язык отправляемого письма: ' +\
+        config.LANG_NAMES[data['letter_lang']] + '.' +\
+        '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
         'Имя: ' + data['sender_name'] + '\n' +\
@@ -140,7 +146,7 @@ async def compose_summary(data):
 
 
 async def compose_letter_body(data):
-    template = path.join('letters', 'minsk.html')
+    template = path.join('letters', 'minsk' + data['letter_lang'] + '.html')
 
     with open(template, 'r') as file:
         text = file.read()
@@ -180,11 +186,23 @@ async def approve_sending(chat_id, state):
     await bot.send_message(chat_id, text, reply_markup=keyboard)
 
 
+def get_subject(language):
+    if language == config.BY:
+        return 'Зварот аб парушэнні правілаў прыпынку і стаянкі ' +\
+               'транспартных сродкаў'
+    else:
+        return 'Обращение о нарушении правил остановки и стоянки ' +\
+               'транспортных средств'
+
+
 async def prepare_mail_parameters(state):
     async with state.proxy() as data:
-        parameters = {'to': {config.EMAIL_TO: config.NAME_TO},
+        recipient = config.NAME_TO[data['letter_lang']]
+
+        parameters = {'to': {config.EMAIL_TO: recipient},
                       'bcc': {data['sender_email']: data['sender_name']},
                       'from': [data['sender_email'], data['sender_name']],
+                      'subject': get_subject(data['letter_lang']),
                       'html': await compose_letter_body(data),
                       'attachment': data['attachments']}
 
@@ -318,6 +336,26 @@ async def ask_for_violation_address(chat_id):
     await Form.violation_location.set()
 
 
+async def send_language_info(chat_id, data):
+    if 'letter_lang' not in data:
+        data['letter_lang'] = config.RU
+
+    lang_name = config.LANG_NAMES[data['letter_lang']]
+
+    text = 'Текущий язык посылаемого обращения - ' + lang_name + '.'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    change_language_button = types.InlineKeyboardButton(
+        text='Изменить',
+        callback_data='/change_language')
+
+    keyboard.add(change_language_button)
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -336,6 +374,42 @@ async def skip_name_click(call, state: FSMContext):
 
     await bot.answer_callback_query(call.id)
     await ask_for_user_email(call.message.chat.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/change_language',
+                           state=[Form.vehicle_number,
+                                  Form.sender_name])
+async def change_language_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки смены языка - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        if data['letter_lang'] == config.RU:
+            data['letter_lang'] = config.BY
+        elif data['letter_lang'] == config.BY:
+            data['letter_lang'] = config.RU
+        else:
+            data['letter_lang'] = config.RU
+
+        lang_name = config.LANG_NAMES[data['letter_lang']]
+
+    text = 'Текущий язык посылаемого обращения - ' + lang_name + '.'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    change_language_button = types.InlineKeyboardButton(
+        text='Изменить',
+        callback_data='/change_language')
+
+    keyboard.add(change_language_button)
+
+    await bot.edit_message_text(text,
+                                call.message.chat.id,
+                                call.message.message_id,
+                                reply_markup=keyboard)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -403,9 +477,12 @@ async def violation_address_click(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
                            state=[Form.violation_photo,
                                   Form.violation_sending])
-async def enter_violation_info_click(call):
+async def enter_violation_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
                 str(call.from_user.id))
+
+    async with state.proxy() as data:
+        await send_language_info(call.message.chat.id, data)
 
     text = 'Введите гос. номер транспортного средства.' + '\n' +\
         '\n' +\
@@ -519,6 +596,9 @@ async def setup_sender(message: types.Message, state: FSMContext):
     await delete_prepared_violation(state)
 
     await set_default_sender_info(state)
+
+    async with state.proxy() as data:
+        await send_language_info(message.chat.id, data)
 
     text = 'Введите свое ФИО.' + '\n' +\
         '\n' +\
@@ -652,7 +732,8 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
     coordinates = (str(message.location.longitude) + ', ' +
                    str(message.location.latitude))
 
-    address = await geocoder.get_address(coordinates)
+    async with state.proxy() as data:
+        address = await geocoder.get_address(coordinates, data['letter_lang'])
 
     if address is None:
         logger.info('Не распознал локацию - ' +
@@ -776,7 +857,8 @@ async def catch_gps_violation_location(message: types.Message,
     coordinates = (str(message.location.longitude) + ', ' +
                    str(message.location.latitude))
 
-    address = await geocoder.get_address(coordinates)
+    async with state.proxy() as data:
+        address = await geocoder.get_address(coordinates, data['letter_lang'])
 
     if address is None:
         logger.info('Не распознал локацию - ' +

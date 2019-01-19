@@ -2,10 +2,23 @@
 API_TOKEN = 'PUT_TOKEN_HERE'
 URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 
+# letter language
+BY = '_by'
+RU = '_ru'
+
+LANG_NAMES = {
+    BY: 'беларуский',
+    RU: 'русский'
+}
+
 # SendInBlue
 SIB_ACCESS_KEY = 'access_key'
 EMAIL_TO = 'example@example.com'
-NAME_TO = 'имя получателя'
+
+NAME_TO = {
+    BY: 'Поўнае імя атрымальніка',
+    RU: 'Полное имя получателя'
+}
 
 # redis
 REDIS_HOST = 'localhost'
