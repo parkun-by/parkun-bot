@@ -91,13 +91,10 @@ async def add_photo_to_attachments(photo, state):
     image_url = config.URL_BASE + file.file_path
 
     async with state.proxy() as data:
-        try:
-            attachments = data['attachments']  # такого ключа может не быть
-        except KeyError:
-            attachments = []
+        if 'attachments' not in data:
+            data['attachments'] = []
 
-        attachments.append(image_url)
-        data['attachments'] = attachments
+        data['attachments'].append(image_url)
 
 
 async def delete_prepared_violation(state):
@@ -368,7 +365,7 @@ async def setup_sender_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_name)
-async def skip_name_click(call, state: FSMContext):
+async def skip_name_click(call):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода ФИО - ' +
                 str(call.from_user.id))
 
@@ -414,7 +411,7 @@ async def change_language_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_email)
-async def skip_email_click(call, state: FSMContext):
+async def skip_email_click(call):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода email - ' +
                 str(call.from_user.id))
 
@@ -424,7 +421,7 @@ async def skip_email_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_address)
-async def skip_address_click(call, state: FSMContext):
+async def skip_address_click(call):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода адреса - ' +
                 str(call.from_user.id))
 
@@ -456,7 +453,7 @@ async def current_time_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_sender_address',
                            state=Form.sender_phone)
-async def sender_address_click(call, state: FSMContext):
+async def sender_address_click(call):
     logger.info('Обрабатываем нажатие кнопки ввода своего адреса - ' +
                 str(call.from_user.id))
 
@@ -466,7 +463,7 @@ async def sender_address_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
                            state=Form.violation_datetime)
-async def violation_address_click(call, state: FSMContext):
+async def violation_address_click(call):
     logger.info('Обрабатываем нажатие кнопки ввода адреса нарушения - ' +
                 str(call.from_user.id))
 

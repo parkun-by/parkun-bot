@@ -1,7 +1,5 @@
 from mailin import Mailin
 
-import config
-
 
 class Mailer:
     def __init__(self, api_key):
