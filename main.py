@@ -17,6 +17,7 @@ from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 geocoder = Geocoder()
+semaphore = asyncio.Semaphore()
 
 
 def setup_logging():
@@ -90,7 +91,11 @@ async def add_photo_to_attachments(photo, state):
     file = await bot.get_file(photo['file_id'])
     image_url = config.URL_BASE + file.file_path
 
-    async with state.proxy() as data:
+    # потанцевально узкое место, все потоки всех пользователей будут ждать
+    # пока кто-то один аппендит, если я правильно понимаю
+    # нужно сделать каждому пользователю свой личный семафорчик, но я пока
+    # что не знаю как
+    async with semaphore, state.proxy() as data:
         if 'attachments' not in data:
             data['attachments'] = []
 
