@@ -147,8 +147,19 @@ async def compose_summary(data):
     return text
 
 
-async def compose_letter_body(data):
-    template = path.join('letters', 'minsk' + data['letter_lang'] + '.html')
+async def get_letter_header(data):
+    template = path.join('letters',
+                         'footer',
+                         'minsk' + data['letter_lang'] + '.html')
+
+    with open(template, 'r') as file:
+        text = file.read()
+
+    return text
+
+
+async def get_letter_body(data):
+    template = path.join('letters', 'body' + data['letter_lang'] + '.html')
 
     with open(template, 'r') as file:
         text = file.read()
@@ -161,6 +172,29 @@ async def compose_letter_body(data):
     text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__', data['sender_phone'])
 
     return text
+
+
+async def get_letter_photos(data):
+    template = path.join('letters', 'photo.html')
+
+    with open(template, 'r') as file:
+        photo_template = file.read()
+
+    text = ''
+
+    for photo_url in data['attachments']:
+        photo = photo_template.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
+        text += photo
+
+    return text
+
+
+async def compose_letter_body(data):
+    header = await get_letter_header(data)
+    body = await get_letter_body(data)
+    photos = await get_letter_photos(data)
+
+    return header + body + photos
 
 
 async def approve_sending(chat_id, state):
