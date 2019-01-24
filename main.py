@@ -665,6 +665,7 @@ async def cmd_help(message: types.Message):
     text = 'Можно почитать политику конфиденциальности. ' + '\n' +\
         'Можно посмотреть шаблон письма в ГАИ.' + '\n' +\
         'По команде /feedback можно спросить разработчика.' + '\n' +\
+        'Можно почитать changelog.' + '\n' +\
         '\n' +\
         '\n' +\
         'После однократного заполнения личных данных, можно прикрепить ' +\
@@ -701,7 +702,11 @@ async def cmd_help(message: types.Message):
         url='https://docs.google.com/document/d/' +
             '11kigeRPEdqbYcMcFVmg1lv66Fy-eOyf5i1PIQpSqcII/edit?usp=sharing')
 
-    keyboard.add(privacy_policy, letter_template)
+    changelog = types.InlineKeyboardButton(
+        text='Changelog',
+        url='https://github.com/dziaineka/parkun-bot/blob/master/README.md')
+
+    keyboard.add(privacy_policy, letter_template, changelog)
 
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
