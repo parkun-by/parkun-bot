@@ -13,12 +13,73 @@ LANG_NAMES = {
 
 # SendInBlue
 SIB_ACCESS_KEY = 'access_key'
-EMAIL_TO = 'example@example.com'
+
+# regionalization
+MINSK = 'minsk'
+BREST_REGION = 'brest_region'
+VITSEBSK_REGION = 'vitsebsk_region'
+HOMEL_REGION = 'homel_region'
+HRODNA_REGION = 'hrodna_region'
+MINSK_REGION = 'minsk_region'
+MAHILEU_REGION = 'mahileu_region'
+
+REGIONAL_NAME = {
+    MINSK: 'ГУВД Мингорисполкома',
+    BREST_REGION: 'УВД Брестского облисполкома',
+    VITSEBSK_REGION: 'УВД Витебского облисполкома',
+    HOMEL_REGION: 'УВД Гомельского облисполкома',
+    HRODNA_REGION: 'УВД Гродненского облисполкома',
+    MINSK_REGION: 'УВД Минского облисполкома',
+    MAHILEU_REGION: 'УВД Могилевского облисполкома',
+}
+
+EMAIL_TO = {
+    MINSK: 'pismo_guvd_minsk@mia.by',
+    BREST_REGION: 'uvdbrest@brest.by',
+    VITSEBSK_REGION: 'ozgs@uvd.vitebsk.gov.by',
+    HOMEL_REGION: 'uvd@mail.gomel.by',
+    HRODNA_REGION: 'uvd@mail.grodno.by',
+    MINSK_REGION: 'priemnaja@uvd-mo.gov.by',
+    MAHILEU_REGION: 'uvd@mogilev.by',
+}
 
 NAME_TO = {
-    BY: 'Поўнае імя атрымальніка',
-    RU: 'Полное имя получателя'
+    MINSK: {
+        BY: 'Вадзім Мікалаевіч Гаркун',
+        RU: 'Вадим Николаевич Гаркун',
+    },
+
+    BREST_REGION: {
+        BY: 'Міхаіл Вітальевіч Банадык',
+        RU: 'Михаил Витальевич Банадык',
+    },
+
+    VITSEBSK_REGION: {
+        BY: 'Міхаіл Аляксандравіч Дзядзічкін',
+        RU: 'Михаил Александрович Дядичкин',
+    },
+
+    HOMEL_REGION: {
+        BY: 'Андрэй Мікалаевіч Гаркуша',
+        RU: 'Андрей Николаевич Гаркуша',
+    },
+
+    HRODNA_REGION: {
+        BY: 'Уладзімір Мікалаевіч Назарка',
+        RU: 'Владимир Николаевич Назарко',
+    },
+
+    MINSK_REGION: {
+        BY: 'Мікалай Міхайлавіч Караткевіч',
+        RU: 'Николай Михайлович Короткевич',
+    },
+
+    MAHILEU_REGION: {
+        BY: 'Міхаіл Міхайлавіч Неўмяржыцкі',
+        RU: 'Михаил Михайлович Невмержицкий',
+    }
 }
+
 
 # redis
 REDIS_HOST = 'localhost'

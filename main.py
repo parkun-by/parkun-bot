@@ -11,12 +11,12 @@ from aiogram.utils import executor
 from aiogram.utils.exceptions import InvalidQueryID
 
 import config
-from geocoder import Geocoder
+from locator import Locator
 from mailer import Mailer
 from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
-geocoder = Geocoder()
+locator = Locator()
 semaphore = asyncio.Semaphore()
 
 
@@ -117,10 +117,13 @@ async def set_default_sender_info(state):
                 data[user_info] = ''
 
         data['letter_lang'] = config.RU
+        data['recipient'] = config.MINSK
 
 
 async def compose_summary(data):
-    text = 'Перед тем, как отправить обращение на ящик ' + config.EMAIL_TO +\
+    text = 'Перед тем, как отправить обращение в ' +\
+        config.REGIONAL_NAME[data['recipient']] + ' на ящик ' +\
+        config.EMAIL_TO[data['recipient']] +\
         ' (и копию вам на ' + data['sender_email'] +\
         ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
@@ -150,7 +153,7 @@ async def compose_summary(data):
 async def get_letter_header(data):
     template = path.join('letters',
                          'footer',
-                         'minsk' + data['letter_lang'] + '.html')
+                         data['recipient'] + data['letter_lang'] + '.html')
 
     with open(template, 'r') as file:
         text = file.read()
@@ -233,9 +236,9 @@ def get_subject(language):
 
 async def prepare_mail_parameters(state):
     async with state.proxy() as data:
-        recipient = config.NAME_TO[data['letter_lang']]
+        recipient = config.NAME_TO[data['recipient']][data['letter_lang']]
 
-        parameters = {'to': {config.EMAIL_TO: recipient},
+        parameters = {'to': {config.EMAIL_TO[data['recipient']]: recipient},
                       'bcc': {data['sender_email']: data['sender_name']},
                       'from': [data['sender_email'], data['sender_name']],
                       'subject': get_subject(data['letter_lang']),
@@ -390,6 +393,13 @@ async def send_language_info(chat_id, data):
     keyboard.add(change_language_button)
 
     await bot.send_message(chat_id, text, reply_markup=keyboard)
+
+
+def save_recipient(region, data):
+    if region is None:
+        data['recipient'] = config.MINSK
+    else:
+        data['recipient'] = region
 
 
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
@@ -791,7 +801,7 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
                    str(message.location.latitude))
 
     async with state.proxy() as data:
-        address = await geocoder.get_address(coordinates, data['letter_lang'])
+        address = await locator.get_address(coordinates, data['letter_lang'])
 
     if address is None:
         logger.info('Не распознал локацию - ' +
@@ -911,11 +921,18 @@ async def catch_gps_violation_location(message: types.Message,
     logger.info('Обрабатываем ввод локации адреса нарушения - ' +
                 str(message.from_user.id))
 
-    coordinates = (str(message.location.longitude) + ', ' +
-                   str(message.location.latitude))
+    str_coordinates = (str(message.location.longitude) + ', ' +
+                       str(message.location.latitude))
+
+    coordinates = [message.location.latitude, message.location.longitude]
 
     async with state.proxy() as data:
-        address = await geocoder.get_address(coordinates, data['letter_lang'])
+        address = await locator.get_address(str_coordinates,
+                                            data['letter_lang'])
+
+        region = await locator.get_region(coordinates)
+        save_recipient(region, data)
+        region = data['recipient']
 
     if address is None:
         logger.info('Не распознал локацию - ' +
@@ -924,6 +941,10 @@ async def catch_gps_violation_location(message: types.Message,
         text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
         await bot.send_message(message.chat.id, text)
         return
+
+    text = 'Получатель письма: ' + config.REGIONAL_NAME[region] + '.' + '\n' +\
+        '\n' +\
+        'Адрес нарушения: ' + address
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -935,8 +956,10 @@ async def catch_gps_violation_location(message: types.Message,
     keyboard.add(enter_sender_address)
 
     bot_message = await bot.send_message(message.chat.id,
-                                         address,
+                                         text,
                                          reply_markup=keyboard)
+
+    bot_message.text = address
 
     await catch_violation_location(bot_message, state)
 
@@ -1001,6 +1024,8 @@ async def reject_wrong_violation_data_input(message: types.Message):
 
 async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
+
+    await locator.download_boundaries()
 
 
 async def shutdown(dispatcher: Dispatcher):
