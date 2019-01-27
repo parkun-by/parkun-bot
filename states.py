@@ -12,6 +12,7 @@ class Form(StatesGroup):
     violation_photo = State()  # In storage as 'Form:violation_photo'
     vehicle_number = State()  # In storage as 'Form:vehicle_number'
     violation_location = State()  # In storage as 'Form:violation_location'
+    recipient = State()  # In storage as 'Form:recipient'
     violation_datetime = State()  # In storage as 'Form:violation_datetime'
     violation_sending = State()  # In storage as 'Form:violation_sending'
     feedback = State()  # In storage as 'Form:feedback'

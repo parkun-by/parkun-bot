@@ -402,6 +402,31 @@ def save_recipient(region, data):
         data['recipient'] = region
 
 
+async def print_violation_address_info(region, address, chat_id):
+    text = 'Получатель письма: ' + config.REGIONAL_NAME[region] + '.' + '\n' +\
+        '\n' +\
+        'Адрес нарушения: ' + address
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    enter_violation_addr_button = types.InlineKeyboardButton(
+        text='Изменить адрес',
+        callback_data='/enter_violation_addr')
+
+    enter_recipient_button = types.InlineKeyboardButton(
+        text='Изменить получателя',
+        callback_data='/enter_recipient')
+
+    keyboard.add(enter_violation_addr_button, enter_recipient_button)
+
+    bot_message = await bot.send_message(chat_id,
+                                         text,
+                                         reply_markup=keyboard)
+
+    return bot_message
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -520,6 +545,56 @@ async def violation_address_click(call):
     await ask_for_violation_address(call.message.chat.id)
 
 
+@dp.callback_query_handler(lambda call: call.data == '/enter_recipient',
+                           state=Form.violation_datetime)
+async def recipient_click(call):
+    logger.info('Обрабатываем нажатие кнопки ввода реципиента - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+
+    # этот текст не менять или менять по всему файлу
+    text = 'Выберите получателя письма:'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    for region in config.REGIONAL_NAME:
+        button = types.InlineKeyboardButton(
+            text=config.REGIONAL_NAME[region],
+            callback_data=region)
+
+        keyboard.add(button)
+
+    await bot.send_message(call.message.chat.id,
+                           text,
+                           reply_markup=keyboard)
+
+    await Form.recipient.set()
+
+
+@dp.callback_query_handler(
+    lambda call: call.message.text == 'Выберите получателя письма:',
+    state=Form.recipient)
+async def recipient_choosen_click(call, state: FSMContext):
+    logger.info('Выбрал реципиента - ' + str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        address = data['violation_location']
+
+    region = call.data
+
+    bot_message = await print_violation_address_info(region,
+                                                     address,
+                                                     call.message.chat.id)
+
+    bot_message.text = address
+
+    await catch_violation_location(bot_message, state)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
                            state=[Form.violation_photo,
                                   Form.violation_sending])
@@ -556,7 +631,7 @@ async def cancel_violation_input(call, state: FSMContext):
     await delete_prepared_violation(state)
 
     await bot.answer_callback_query(call.id)
-    text = 'Бот вернулся в режим ожидания нарушения.'
+    text = 'Бот вернулся в режим ожидания фотокарточки нарушения.'
     await bot.send_message(call.message.chat.id, text)
     await Form.operational_mode.set()
 
@@ -942,22 +1017,9 @@ async def catch_gps_violation_location(message: types.Message,
         await bot.send_message(message.chat.id, text)
         return
 
-    text = 'Получатель письма: ' + config.REGIONAL_NAME[region] + '.' + '\n' +\
-        '\n' +\
-        'Адрес нарушения: ' + address
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    enter_sender_address = types.InlineKeyboardButton(
-        text='Изменить адрес',
-        callback_data='/enter_violation_addr')
-
-    keyboard.add(enter_sender_address)
-
-    bot_message = await bot.send_message(message.chat.id,
-                                         text,
-                                         reply_markup=keyboard)
+    bot_message = await print_violation_address_info(region,
+                                                     address,
+                                                     message.chat.id)
 
     bot_message.text = address
 
