@@ -568,10 +568,11 @@ async def send_letter_click(call, state: FSMContext):
 
         try:
             mailer.send_mail(parameters)
-            text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
+            text = 'Письмо отправлено. ' +\
+                'Проверьте ящик - вам придет копия.' + '\n' +\
+                'Внимание! На ящики mail.ru копия не приходит ¯ \ _ (ツ) _ / ¯.'
 
-            logger.info('Письмо отправлено - ' +
-                        str(call.from_user.id))
+            logger.info('Письмо отправлено - ' + str(call.from_user.id))
         except Exception as exc:
             text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
                 await humanize_message(exc)
