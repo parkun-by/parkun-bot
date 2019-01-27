@@ -420,11 +420,35 @@ async def print_violation_address_info(region, address, chat_id):
 
     keyboard.add(enter_violation_addr_button, enter_recipient_button)
 
-    bot_message = await bot.send_message(chat_id,
-                                         text,
-                                         reply_markup=keyboard)
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
 
-    return bot_message
+
+async def save_violation_address(address, data):
+    data['violation_location'] = address
+
+async def ask_for_violation_time(chat_id):
+    current_time = get_str_current_time()
+
+    text = 'Введите дату и время нарушения. Ввести текущее время ' +\
+        'можно кнопкой снизу.' + '\n' +\
+        '\n' +\
+        'Пример: ' + current_time + '.'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    current_time_button = types.InlineKeyboardButton(
+        text='Текущее время',
+        callback_data='/current_time')
+
+    cancel = types.InlineKeyboardButton(
+        text='Отмена',
+        callback_data='/cancel')
+
+    keyboard.add(current_time_button, cancel)
+
+    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await Form.violation_datetime.set()
 
 
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
@@ -583,16 +607,11 @@ async def recipient_choosen_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         address = data['violation_location']
+        save_recipient(call.data, data)
+        region = data['recipient']
 
-    region = call.data
-
-    bot_message = await print_violation_address_info(region,
-                                                     address,
-                                                     call.message.chat.id)
-
-    bot_message.text = address
-
-    await catch_violation_location(bot_message, state)
+    await print_violation_address_info(region, address, call.message.chat.id)
+    await ask_for_violation_time(call.message.chat.id)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
@@ -963,30 +982,9 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        data['violation_location'] = message.text
+        await save_violation_address(message.text, data)
 
-    current_time = get_str_current_time()
-
-    text = 'Введите дату и время нарушения. Ввести текущее время ' +\
-        'можно кнопкой снизу.' + '\n' +\
-        '\n' +\
-        'Пример: ' + current_time + '.'
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    current_time_button = types.InlineKeyboardButton(
-        text='Текущее время',
-        callback_data='/current_time')
-
-    cancel = types.InlineKeyboardButton(
-        text='Отмена',
-        callback_data='/cancel')
-
-    keyboard.add(current_time_button, cancel)
-
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
-    await Form.violation_datetime.set()
+    await ask_for_violation_time(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
@@ -1017,13 +1015,11 @@ async def catch_gps_violation_location(message: types.Message,
         await bot.send_message(message.chat.id, text)
         return
 
-    bot_message = await print_violation_address_info(region,
-                                                     address,
-                                                     message.chat.id)
+    async with state.proxy() as data:
+        await save_violation_address(address, data)
 
-    bot_message.text = address
-
-    await catch_violation_location(bot_message, state)
+    await print_violation_address_info(region, address, message.chat.id)
+    await ask_for_violation_time(message.chat.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
