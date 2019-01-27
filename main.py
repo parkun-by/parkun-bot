@@ -395,7 +395,7 @@ async def send_language_info(chat_id, data):
     await bot.send_message(chat_id, text, reply_markup=keyboard)
 
 
-def save_recipient(region, data):
+async def save_recipient(region, data):
     if region is None:
         data['recipient'] = config.MINSK
     else:
@@ -607,7 +607,7 @@ async def recipient_choosen_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         address = data['violation_location']
-        save_recipient(call.data, data)
+        await save_recipient(call.data, data)
         region = data['recipient']
 
     await print_violation_address_info(region, address, call.message.chat.id)
@@ -981,9 +981,16 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
                 str(message.from_user.id))
 
-    async with state.proxy() as data:
-        await save_violation_address(message.text, data)
+    address = message.text
+    coordinates = await locator.get_coordinates(address)
+    region = await locator.get_region(coordinates)
 
+    async with state.proxy() as data:
+        await save_violation_address(address, data)
+        await save_recipient(region, data)
+        region = data['recipient']
+
+    await print_violation_address_info(region, address, message.chat.id)
     await ask_for_violation_time(message.chat.id)
 
 
@@ -994,17 +1001,12 @@ async def catch_gps_violation_location(message: types.Message,
     logger.info('Обрабатываем ввод локации адреса нарушения - ' +
                 str(message.from_user.id))
 
-    str_coordinates = (str(message.location.longitude) + ', ' +
-                       str(message.location.latitude))
-
-    coordinates = [message.location.latitude, message.location.longitude]
+    coordinates = [message.location.longitude, message.location.latitude]
 
     async with state.proxy() as data:
-        address = await locator.get_address(str_coordinates,
-                                            data['letter_lang'])
-
+        address = await locator.get_address(coordinates, data['letter_lang'])
         region = await locator.get_region(coordinates)
-        save_recipient(region, data)
+        await save_recipient(region, data)
         region = data['recipient']
 
     if address is None:
