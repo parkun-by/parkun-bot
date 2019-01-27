@@ -985,6 +985,9 @@ async def ignore_initial_input(message: types.Message):
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=Form.operational_mode)
 async def reject_wrong_input(message: types.Message):
+    logger.info('Посылает не фотку, а что-то другое - ' +
+                str(message.from_user.id))
+
     text = 'Я ожидаю от вас фото нарушений правил остановки и ' +\
         'стоянки транспортных средств.'
 
