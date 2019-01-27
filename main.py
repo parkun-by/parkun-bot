@@ -570,14 +570,13 @@ async def send_letter_click(call, state: FSMContext):
             mailer.send_mail(parameters)
             text = 'Письмо отправлено. Проверьте ящик - вам придет копия.'
 
-            logger.info('Письмо отправлено у пользователя ' +
+            logger.info('Письмо отправлено - ' +
                         str(call.from_user.id))
         except Exception as exc:
             text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
                 await humanize_message(exc)
 
-            logger.error('Неудачка у пользователя ' +
-                         str(call.from_user.id) + '\n' +
+            logger.error('Неудачка - ' + str(call.from_user.id) + '\n' +
                          str(exc))
 
     # из-за того, что письмо может отправляться долго,
@@ -609,8 +608,7 @@ async def cmd_start(message: types.Message):
     """
     Conversation's entry point
     """
-    logger.info('Старт работы бота у пользователя ' +
-                str(message.from_user.id))
+    logger.info('Старт работы бота - ' + str(message.from_user.id))
 
     text = 'Привет, этот бот упрощает посылку обращения в ГАИ о нарушении ' +\
         'правил парковки. Для работы ему потребуется от вас ' +\
@@ -625,7 +623,7 @@ async def cmd_start(message: types.Message):
 
 @dp.message_handler(commands=['setup_sender'], state='*')
 async def setup_sender(message: types.Message, state: FSMContext):
-    logger.info('Настройка пользователя ' + str(message.from_user.id))
+    logger.info('Настройка отправителя - ' + str(message.from_user.id))
 
     # на всякий случай удалим введенное нарушение, если решили ввести
     # свои данные в процессе ввода нарушения
@@ -648,7 +646,7 @@ async def setup_sender(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['reset'], state='*')
 async def cmd_reset(message: types.Message, state: FSMContext):
-    logger.info('Сброс бота у пользователя ' + str(message.from_user.id))
+    logger.info('Сброс бота - ' + str(message.from_user.id))
 
     await state.finish()
     await Form.initial.set()
@@ -752,8 +750,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_name)
 async def catch_sender_name(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод ФИО пользователя ' +
-                str(message.from_user.id))
+    logger.info('Обрабатываем ввод ФИО - ' + str(message.from_user.id))
 
     async with state.proxy() as data:
         data['sender_name'] = message.text
@@ -764,8 +761,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_email)
 async def catch_sender_email(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод email пользователя ' +
-                str(message.from_user.id))
+    logger.info('Обрабатываем ввод email - ' + str(message.from_user.id))
 
     async with state.proxy() as data:
         data['sender_email'] = message.text
@@ -776,8 +772,7 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_address)
 async def catch_sender_address(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод адреса пользователя ' +
-                str(message.from_user.id))
+    logger.info('Обрабатываем ввод адреса - ' + str(message.from_user.id))
 
     async with state.proxy() as data:
         data['sender_address'] = message.text
@@ -824,8 +819,7 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_phone)
 async def catch_sender_phone(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод телефона пользователя ' +
-                str(message.from_user.id))
+    logger.info('Обрабатываем ввод телефона - ' + str(message.from_user.id))
 
     async with state.proxy() as data:
         data['sender_phone'] = message.text
@@ -837,7 +831,7 @@ async def catch_sender_phone(message: types.Message, state: FSMContext):
                     state=[Form.operational_mode,
                            Form.violation_photo])
 async def process_violation_photo(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем посылку фотки нарушения. ' +
+    logger.info('Обрабатываем посылку фотки нарушения - ' +
                 str(message.from_user.id))
 
     # Добавляем фотку наилучшего качества(последнюю в массиве) в список
