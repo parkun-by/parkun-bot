@@ -13,6 +13,7 @@ from aiogram.utils.exceptions import InvalidQueryID
 import config
 from locator import Locator
 from mailer import Mailer
+from photoitem import PhotoItem
 from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
@@ -98,26 +99,27 @@ async def add_photo_to_attachments(photo, state):
     async with semaphore, state.proxy() as data:
         if 'attachments' not in data:
             data['attachments'] = []
+            data['photo_id'] = []
 
         data['attachments'].append(image_url)
+        data['photo_id'].append(photo['file_id'])
 
 
-async def delete_prepared_violation(state):
-    async with state.proxy() as data:
-        data['attachments'] = []
-        data['vehicle_number'] = ''
-        data['violation_location'] = ''
-        data['violation_datetime'] = ''
+async def delete_prepared_violation(data):
+    data['attachments'] = []
+    data['photo_id'] = []
+    data['vehicle_number'] = ''
+    data['violation_location'] = ''
+    data['violation_datetime'] = ''
 
 
-async def set_default_sender_info(state):
-    async with state.proxy() as data:
-        for user_info in CREDENTIALS:
-            if user_info not in data:
-                data[user_info] = ''
+async def set_default_sender_info(data):
+    for user_info in CREDENTIALS:
+        if user_info not in data:
+            data[user_info] = ''
 
-        data['letter_lang'] = config.RU
-        data['recipient'] = config.MINSK
+    data['letter_lang'] = config.RU
+    data['recipient'] = config.MINSK
 
 
 async def compose_summary(data):
@@ -451,6 +453,26 @@ async def ask_for_violation_time(chat_id):
     await Form.violation_datetime.set()
 
 
+async def send_post_to_channel(data):
+    caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
+        'Место: ' + data['violation_location']
+
+    photos_id = data['photo_id']
+
+    if len(photos_id) != 1:
+        photos = []
+
+        for photo_id in photos_id:
+            photo = PhotoItem('photo', photo_id, caption)
+            photos.append(photo)
+
+        await bot.send_media_group(chat_id=config.CHANNEL, media=photos)
+    else:
+        await bot.send_photo(chat_id=config.CHANNEL,
+                             photo=photos_id[0],
+                             caption=caption)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -647,7 +669,8 @@ async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.id))
 
-    await delete_prepared_violation(state)
+    async with state.proxy() as data:
+        await delete_prepared_violation(data)
 
     await bot.answer_callback_query(call.id)
     text = 'Бот вернулся в режим ожидания фотокарточки нарушения.'
@@ -693,7 +716,10 @@ async def send_letter_click(call, state: FSMContext):
 
     await bot.send_message(call.message.chat.id, text)
 
-    await delete_prepared_violation(state)
+    async with state.proxy() as data:
+        await send_post_to_channel(data)
+        await delete_prepared_violation(data)
+
     await Form.operational_mode.set()
 
 
@@ -730,13 +756,12 @@ async def cmd_start(message: types.Message):
 async def setup_sender(message: types.Message, state: FSMContext):
     logger.info('Настройка отправителя - ' + str(message.from_user.id))
 
-    # на всякий случай удалим введенное нарушение, если решили ввести
-    # свои данные в процессе ввода нарушения
-    await delete_prepared_violation(state)
-
-    await set_default_sender_info(state)
-
     async with state.proxy() as data:
+        # на всякий случай удалим введенное нарушение, если решили ввести
+        # свои данные в процессе ввода нарушения
+        await delete_prepared_violation(data)
+
+        await set_default_sender_info(data)
         await send_language_info(message.chat.id, data)
 
     text = 'Введите свое ФИО.' + '\n' +\

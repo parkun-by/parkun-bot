@@ -95,6 +95,9 @@ class Locator():
             yield boundaries
 
     async def get_region(self, coordinates):
+        if not isinstance(coordinates, list):
+            return None
+
         for region in self._boundaries:
             areas = self.__areas_in_region(self._boundaries[region])
 
