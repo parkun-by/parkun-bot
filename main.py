@@ -97,7 +97,7 @@ async def add_photo_to_attachments(photo, state):
     # нужно сделать каждому пользователю свой личный семафорчик, но я пока
     # что не знаю как
     async with semaphore, state.proxy() as data:
-        if 'attachments' not in data:
+        if ('attachments' not in data) or ('photo_id' not in data):
             data['attachments'] = []
             data['photo_id'] = []
 
