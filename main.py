@@ -462,8 +462,14 @@ async def send_post_to_channel(data):
     if len(photos_id) != 1:
         photos = []
 
-        for photo_id in photos_id:
-            photo = PhotoItem('photo', photo_id, caption)
+        for count, photo_id in enumerate(photos_id):
+            text = ''
+
+            # первой фотке добавим общее описание
+            if count == 0:
+                text = caption
+
+            photo = PhotoItem('photo', photo_id, text)
             photos.append(photo)
 
         await bot.send_media_group(chat_id=config.CHANNEL, media=photos)
@@ -1055,7 +1061,7 @@ async def catch_gps_violation_location(message: types.Message,
                     state=Form.violation_datetime)
 async def catch_violation_time(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод даты и времени нарушения - ' +
-                str(message.from_user.id))
+                str(message.chat.id))
 
     async with state.proxy() as data:
         data['violation_datetime'] = message.text
