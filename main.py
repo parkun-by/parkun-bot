@@ -130,9 +130,6 @@ async def compose_summary(data):
         ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
         '\n' +\
-        'Прикреплено фотографий: ' +\
-        str(len(data['attachments'])) + '.' + '\n' +\
-        '\n' +\
         'Язык отправляемого письма: ' +\
         config.LANG_NAMES[data['letter_lang']] + '.' +\
         '\n' +\
@@ -207,6 +204,7 @@ async def compose_letter_body(data):
 async def approve_sending(chat_id, state):
     async with state.proxy() as data:
         text = await compose_summary(data)
+        await send_photos_group_with_caption(data, chat_id)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -455,31 +453,22 @@ async def ask_for_violation_time(chat_id):
     await Form.violation_datetime.set()
 
 
-async def send_post_to_channel(data):
-    caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
-              'Место: ' + data['violation_location'] + '\n' +\
-              'Гос. номер: ' + data['vehicle_number']
-
+async def send_photos_group_with_caption(data, chat_id, caption=''):
     photos_id = data['photo_id']
 
-    if len(photos_id) != 1:
-        photos = []
+    photos = []
 
-        for count, photo_id in enumerate(photos_id):
-            text = ''
+    for count, photo_id in enumerate(photos_id):
+        text = ''
 
-            # первой фотке добавим общее описание
-            if count == 0:
-                text = caption
+        # первой фотке добавим общее описание
+        if count == 0:
+            text = caption
 
-            photo = PhotoItem('photo', photo_id, text)
-            photos.append(photo)
+        photo = PhotoItem('photo', photo_id, text)
+        photos.append(photo)
 
-        await bot.send_media_group(chat_id=config.CHANNEL, media=photos)
-    else:
-        await bot.send_photo(chat_id=config.CHANNEL,
-                             photo=photos_id[0],
-                             caption=caption)
+    await bot.send_media_group(chat_id=chat_id, media=photos)
 
 
 def prepare_registration_number(number: str):
@@ -740,7 +729,12 @@ async def send_letter_click(call, state: FSMContext):
     await bot.send_message(call.message.chat.id, text)
 
     async with state.proxy() as data:
-        await send_post_to_channel(data)
+        caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
+            'Место: ' + data['violation_location'] + '\n' +\
+            'Гос. номер: ' + data['vehicle_number']
+
+        # в канал
+        await send_photos_group_with_caption(data, config.CHANNEL, caption)
         await delete_prepared_violation(data)
 
     await Form.operational_mode.set()
