@@ -147,7 +147,9 @@ async def compose_summary(data):
         'Гос. номер транспортного средства: ' +\
         data['vehicle_number'] + '\n' +\
         'Место нарушения (адрес): ' + data['violation_location'] + '\n' +\
-        'Дата и время нарушения: ' + data['violation_datetime']
+        'Дата и время нарушения: ' + data['violation_datetime'] + '\n' +\
+        '\n' +\
+        'Также нарушение будет опубликовано в канале ' + config.CHANNEL
 
     return text
 
@@ -455,7 +457,8 @@ async def ask_for_violation_time(chat_id):
 
 async def send_post_to_channel(data):
     caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
-        'Место: ' + data['violation_location']
+              'Место: ' + data['violation_location'] + '\n' +\
+              'Гос. номер: ' + data['vehicle_number']
 
     photos_id = data['photo_id']
 
@@ -477,6 +480,20 @@ async def send_post_to_channel(data):
         await bot.send_photo(chat_id=config.CHANNEL,
                              photo=photos_id[0],
                              caption=caption)
+
+
+def prepare_registration_number(number: str):
+    '''заменяем в номере все символы на киррилические'''
+
+    kyrillic = 'ABCEHKMOPTXY'
+    latin = 'ABCEHKMOPTXY'
+
+    up_number = number.upper()
+
+    for num, symbol in enumerate(latin):
+        up_number = up_number.replace(symbol, kyrillic[num])
+
+    return up_number
 
 
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
@@ -1003,7 +1020,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        data['vehicle_number'] = message.text
+        data['vehicle_number'] = prepare_registration_number(message.text)
 
     await ask_for_violation_address(message.chat.id)
 
