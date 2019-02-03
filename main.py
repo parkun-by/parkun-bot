@@ -123,28 +123,30 @@ async def set_default_sender_info(data):
 
 
 async def compose_summary(data):
-    text = 'Перед тем, как отправить обращение в ' +\
-        config.REGIONAL_NAME[data['recipient']] + ' на ящик ' +\
+    text = 'Перед тем, как отправить обращение в *' +\
+        config.REGIONAL_NAME[data['recipient']] + '* на ящик ' +\
         config.EMAIL_TO[data['recipient']] +\
         ' (и копию вам на ' + data['sender_email'] +\
         ') прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
         '\n' +\
-        'Язык отправляемого письма: ' +\
-        config.LANG_NAMES[data['letter_lang']] + '.' +\
+        'Язык отправляемого письма: *' +\
+        config.LANG_NAMES[data['letter_lang']] + '*.' +\
         '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
-        'Имя: ' + data['sender_name'] + '\n' +\
-        'Email: ' + data['sender_email'] + '\n' +\
-        'Адрес: ' + data['sender_address'] + '\n' +\
-        'Телефон: ' + data['sender_phone'] + '\n' +\
+        'Имя: *' + data['sender_name'] + '*' + '\n' +\
+        'Email: *' + data['sender_email'] + '*' + '\n' +\
+        'Адрес: *' + data['sender_address'] + '*' + '\n' +\
+        'Телефон: *' + data['sender_phone'] + '*' + '\n' +\
         '\n' +\
         'Нарушитель: ' + '\n' +\
-        'Гос. номер транспортного средства: ' +\
-        data['vehicle_number'] + '\n' +\
-        'Место нарушения (адрес): ' + data['violation_location'] + '\n' +\
-        'Дата и время нарушения: ' + data['violation_datetime'] + '\n' +\
+        'Гос. номер транспортного средства: *' +\
+        data['vehicle_number'] + '*' + '\n' +\
+        'Место нарушения (адрес): *' +\
+        data['violation_location'] + '*' + '\n' +\
+        'Дата и время нарушения: *' +\
+        data['violation_datetime'] + '*' + '\n' +\
         '\n' +\
         'Также нарушение будет опубликовано в канале ' + config.CHANNEL
 
@@ -224,7 +226,10 @@ async def approve_sending(chat_id, state):
     keyboard.add(approve_sending_button, cancel)
     keyboard.add(enter_violation_info)
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='Markdown')
 
 
 def get_subject(language):
