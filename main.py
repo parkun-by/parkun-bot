@@ -14,10 +14,12 @@ import config
 from locator import Locator
 from mailer import Mailer
 from photoitem import PhotoItem
+from uploader import Uploader
 from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
+uploader = Uploader()
 semaphore = asyncio.Semaphore()
 
 
@@ -90,7 +92,9 @@ async def invite_to_fill_credentials(chat_id):
 
 async def add_photo_to_attachments(photo, state):
     file = await bot.get_file(photo['file_id'])
-    image_url = config.URL_BASE + file.file_path
+
+    image_url = await uploader.get_permanent_url(
+        config.URL_BASE + file.file_path)
 
     # потанцевально узкое место, все потоки всех пользователей будут ждать
     # пока кто-то один аппендит, если я правильно понимаю
