@@ -124,6 +124,7 @@ async def set_default_sender_info(data):
 
     data['letter_lang'] = config.RU
     data['recipient'] = config.MINSK
+    data['saved_state'] = None
 
 
 async def compose_summary(data):
@@ -679,21 +680,65 @@ async def enter_violation_info_click(call, state: FSMContext):
     await Form.vehicle_number.set()
 
 
+@dp.callback_query_handler(lambda call: call.data == '/answer_feedback',
+                           state='*')
+async def answer_feedback_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ответа на фидбэк - ' +
+                str(call.from_user.id))
+
+    async with state.proxy() as data:
+        # сохраняем текущее состояние
+        current_state = await state.get_state()
+
+        if current_state != Form.feedback_answering.state:
+            data['saved_state'] = current_state
+
+        # сохраняем адресата
+        data['feedback_post'] = call.message.text
+
+    text = 'Введите ответ на фидбэк.'
+
+    # настроим клавиатуру
+    keyboard = get_cancel_keyboard()
+
+    await bot.answer_callback_query(call.id)
+
+    await bot.send_message(call.message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           reply_to_message_id=call.message.message_id)
+
+    await Form.feedback_answering.set()
+
+
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
                            state=[Form.violation_photo,
                                   Form.vehicle_number,
                                   Form.violation_datetime,
                                   Form.violation_location,
                                   Form.violation_sending,
-                                  Form.feedback])
+                                  Form.feedback,
+                                  Form.feedback_answering])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.id))
 
-    async with state.proxy() as data:
-        await delete_prepared_violation(data)
-
     await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        if 'saved_state' in data:
+            if data['saved_state'] is not None:
+                saved_state = data['saved_state']
+                await state.set_state(saved_state)
+                data['saved_state'] = None
+
+                text = 'Продолжайте работу с места, где она была прервана.'
+                await bot.send_message(call.message.chat.id, text)
+                return
+
+        await delete_prepared_violation(data)
+        data['feedback_post'] = ''
+
     text = 'Бот вернулся в режим ожидания фотокарточки нарушения.'
     await bot.send_message(call.message.chat.id, text)
     await Form.operational_mode.set()
@@ -897,12 +942,47 @@ async def catch_feedback(message: types.Message, state: FSMContext):
         message_id=message.message_id,
         disable_notification=True)
 
+    text = str(message.from_user.id) + ' ' + str(message.message_id)
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    give_feedback_button = types.InlineKeyboardButton(
+        text='Ответить',
+        callback_data='/answer_feedback')
+
+    keyboard.add(give_feedback_button)
+
+    await bot.send_message(config.ADMIN_ID, text, reply_markup=keyboard)
+
     text = 'Спасибо за отзыв! Можно продолжить работу с того же места.'
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
         saved_state = data['saved_state']
         await state.set_state(saved_state)
+        data['saved_state'] = None
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.feedback_answering)
+async def catch_sender_name(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ответ на фидбэк - ' + str(message.from_user.id))
+
+    async with state.proxy() as data:
+        feedback = data['feedback_post'].split(' ')
+        feedback_chat_id = feedback[0]
+        feedback_message_id = feedback[1]
+
+        await bot.send_message(feedback_chat_id,
+                               message.text,
+                               reply_to_message_id=feedback_message_id)
+
+        await state.set_state(data['saved_state'])
+        data['saved_state'] = None
+
+    text = 'Можно продолжить работу с того же места.'
+    await bot.send_message(message.chat.id, text)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
