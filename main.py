@@ -110,6 +110,10 @@ async def add_photo_to_attachments(photo, state):
 
 
 async def delete_prepared_violation(data):
+    # в этом месте сохраним адрес нарушения для использования в
+    # следующем обращении
+    data['previous_violation_address'] = data['violation_location']
+
     data['attachments'] = []
     data['photo_id'] = []
     data['vehicle_number'] = ''
@@ -125,6 +129,13 @@ async def set_default_sender_info(data):
     data['letter_lang'] = config.RU
     data['recipient'] = config.MINSK
     data['saved_state'] = None
+    data['previous_violation_address'] = ''
+
+    data['attachments'] = []
+    data['photo_id'] = []
+    data['vehicle_number'] = ''
+    data['violation_location'] = ''
+    data['violation_datetime'] = ''
 
 
 async def compose_summary(data):
@@ -290,7 +301,7 @@ async def invalid_credentials(state):
 
 def get_cancel_keyboard():
     # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard = types.InlineKeyboardMarkup()
 
     cancel = types.InlineKeyboardButton(
         text='Отмена',
@@ -374,14 +385,25 @@ async def show_private_info_summary(chat_id, state):
     await Form.operational_mode.set()
 
 
-async def ask_for_violation_address(chat_id):
+async def ask_for_violation_address(chat_id, data):
     text = 'Введите адрес, где произошло нарушение.' + '\n' +\
         'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
         '\n' +\
-        'Пример: г. Минск, пр. Независимости, д. 17.'
+        'Пример: г. Минск, пр. Независимости, д. 17.' + '\n' +\
+        '\n'
 
     # настроим клавиатуру
     keyboard = get_cancel_keyboard()
+
+    if 'previous_violation_address' in data:
+        if data['previous_violation_address'] != '':
+            text += 'Предыдущий: ' + data['previous_violation_address']
+
+            use_previous_button = types.InlineKeyboardButton(
+                text='Использовать предыдущий',
+                callback_data='/use_previous')
+
+            keyboard.add(use_previous_button)
 
     await bot.send_message(chat_id, text, reply_markup=keyboard)
     await Form.violation_location.set()
@@ -495,6 +517,19 @@ def prepare_registration_number(number: str):
     return up_number
 
 
+async def set_violation_location(chat_id, address, state):
+    coordinates = await locator.get_coordinates(address)
+    region = await locator.get_region(coordinates)
+
+    async with state.proxy() as data:
+        await save_violation_address(address, data)
+        await save_recipient(region, data)
+        region = data['recipient']
+
+    await print_violation_address_info(region, address, chat_id)
+    await ask_for_violation_time(chat_id)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/setup_sender',
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
@@ -513,6 +548,22 @@ async def skip_name_click(call):
 
     await bot.answer_callback_query(call.id)
     await ask_for_user_email(call.message.chat.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/use_previous',
+                           state=Form.violation_location)
+async def use_previous_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие предыдущий адрес - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        previous_address = data['previous_violation_address']
+
+    await set_violation_location(call.message.chat.id,
+                                 previous_address,
+                                 state)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/change_language',
@@ -605,12 +656,14 @@ async def sender_address_click(call):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
                            state=Form.violation_datetime)
-async def violation_address_click(call):
+async def violation_address_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода адреса нарушения - ' +
                 str(call.from_user.id))
 
     await bot.answer_callback_query(call.id)
-    await ask_for_violation_address(call.message.chat.id)
+
+    async with state.proxy() as data:
+        await ask_for_violation_address(call.message.chat.id, data)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_recipient',
@@ -828,10 +881,6 @@ async def setup_sender(message: types.Message, state: FSMContext):
     logger.info('Настройка отправителя - ' + str(message.from_user.id))
 
     async with state.proxy() as data:
-        # на всякий случай удалим введенное нарушение, если решили ввести
-        # свои данные в процессе ввода нарушения
-        await delete_prepared_violation(data)
-
         await set_default_sender_info(data)
         await send_language_info(message.chat.id, data)
 
@@ -1104,8 +1153,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['vehicle_number'] = prepare_registration_number(message.text)
-
-    await ask_for_violation_address(message.chat.id)
+        await ask_for_violation_address(message.chat.id, data)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1114,17 +1162,7 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
                 str(message.from_user.id))
 
-    address = message.text
-    coordinates = await locator.get_coordinates(address)
-    region = await locator.get_region(coordinates)
-
-    async with state.proxy() as data:
-        await save_violation_address(address, data)
-        await save_recipient(region, data)
-        region = data['recipient']
-
-    await print_violation_address_info(region, address, message.chat.id)
-    await ask_for_violation_time(message.chat.id)
+    await set_violation_location(message.chat.id, message.text, state)
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
