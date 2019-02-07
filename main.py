@@ -1126,7 +1126,10 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
     await add_photo_to_attachments(message.photo[-1], state)
 
     text = 'Добавьте еще одно фото или перейдите ко вводу информации ' +\
-        'о нарушении по кнопке "Гос. номер, адрес, время".'
+        'о нарушении по кнопке "Гос. номер, адрес, время".' + '\n' +\
+        '\n' +\
+        '*По отправленным фото должен легко определяться гос. номер ' +\
+        'нарушителя и само нарушение.*'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -1141,7 +1144,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     keyboard.add(enter_violation_info, cancel)
 
-    await message.reply(text, reply_markup=keyboard)
+    await message.reply(text, reply_markup=keyboard, parse_mode='Markdown')
     await Form.violation_photo.set()
 
 
