@@ -506,8 +506,8 @@ async def send_photos_group_with_caption(data, chat_id, caption=''):
 def prepare_registration_number(number: str):
     '''заменяем в номере все символы на киррилические'''
 
-    kyrillic = 'ABCEHKMOPTXY'
-    latin = 'ABCEHKMOPTXY'
+    kyrillic = 'ABCEHKMOPTXYІ'
+    latin = 'ABCEHKMOPTXYI'
 
     up_number = number.upper()
 
