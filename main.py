@@ -119,6 +119,7 @@ async def delete_prepared_violation(data):
     data['vehicle_number'] = ''
     data['violation_location'] = ''
     data['violation_datetime'] = ''
+    data['caption'] = ''
 
 
 async def set_default_sender_info(data):
@@ -192,6 +193,7 @@ async def get_letter_body(data):
     text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', data['sender_name'])
     text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__', data['sender_address'])
     text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__', data['sender_phone'])
+    text = text.replace('__ПРИМЕЧАНИЕ__', data['caption'])
 
     return text
 
@@ -220,9 +222,14 @@ async def compose_letter_body(data):
 
 
 async def approve_sending(chat_id, state):
+    caption_button_text = 'Добавить примечание'
+
     async with state.proxy() as data:
         text = await compose_summary(data)
         await send_photos_group_with_caption(data, chat_id)
+
+        if data['caption']:
+            caption_button_text = 'Изменить примечание'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -231,16 +238,20 @@ async def approve_sending(chat_id, state):
         text='Отправить письмо',
         callback_data='/approve_sending')
 
-    cancel = types.InlineKeyboardButton(
+    cancel_button = types.InlineKeyboardButton(
         text='Отмена',
         callback_data='/cancel')
 
-    enter_violation_info = types.InlineKeyboardButton(
-        text='Заново ввести данные о нарушении',
+    enter_violation_info_button = types.InlineKeyboardButton(
+        text='Гос. номер, адрес, время',
         callback_data='/enter_violation_info')
 
-    keyboard.add(approve_sending_button, cancel)
-    keyboard.add(enter_violation_info)
+    add_caption_button = types.InlineKeyboardButton(
+        text=caption_button_text,
+        callback_data='/add_caption')
+
+    keyboard.add(enter_violation_info_button, add_caption_button)
+    keyboard.add(approve_sending_button, cancel_button)
 
     await bot.send_message(chat_id,
                            text,
@@ -509,7 +520,7 @@ def prepare_registration_number(number: str):
     kyrillic = 'ABCEHKMOPTXYІ'
     latin = 'ABCEHKMOPTXYI'
 
-    up_number = number.upper()
+    up_number = number.upper().strip()
 
     for num, symbol in enumerate(latin):
         up_number = up_number.replace(symbol, kyrillic[num])
@@ -721,6 +732,9 @@ async def enter_violation_info_click(call, state: FSMContext):
     async with state.proxy() as data:
         await send_language_info(call.message.chat.id, data)
 
+        # зададим сразу пустое примечание
+        data['caption'] = ''
+
     text = 'Введите гос. номер транспортного средства.' + '\n' +\
         '\n' +\
         'Пример: 9999 АА-9'
@@ -731,6 +745,30 @@ async def enter_violation_info_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
     await Form.vehicle_number.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/add_caption',
+                           state=[Form.violation_sending])
+async def add_caption_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ввода примечания - ' +
+                str(call.from_user.id))
+
+    async with state.proxy() as data:
+        # зададим сразу пустое примечание
+        data['caption'] = ''
+
+        # сохраним состояние, чтобы к нему вернуться
+        current_state = await state.get_state()
+        data['saved_state'] = current_state
+
+    text = 'Введите примечание к обращению (будет вставлено в тело письма).'
+
+    # настроим клавиатуру
+    keyboard = get_cancel_keyboard()
+
+    await bot.answer_callback_query(call.id)
+    await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
+    await Form.caption.set()
 
 
 @dp.callback_query_handler(lambda call: call.data == '/answer_feedback',
@@ -771,7 +809,8 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.violation_location,
                                   Form.violation_sending,
                                   Form.feedback,
-                                  Form.feedback_answering])
+                                  Form.feedback_answering,
+                                  Form.caption])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.id))
@@ -1157,6 +1196,30 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['vehicle_number'] = prepare_registration_number(message.text)
         await ask_for_violation_address(message.chat.id, data)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.caption)
+async def catch_vehicle_number(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод примечания - ' +
+                str(message.from_user.id))
+
+    async with state.proxy() as data:
+        data['saved_state'] = None
+        data['caption'] = message.text.strip()
+
+    await Form.violation_sending.set()
+    await approve_sending(message.chat.id, state)
+
+
+@dp.message_handler(content_types=types.ContentType.ANY,
+                    state=Form.caption)
+async def catch_vehicle_number(message: types.Message):
+    logger.info('Обрабатываем ввод неправильного примечания - ' +
+                str(message.from_user.id))
+
+    text = 'Допускается ввод только текста.'
+    await bot.send_message(message.chat.id, text)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,

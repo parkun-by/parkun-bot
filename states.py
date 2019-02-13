@@ -17,3 +17,4 @@ class Form(StatesGroup):
     violation_sending = State()  # In storage as 'Form:violation_sending'
     feedback = State()  # In storage as 'Form:feedback'
     feedback_answering = State()  # In storage as 'Form:feedback_answering'
+    caption = State()  # In storage as 'Form:caption'
