@@ -545,7 +545,7 @@ async def set_violation_location(chat_id, address, state):
                            state='*')
 async def setup_sender_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода личных данных - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await setup_sender(call.message, state)
@@ -555,7 +555,7 @@ async def setup_sender_click(call, state: FSMContext):
                            state=Form.sender_name)
 async def skip_name_click(call):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода ФИО - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await ask_for_user_email(call.message.chat.id)
@@ -565,7 +565,7 @@ async def skip_name_click(call):
                            state=Form.violation_location)
 async def use_previous_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие предыдущий адрес - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
 
@@ -582,7 +582,7 @@ async def use_previous_click(call, state: FSMContext):
                                   Form.sender_name])
 async def change_language_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки смены языка - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
 
@@ -617,7 +617,7 @@ async def change_language_click(call, state: FSMContext):
                            state=Form.sender_email)
 async def skip_email_click(call):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода email - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await ask_for_user_address(call.message.chat.id)
@@ -627,7 +627,7 @@ async def skip_email_click(call):
                            state=Form.sender_address)
 async def skip_address_click(call):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода адреса - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await ask_for_user_phone(call.message.chat.id)
@@ -637,7 +637,7 @@ async def skip_address_click(call):
                            state=Form.sender_phone)
 async def skip_phone_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода телефона - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await show_private_info_summary(call.message.chat.id, state)
@@ -647,7 +647,7 @@ async def skip_phone_click(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def current_time_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода текущего времени - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     current_time = get_str_current_time()
 
@@ -659,7 +659,7 @@ async def current_time_click(call, state: FSMContext):
                            state=Form.sender_phone)
 async def sender_address_click(call):
     logger.info('Обрабатываем нажатие кнопки ввода своего адреса - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await ask_for_user_address(call.message.chat.id)
@@ -669,7 +669,7 @@ async def sender_address_click(call):
                            state=Form.violation_datetime)
 async def violation_address_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода адреса нарушения - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
 
@@ -681,7 +681,7 @@ async def violation_address_click(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def recipient_click(call):
     logger.info('Обрабатываем нажатие кнопки ввода реципиента - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
 
@@ -709,7 +709,7 @@ async def recipient_click(call):
     lambda call: call.message.text == 'Выберите получателя письма:',
     state=Form.recipient)
 async def recipient_choosen_click(call, state: FSMContext):
-    logger.info('Выбрал реципиента - ' + str(call.from_user.id))
+    logger.info('Выбрал реципиента - ' + str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
 
@@ -727,7 +727,7 @@ async def recipient_choosen_click(call, state: FSMContext):
                                   Form.violation_sending])
 async def enter_violation_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     async with state.proxy() as data:
         await send_language_info(call.message.chat.id, data)
@@ -751,7 +751,7 @@ async def enter_violation_info_click(call, state: FSMContext):
                            state=[Form.violation_sending])
 async def add_caption_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода примечания - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     async with state.proxy() as data:
         # зададим сразу пустое примечание
@@ -775,7 +775,7 @@ async def add_caption_click(call, state: FSMContext):
                            state='*')
 async def answer_feedback_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ответа на фидбэк - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     async with state.proxy() as data:
         # сохраняем текущее состояние
@@ -813,7 +813,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.caption])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
 
@@ -840,14 +840,14 @@ async def cancel_violation_input(call, state: FSMContext):
                            state=Form.violation_sending)
 async def send_letter_click(call, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     if await invalid_credentials(state):
         text = 'Для отправки нарушений нужно заполнить информацию ' +\
             'о себе командой /setup_sender'
 
         logger.info('Письмо не отправлено, не введены личные данные - ' +
-                    str(call.from_user.id))
+                    str(call.from_user.username))
     else:
         parameters = await prepare_mail_parameters(state)
 
@@ -857,7 +857,7 @@ async def send_letter_click(call, state: FSMContext):
                 'Проверьте ящик - вам придет копия.' + '\n' +\
                 'Внимание! На ящики mail.ru копия не приходит ¯ \ _ (ツ) _ / ¯.'
 
-            logger.info('Письмо отправлено - ' + str(call.from_user.id))
+            logger.info('Письмо отправлено - ' + str(call.from_user.username))
         except Exception as exc:
             text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
                 await humanize_message(exc)
@@ -889,7 +889,7 @@ async def send_letter_click(call, state: FSMContext):
 @dp.callback_query_handler(state='*')
 async def reject_button_click(call):
     logger.info('Беспорядочно кликает на кнопки - ' +
-                str(call.from_user.id))
+                str(call.from_user.username))
 
     text = 'Действие неактуально.'
 
@@ -902,7 +902,7 @@ async def cmd_start(message: types.Message):
     """
     Conversation's entry point
     """
-    logger.info('Старт работы бота - ' + str(message.from_user.id))
+    logger.info('Старт работы бота - ' + str(message.from_user.username))
 
     text = 'Привет, этот бот упрощает посылку обращения в ГАИ о нарушении ' +\
         'правил парковки. Для работы ему потребуется от вас ' +\
@@ -917,7 +917,7 @@ async def cmd_start(message: types.Message):
 
 @dp.message_handler(commands=['setup_sender'], state='*')
 async def setup_sender(message: types.Message, state: FSMContext):
-    logger.info('Настройка отправителя - ' + str(message.from_user.id))
+    logger.info('Настройка отправителя - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
         await set_default_sender_info(data)
@@ -935,7 +935,7 @@ async def setup_sender(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['reset'], state='*')
 async def cmd_reset(message: types.Message, state: FSMContext):
-    logger.info('Сброс бота - ' + str(message.from_user.id))
+    logger.info('Сброс бота - ' + str(message.from_user.username))
 
     await state.finish()
     await Form.initial.set()
@@ -947,7 +947,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['help'], state='*')
 async def cmd_help(message: types.Message):
-    logger.info('Вызов помощи - ' + str(message.from_user.id))
+    logger.info('Вызов помощи - ' + str(message.from_user.username))
 
     text = 'После однократного заполнения личных данных, можно прикрепить ' +\
         'сразу несколько фото нарушения с телефона или отправив ' +\
@@ -1002,7 +1002,7 @@ async def cmd_help(message: types.Message):
 
 @dp.message_handler(commands=['feedback'], state='*')
 async def write_feedback(message: types.Message, state: FSMContext):
-    logger.info('Хочет написать фидбэк - ' + str(message.from_user.id))
+    logger.info('Хочет написать фидбэк - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
         current_state = await state.get_state()
@@ -1022,7 +1022,7 @@ async def write_feedback(message: types.Message, state: FSMContext):
 @dp.message_handler(state=Form.feedback)
 async def catch_feedback(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод фидбэка - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     await bot.forward_message(
         chat_id=config.ADMIN_ID,
@@ -1055,7 +1055,8 @@ async def catch_feedback(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.feedback_answering)
 async def catch_sender_name(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ответ на фидбэк - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ответ на фидбэк - ' +
+                str(message.from_user.username))
 
     async with state.proxy() as data:
         feedback = data['feedback_post'].split(' ')
@@ -1076,7 +1077,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_name)
 async def catch_sender_name(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод ФИО - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод ФИО - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
         data['sender_name'] = message.text
@@ -1087,7 +1088,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_email)
 async def catch_sender_email(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод email - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод email - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
         data['sender_email'] = message.text
@@ -1098,7 +1099,8 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_address)
 async def catch_sender_address(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод адреса - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод адреса - ' +
+                str(message.from_user.username))
 
     async with state.proxy() as data:
         data['sender_address'] = message.text
@@ -1110,7 +1112,7 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
                     state=Form.sender_address)
 async def catch_gps_sender_address(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса по локации - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     coordinates = (str(message.location.longitude) + ', ' +
                    str(message.location.latitude))
@@ -1120,7 +1122,7 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
 
     if address is None:
         logger.info('Не распознал локацию - ' +
-                    str(message.from_user.id))
+                    str(message.from_user.username))
 
         text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
         await bot.send_message(message.chat.id, text)
@@ -1145,7 +1147,8 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_phone)
 async def catch_sender_phone(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод телефона - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод телефона - ' +
+                str(message.from_user.username))
 
     async with state.proxy() as data:
         data['sender_phone'] = message.text
@@ -1158,7 +1161,7 @@ async def catch_sender_phone(message: types.Message, state: FSMContext):
                            Form.violation_photo])
 async def process_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки нарушения - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     # Добавляем фотку наилучшего качества(последнюю в массиве) в список
     # прикрепления в письме
@@ -1191,7 +1194,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
                     state=Form.vehicle_number)
 async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод гос. номера - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     async with state.proxy() as data:
         data['vehicle_number'] = prepare_registration_number(message.text)
@@ -1202,7 +1205,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                     state=Form.caption)
 async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод примечания - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     async with state.proxy() as data:
         data['saved_state'] = None
@@ -1216,7 +1219,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                     state=Form.caption)
 async def catch_vehicle_number(message: types.Message):
     logger.info('Обрабатываем ввод неправильного примечания - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     text = 'Допускается ввод только текста.'
     await bot.send_message(message.chat.id, text)
@@ -1226,7 +1229,7 @@ async def catch_vehicle_number(message: types.Message):
                     state=Form.violation_location)
 async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     await set_violation_location(message.chat.id, message.text, state)
 
@@ -1236,7 +1239,7 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
 async def catch_gps_violation_location(message: types.Message,
                                        state: FSMContext):
     logger.info('Обрабатываем ввод локации адреса нарушения - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     coordinates = [message.location.longitude, message.location.latitude]
 
@@ -1248,7 +1251,7 @@ async def catch_gps_violation_location(message: types.Message,
 
     if address is None:
         logger.info('Не распознал локацию - ' +
-                    str(message.from_user.id))
+                    str(message.from_user.username))
 
         text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
         await bot.send_message(message.chat.id, text)
@@ -1265,7 +1268,7 @@ async def catch_gps_violation_location(message: types.Message,
                     state=Form.violation_datetime)
 async def catch_violation_time(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод даты и времени нарушения - ' +
-                str(message.chat.id))
+                str(message.chat.username))
 
     async with state.proxy() as data:
         data['violation_datetime'] = message.text
@@ -1283,7 +1286,7 @@ async def ignore_initial_input(message: types.Message):
                     state=Form.operational_mode)
 async def reject_wrong_input(message: types.Message):
     logger.info('Посылает не фотку, а что-то другое - ' +
-                str(message.from_user.id))
+                str(message.from_user.username))
 
     text = 'Я ожидаю от вас фото нарушений правил остановки и ' +\
         'стоянки транспортных средств.'
