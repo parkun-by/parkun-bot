@@ -72,18 +72,18 @@ REQUIRED_CREDENTIALS = ['sender_name',
 async def invite_to_fill_credentials(chat_id):
     message = 'Первым делом нужно ввести информацию о себе ' +\
         '(ФИО, адрес, телефон, которые будут в письме в ГАИ) ' +\
-        'отправив команду /setup_sender. Введенная информация сохранится ' +\
+        'отправив команду /personal_info. Введенная информация сохранится ' +\
         'для упрощения ввода нарушений. Очистить информацию о себе можно ' +\
         'командой /reset.'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
-    setup_sender_button = types.InlineKeyboardButton(
+    personal_info_button = types.InlineKeyboardButton(
         text='Ввести информацию о себе',
-        callback_data='/setup_sender')
+        callback_data='/enter_personal_info')
 
-    keyboard.add(setup_sender_button)
+    keyboard.add(personal_info_button)
 
     await bot.send_message(chat_id,
                            message,
@@ -339,7 +339,7 @@ def get_skip_keyboard():
 async def humanize_message(exception):
     invalid_email_msg = '\'message\': "valid \'from\' email address required"'
     invalid_email_humanized = 'Для отправки письма нужно ввести свой ' +\
-        'существующий email командой /setup_sender.'
+        'существующий email командой /personal_info.'
 
     if invalid_email_msg in str(exception):
         return invalid_email_humanized
@@ -541,14 +541,41 @@ async def set_violation_location(chat_id, address, state):
     await ask_for_violation_time(chat_id)
 
 
-@dp.callback_query_handler(lambda call: call.data == '/setup_sender',
+async def enter_personal_info(message, state):
+    logger.info('Настройка отправителя - ' + str(message.from_user.username))
+
+    async with state.proxy() as data:
+        await set_default_sender_info(data)
+        await send_language_info(message.chat.id, data)
+
+    text = 'Введите свое ФИО.' + '\n' +\
+        '\n' +\
+        'Пример: Зенон Станиславович Позняк.'
+
+    keyboard = get_skip_keyboard()
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await Form.sender_name.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/enter_personal_info',
                            state='*')
-async def setup_sender_click(call, state: FSMContext):
+async def personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода личных данных - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await setup_sender(call.message, state)
+    await enter_personal_info(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/reset',
+                           state='*')
+async def personal_info_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки удаления личных данных - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    await cmd_reset(call.message, state)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -843,8 +870,8 @@ async def send_letter_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     if await invalid_credentials(state):
-        text = 'Для отправки нарушений нужно заполнить информацию ' +\
-            'о себе командой /setup_sender'
+        text = 'Для отправки нарушений в ГАИ нужно заполнить информацию ' +\
+            'о себе командой /personal_info'
 
         logger.info('Письмо не отправлено, не введены личные данные - ' +
                     str(call.from_user.username))
@@ -915,22 +942,34 @@ async def cmd_start(message: types.Message):
     await invite_to_fill_credentials(message.chat.id)
 
 
-@dp.message_handler(commands=['setup_sender'], state='*')
-async def setup_sender(message: types.Message, state: FSMContext):
-    logger.info('Настройка отправителя - ' + str(message.from_user.username))
+@dp.message_handler(commands=['personal_info'], state='*')
+async def show_personal_info(message: types.Message, state: FSMContext):
+    logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
-        await set_default_sender_info(data)
-        await send_language_info(message.chat.id, data)
+        text = 'Личные данные:' + '\n' + '\n' +\
+            'Имя: <b>' + data['sender_name'] + '</b>' + '\n' +\
+            'Email: <b>' + data['sender_email'] + '</b>' + '\n' +\
+            'Адрес: <b>' + data['sender_address'] + '</b>' + '\n' +\
+            'Телефон: <b>' + data['sender_phone'] + '</b>' + '\n'
 
-    text = 'Введите свое ФИО.' + '\n' +\
-        '\n' +\
-        'Пример: Зенон Станиславович Позняк.'
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    keyboard = get_skip_keyboard()
+    enter_personal_info_button = types.InlineKeyboardButton(
+        text='Редактировать',
+        callback_data='/enter_personal_info')
 
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
-    await Form.sender_name.set()
+    delete_personal_info_button = types.InlineKeyboardButton(
+        text='Удалить',
+        callback_data='/reset')
+
+    keyboard.add(enter_personal_info_button, delete_personal_info_button)
+
+    await bot.send_message(message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
 
 
 @dp.message_handler(commands=['reset'], state='*')
@@ -942,6 +981,10 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 
     text = 'Стер себе память ¯\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
+
+    async with state.proxy() as data:
+        await set_default_sender_info(data)
+
     await invite_to_fill_credentials(message.chat.id)
 
 
