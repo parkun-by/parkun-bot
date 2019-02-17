@@ -925,7 +925,7 @@ async def reject_button_click(call):
 
 
 @dp.message_handler(commands=['start'])
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, state: FSMContext):
     """
     Conversation's entry point
     """
@@ -933,12 +933,16 @@ async def cmd_start(message: types.Message):
 
     text = 'Привет, этот бот упрощает посылку обращения в ГАИ о нарушении ' +\
         'правил парковки. Для работы ему потребуется от вас ' +\
-        'имя, адрес, email, телефон. '
+        'имя, адрес, email, телефон (по желанию). '
 
     await bot.send_message(message.chat.id,
                            text)
 
     await Form.initial.set()
+
+    async with state.proxy() as data:
+        await set_default_sender_info(data)
+
     await invite_to_fill_credentials(message.chat.id)
 
 
