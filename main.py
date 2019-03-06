@@ -352,11 +352,15 @@ async def ask_for_user_address(chat_id):
         'на него придет ответ из ГАИ.' + '\n' +\
         'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
         '\n' +\
-        'Пример: г. Минск, пр. Независимости, д. 17, кв. 25.'
+        'Пример: <b>г. Минск, пр. Независимости, д. 17, кв. 25</b>.'
 
     keyboard = get_skip_keyboard()
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.sender_address.set()
 
 
@@ -365,22 +369,30 @@ async def ask_for_user_email(chat_id):
         'отправляться письма в ГАИ.' + '\n' +\
         'С несуществующего адреса письмо не отправится.' + '\n' +\
         '\n' +\
-        'Пример: example@example.com'
+        'Пример: <b>example@example.com</b>'
 
     keyboard = get_skip_keyboard()
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.sender_email.set()
 
 
 async def ask_for_user_phone(chat_id):
     text = 'Введите свой номер телефона (необязательно).' + '\n' +\
         '\n' +\
-        'Пример: +375221111111.'
+        'Пример: <b>+375221111111</b>.'
 
     keyboard = get_skip_keyboard()
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.sender_phone.set()
 
 
@@ -400,7 +412,7 @@ async def ask_for_violation_address(chat_id, data):
     text = 'Введите адрес, где произошло нарушение.' + '\n' +\
         'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
         '\n' +\
-        'Пример: г. Минск, пр. Независимости, д. 17.' + '\n' +\
+        'Пример: <b>г. Минск, пр. Независимости, д. 17</b>.' + '\n' +\
         '\n'
 
     # настроим клавиатуру
@@ -408,7 +420,8 @@ async def ask_for_violation_address(chat_id, data):
 
     if 'previous_violation_address' in data:
         if data['previous_violation_address'] != '':
-            text += 'Предыдущий: ' + data['previous_violation_address']
+            text += 'Предыдущий: <b>' + \
+                data['previous_violation_address'] + '</b>'
 
             use_previous_button = types.InlineKeyboardButton(
                 text='Использовать предыдущий',
@@ -416,7 +429,11 @@ async def ask_for_violation_address(chat_id, data):
 
             keyboard.add(use_previous_button)
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.violation_location.set()
 
 
@@ -448,9 +465,10 @@ async def save_recipient(region, data):
 
 
 async def print_violation_address_info(region, address, chat_id):
-    text = 'Получатель письма: ' + config.REGIONAL_NAME[region] + '.' + '\n' +\
+    text = 'Получатель письма: <b>' + config.REGIONAL_NAME[region] +\
+        '</b>.' + '\n' +\
         '\n' +\
-        'Адрес нарушения: ' + address
+        'Адрес нарушения: <b>' + address + '</b>'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -465,7 +483,10 @@ async def print_violation_address_info(region, address, chat_id):
 
     keyboard.add(enter_violation_addr_button, enter_recipient_button)
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
 
 
 async def save_violation_address(address, data):
@@ -477,7 +498,7 @@ async def ask_for_violation_time(chat_id):
     text = 'Введите дату и время нарушения. Ввести текущее время ' +\
         'можно кнопкой снизу.' + '\n' +\
         '\n' +\
-        'Пример: ' + current_time + '.'
+        'Пример: <b>' + current_time + '</b>.'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -492,7 +513,11 @@ async def ask_for_violation_time(chat_id):
 
     keyboard.add(current_time_button, cancel)
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.violation_datetime.set()
 
 
@@ -550,11 +575,15 @@ async def enter_personal_info(message, state):
 
     text = 'Введите свое ФИО.' + '\n' +\
         '\n' +\
-        'Пример: Зенон Станиславович Позняк.'
+        'Пример: <b>Зенон Станиславович Позняк</b>.'
 
     keyboard = get_skip_keyboard()
 
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await bot.send_message(message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.sender_name.set()
 
 
@@ -623,7 +652,7 @@ async def change_language_click(call, state: FSMContext):
 
         lang_name = config.LANG_NAMES[data['letter_lang']]
 
-    text = 'Текущий язык посылаемого обращения - ' + lang_name + '.'
+    text = 'Текущий язык посылаемого обращения - <b>' + lang_name + '</b>.'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -637,7 +666,8 @@ async def change_language_click(call, state: FSMContext):
     await bot.edit_message_text(text,
                                 call.message.chat.id,
                                 call.message.message_id,
-                                reply_markup=keyboard)
+                                reply_markup=keyboard,
+                                parse_mode='HTML')
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -764,13 +794,18 @@ async def enter_violation_info_click(call, state: FSMContext):
 
     text = 'Введите гос. номер транспортного средства.' + '\n' +\
         '\n' +\
-        'Пример: 9999 АА-9'
+        'Пример: <b>9999 АА-9</b>'
 
     # настроим клавиатуру
     keyboard = get_cancel_keyboard()
 
     await bot.answer_callback_query(call.id)
-    await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
+
+    await bot.send_message(call.message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
     await Form.vehicle_number.set()
 
 
