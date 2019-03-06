@@ -95,3 +95,7 @@ BASE_YANDEX_MAPS_URL = 'https://geocode-maps.yandex.ru/1.x/'
 
 # channel
 CHANNEL = '@channel_name'
+
+# verifier
+MAIL_VERIFIER_URL = 'PUT_VERIFIER_URL'
+VERIFYING_FAIL = '42'
