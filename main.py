@@ -13,12 +13,14 @@ from aiogram.utils.exceptions import InvalidQueryID
 import config
 from locator import Locator
 from mailer import Mailer
+from mail_verifier import MailVerifier
 from photoitem import PhotoItem
 from uploader import Uploader
 from states import Form
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
+mail_verifier = MailVerifier()
 uploader = Uploader()
 semaphore = asyncio.Semaphore()
 
@@ -90,6 +92,26 @@ async def invite_to_fill_credentials(chat_id):
                            reply_markup=keyboard)
 
 
+async def invite_to_confirm_email(data, chat_id):
+    message = 'Для отправки обращений нужно подтвердить email. ' +\
+        'После нажатия на кнопку будет выслано письмо на <b>' +\
+        data['sender_email'] + '</b> с кодом, который нужно ввести боту.'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    verify_email_button = types.InlineKeyboardButton(
+        text='Подтвердить email',
+        callback_data='/verify_email')
+
+    keyboard.add(verify_email_button)
+
+    await bot.send_message(chat_id,
+                           message,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
+
 async def add_photo_to_attachments(photo, state):
     file = await bot.get_file(photo['file_id'])
 
@@ -122,15 +144,22 @@ async def delete_prepared_violation(data):
     data['caption'] = ''
 
 
+def set_default(data, key, value):
+    if key not in data:
+        data[key] = value
+
+
 async def set_default_sender_info(data):
     for user_info in CREDENTIALS:
         if user_info not in data:
             data[user_info] = ''
 
-    data['letter_lang'] = config.RU
-    data['recipient'] = config.MINSK
+    set_default(data, 'verified', False)
+    data['secret_code'] = ''
+    set_default(data, 'letter_lang', config.RU)
+    set_default(data, 'recipient', config.MINSK)
+    set_default(data, 'previous_violation_address', '')
     data['saved_state'] = None
-    data['previous_violation_address'] = ''
 
     data['attachments'] = []
     data['photo_id'] = []
@@ -310,6 +339,15 @@ async def invalid_credentials(state):
     return False
 
 
+async def verified_email(state):
+    async with state.proxy() as data:
+        if 'verified' not in data:
+            data['verified'] = False
+            return False
+
+        return data['verified']
+
+
 def get_cancel_keyboard():
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup()
@@ -401,10 +439,15 @@ async def show_private_info_summary(chat_id, state):
         text = 'Без ввода полной информации о себе вы не сможете отправить ' +\
                'обращение в ГАИ. Зато уже можете загрузить фото и ' +\
                'посмотреть, как все работает.'
+
+        await bot.send_message(chat_id, text)
+    elif not await verified_email(state):
+        async with state.proxy() as data:
+            await invite_to_confirm_email(data, chat_id)
     else:
         text = 'Все готово, можно слать фото нарушителей парковки.'
+        await bot.send_message(chat_id, text)
 
-    await bot.send_message(chat_id, text)
     await Form.operational_mode.set()
 
 
@@ -595,6 +638,38 @@ async def personal_info_click(call, state: FSMContext):
 
     await bot.answer_callback_query(call.id)
     await enter_personal_info(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/verify_email',
+                           state='*')
+async def verify_email_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки верификации почты - ' +
+                str(call.from_user.username))
+
+    if await verified_email(state):
+        text = 'Ваш email уже подтвержден.'
+        await bot.send_message(call.message.chat.id, text)
+        return
+
+    async with state.proxy() as data:
+        secret_code = await mail_verifier.verify(data['sender_email'])
+
+    if secret_code == config.VERIFYING_FAIL:
+        text = 'При отправке кода произошла ошибка, попробуйте ' + '\n' +\
+            'еще раз. Если стабильно не получается, то обратитесь в /feedback.'
+
+        await Form.operational_mode.set()
+    else:
+        text = 'Введите код, присланный ботом вам на почту.' + '\n' +\
+            'Скорее всего вы найдете его в папке "Спам".'
+
+        async with state.proxy() as data:
+            data['secret_code'] = secret_code
+
+        await Form.email_verifying.set()
+
+    await bot.send_message(call.message.chat.id, text)
+
 
 
 @dp.callback_query_handler(lambda call: call.data == '/reset',
@@ -910,6 +985,14 @@ async def send_letter_click(call, state: FSMContext):
 
         logger.info('Письмо не отправлено, не введены личные данные - ' +
                     str(call.from_user.username))
+
+        await bot.send_message(call.message.chat.id, text)
+    elif not await verified_email(state):
+        logger.info('Письмо не отправлено, email не подтвержден - ' +
+                    str(call.from_user.username))
+
+        async with state.proxy() as data:
+            await invite_to_confirm_email(data, call.message.chat.id)
     else:
         parameters = await prepare_mail_parameters(state)
 
@@ -938,14 +1021,14 @@ async def send_letter_click(call, state: FSMContext):
             logger.error('Неудачка - ' + str(call.from_user.id) + '\n' +
                          str(exc))
 
+        await bot.send_message(call.message.chat.id, text)
+
     # из-за того, что письмо может отправляться долго,
     # телеграм может погасить кружочек ожидания сам, и тогда будет исключение
     try:
         await bot.answer_callback_query(call.id)
     except InvalidQueryID:
         pass
-
-    await bot.send_message(call.message.chat.id, text)
 
     async with state.proxy() as data:
         await delete_prepared_violation(data)
@@ -1164,6 +1247,28 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.email_verifying)
+async def catch_secret_code(message: types.Message, state: FSMContext):
+    logger.info('Ввод секретного кода - ' + str(message.from_user.username))
+
+    async with state.proxy() as data:
+        secret_code = data['secret_code']
+
+    if secret_code == message.text:
+        async with state.proxy() as data:
+            data['verified'] = True
+
+        text = 'Ваша почта подтверждена, можно вводить нарушения.'
+    else:
+        text = 'Секретный код не совпадает, попробуйте запросить ' +\
+            'подтверждение еще раз (нажать на кнопку).' + '\n' +\
+            'Если стабильно не получается, то обратитесь в /feedback.'
+
+    await bot.send_message(message.chat.id, text)
+    await Form.operational_mode.set()
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_name)
 async def catch_sender_name(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод ФИО - ' + str(message.from_user.username))
@@ -1181,6 +1286,7 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_email'] = message.text
+        data['verified'] = False
 
     await ask_for_user_address(message.chat.id)
 
