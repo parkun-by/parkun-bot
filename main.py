@@ -880,11 +880,22 @@ async def send_letter_click(call, state: FSMContext):
 
         try:
             mailer.send_mail(parameters)
-            text = 'Письмо отправлено. ' +\
+            text = 'Письмо отправлено в ГАИ и в ' + config.CHANNEL + '. ' +\
                 'Проверьте ящик - вам придет копия.' + '\n' +\
                 'Внимание! На ящики mail.ru копия не приходит ¯ \ _ (ツ) _ / ¯.'
 
             logger.info('Письмо отправлено - ' + str(call.from_user.username))
+
+            async with state.proxy() as data:
+                caption = 'Дата и время: ' +\
+                    data['violation_datetime'] + '\n' +\
+                    'Место: ' + data['violation_location'] + '\n' +\
+                    'Гос. номер: ' + data['vehicle_number']
+
+                # в канал
+                await send_photos_group_with_caption(data,
+                                                     config.CHANNEL,
+                                                     caption)
         except Exception as exc:
             text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
                 await humanize_message(exc)
@@ -902,12 +913,6 @@ async def send_letter_click(call, state: FSMContext):
     await bot.send_message(call.message.chat.id, text)
 
     async with state.proxy() as data:
-        caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
-            'Место: ' + data['violation_location'] + '\n' +\
-            'Гос. номер: ' + data['vehicle_number']
-
-        # в канал
-        await send_photos_group_with_caption(data, config.CHANNEL, caption)
         await delete_prepared_violation(data)
 
     await Form.operational_mode.set()
