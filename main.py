@@ -676,6 +676,8 @@ async def verify_email_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки верификации почты - ' +
                 str(call.from_user.username))
 
+    await bot.answer_callback_query(call.id)
+
     if await verified_email(state):
         text = 'Ваш email уже подтвержден.'
         await bot.send_message(call.message.chat.id, text)
