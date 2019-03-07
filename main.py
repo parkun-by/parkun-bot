@@ -1,22 +1,23 @@
 import asyncio
 import logging
-import pytz
 from datetime import datetime
 from os import path
 
+import pytz
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils import executor
 from aiogram.utils.exceptions import InvalidQueryID
+from disposable_email_domains import blocklist
 
 import config
 from locator import Locator
-from mailer import Mailer
 from mail_verifier import MailVerifier
+from mailer import Mailer
 from photoitem import PhotoItem
-from uploader import Uploader
 from states import Form
+from uploader import Uploader
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
@@ -1282,6 +1283,13 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
                     state=Form.sender_email)
 async def catch_sender_email(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод email - ' + str(message.from_user.username))
+
+    if message.text.split('@')[1] in blocklist:
+        logger.info('Временный email - ' + str(message.from_user.username))
+        text = 'Нужно ввести постоянный email-адрес.'
+        await bot.send_message(message.chat.id, text)
+        await ask_for_user_email(message.chat.id)
+        return
 
     async with state.proxy() as data:
         data['sender_email'] = message.text
