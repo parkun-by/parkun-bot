@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 from datetime import datetime
 from os import path
@@ -113,6 +114,36 @@ async def invite_to_confirm_email(data, chat_id):
                            parse_mode='HTML')
 
 
+async def share_violation(state, username, chat_id):
+    parameters = await prepare_mail_parameters(state)
+
+    try:
+        mailer.send_mail(parameters)
+        text = 'Письмо отправлено в ГАИ и в ' + config.CHANNEL + '. '
+        logger.info('Письмо отправлено - ' + str(username))
+
+        async with state.proxy() as data:
+            file = io.StringIO(parameters['html'])
+            file.name = 'Письмо.html'
+            await bot.send_document(chat_id, file)
+
+            caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
+                'Место: ' + data['violation_location'] + '\n' +\
+                'Гос. номер: ' + data['vehicle_number']
+
+            # в канал
+            await send_photos_group_with_caption(data,
+                                                 config.CHANNEL,
+                                                 caption)
+    except Exception as exc:
+        text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
+            await humanize_message(exc)
+
+        logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
+
+    await bot.send_message(chat_id, text)
+
+
 async def add_photo_to_attachments(photo, state):
     file = await bot.get_file(photo['file_id'])
 
@@ -173,8 +204,7 @@ async def compose_summary(data):
     text = 'Перед тем, как отправить обращение в <b>' +\
         config.REGIONAL_NAME[data['recipient']] + '</b> на ящик ' +\
         config.EMAIL_TO[data['recipient']] +\
-        ' (и копию вам на ' + data['sender_email'] +\
-        ') прошу проверить основную информацию ' +\
+        ' прошу проверить основную информацию ' +\
         'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
         '\n' +\
         'Язык отправляемого письма: <b>' +\
@@ -303,7 +333,6 @@ async def prepare_mail_parameters(state):
         recipient = config.NAME_TO[data['recipient']][data['letter_lang']]
 
         parameters = {'to': {config.EMAIL_TO[data['recipient']]: recipient},
-                      'bcc': {data['sender_email']: data['sender_name']},
                       'from': [data['sender_email'], data['sender_name']],
                       'subject': get_subject(data['letter_lang']),
                       'html': await compose_letter_body(data),
@@ -994,34 +1023,9 @@ async def send_letter_click(call, state: FSMContext):
         async with state.proxy() as data:
             await invite_to_confirm_email(data, call.message.chat.id)
     else:
-        parameters = await prepare_mail_parameters(state)
-
-        try:
-            mailer.send_mail(parameters)
-            text = 'Письмо отправлено в ГАИ и в ' + config.CHANNEL + '. ' +\
-                'Проверьте ящик - вам придет копия.' + '\n' +\
-                'Внимание! На ящики mail.ru копия не приходит ¯ \ _ (ツ) _ / ¯.'
-
-            logger.info('Письмо отправлено - ' + str(call.from_user.username))
-
-            async with state.proxy() as data:
-                caption = 'Дата и время: ' +\
-                    data['violation_datetime'] + '\n' +\
-                    'Место: ' + data['violation_location'] + '\n' +\
-                    'Гос. номер: ' + data['vehicle_number']
-
-                # в канал
-                await send_photos_group_with_caption(data,
-                                                     config.CHANNEL,
-                                                     caption)
-        except Exception as exc:
-            text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
-                await humanize_message(exc)
-
-            logger.error('Неудачка - ' + str(call.from_user.id) + '\n' +
-                         str(exc))
-
-        await bot.send_message(call.message.chat.id, text)
+        await share_violation(state,
+                              call.from_user.username,
+                              call.message.chat.id)
 
     # из-за того, что письмо может отправляться долго,
     # телеграм может погасить кружочек ожидания сам, и тогда будет исключение
@@ -1143,11 +1147,7 @@ async def cmd_help(message: types.Message):
         'После отправки письма бот запостит в канал ' + config.CHANNEL + ' ' +\
         'фото, адрес, дату нарушения. Можно подписаться и наблюдать.' + '\n' +\
         '\n' +\
-        'Копия письма отправляется на ваш ящик.' + '\n' +\
-        'На ящик на @mail.ru копия ' +\
-        'письма не доходит. Видимо, потому что присылается не с ' +\
-        'родного для вашего ящика почтового сервера.' +\
-        '\n' +\
+        'Копия письма посылается вам в чат ботом.' + '\n' +\
         '\n' +\
         'По команде /feedback можно связаться с разработчиком.'
 
@@ -1284,12 +1284,15 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 async def catch_sender_email(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод email - ' + str(message.from_user.username))
 
-    if message.text.split('@')[1] in blocklist:
-        logger.info('Временный email - ' + str(message.from_user.username))
-        text = 'Нужно ввести постоянный email-адрес.'
-        await bot.send_message(message.chat.id, text)
-        await ask_for_user_email(message.chat.id)
-        return
+    try:
+        if message.text.split('@')[1] in blocklist:
+            logger.info('Временный email - ' + str(message.from_user.username))
+            text = 'Нужно ввести постоянный email-адрес.'
+            await bot.send_message(message.chat.id, text)
+            await ask_for_user_email(message.chat.id)
+            return
+    except IndexError:
+        pass
 
     async with state.proxy() as data:
         data['sender_email'] = message.text

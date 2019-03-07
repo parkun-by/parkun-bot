@@ -10,7 +10,6 @@ class Mailer:
     def send_mail(self, parameters):
         data = {
             'to': parameters['to'],
-            'bcc': parameters['bcc'],
             'from': parameters['from'],
             'subject': parameters['subject'],
             'html': parameters['html'],
