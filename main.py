@@ -95,9 +95,11 @@ async def invite_to_fill_credentials(chat_id):
 
 
 async def invite_to_confirm_email(data, chat_id):
-    message = 'Для отправки обращений нужно подтвердить email. ' +\
-        'После нажатия на кнопку будет выслано письмо на <b>' +\
-        data['sender_email'] + '</b> с кодом, который нужно ввести боту.'
+    message = ('Для отправки обращений нужно подтвердить email. ' +
+               'После нажатия на кнопку будет выслано письмо на <b>{}</b> ' +
+               'с кодом, который нужно ввести боту.').format(
+                   data['sender_email']
+                )
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -119,7 +121,7 @@ async def share_violation(state, username, chat_id):
 
     try:
         mailer.send_mail(parameters)
-        text = 'Письмо отправлено в ГАИ и в ' + config.CHANNEL + '. '
+        text = 'Письмо отправлено в ГАИ и в {}.'.format(config.CHANNEL)
         logger.info('Письмо отправлено - ' + str(username))
 
         async with state.proxy() as data:
@@ -127,9 +129,10 @@ async def share_violation(state, username, chat_id):
             file.name = 'Письмо.html'
             await bot.send_document(chat_id, file)
 
-            caption = 'Дата и время: ' + data['violation_datetime'] + '\n' +\
-                'Место: ' + data['violation_location'] + '\n' +\
-                'Гос. номер: ' + data['vehicle_number']
+            caption = 'Дата и время:' +\
+                ' {}'.format(data['violation_datetime']) + '\n' +\
+                'Место:' + ' {}'.format(data['violation_location']) + '\n' +\
+                'Гос. номер:' + ' {}'.format(data['vehicle_number'])
 
             # в канал
             await send_photos_group_with_caption(data,
@@ -201,31 +204,30 @@ async def set_default_sender_info(data):
 
 
 async def compose_summary(data):
-    text = 'Перед тем, как отправить обращение в <b>' +\
-        config.REGIONAL_NAME[data['recipient']] + '</b> на ящик ' +\
-        config.EMAIL_TO[data['recipient']] +\
-        ' прошу проверить основную информацию ' +\
-        'и нажать кнопку "Отправить письмо", если все ок:' + '\n' +\
+    text = (
+        'Перед тем, как отправить обращение в <b>{}</b> на ящик {} ' +
+        'прошу проверить основную информацию и нажать кнопку ' +
+        '"Отправить письмо", если все ок:').format(
+            config.REGIONAL_NAME[data['recipient']],
+            config.EMAIL_TO[data['recipient']]) + '\n' +\
         '\n' +\
-        'Язык отправляемого письма: <b>' +\
-        config.LANG_NAMES[data['letter_lang']] + '</b>.' +\
+        ('Язык отправляемого письма: <b>{}</b>.').format(
+            config.LANG_NAMES[data['letter_lang']]) +\
         '\n' +\
         '\n' +\
         'Обращающийся:' + '\n' +\
-        'Имя: <b>' + data['sender_name'] + '</b>' + '\n' +\
-        'Email: <b>' + data['sender_email'] + '</b>' + '\n' +\
-        'Адрес: <b>' + data['sender_address'] + '</b>' + '\n' +\
-        'Телефон: <b>' + data['sender_phone'] + '</b>' + '\n' +\
+        'Имя:' + ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+        'Email:' + ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+        'Адрес:' + ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+        'Телефон:' + ' <b>{}</b>'.format(data['sender_phone']) + '\n' +\
         '\n' +\
-        'Нарушитель: ' + '\n' +\
-        'Гос. номер транспортного средства: <b>' +\
-        data['vehicle_number'] + '</b>' + '\n' +\
-        'Место нарушения (адрес): <b>' +\
-        data['violation_location'] + '</b>' + '\n' +\
-        'Дата и время нарушения: <b>' +\
-        data['violation_datetime'] + '</b>' + '\n' +\
+        'Нарушение:' + '\n' +\
+        'Гос. номер:' + ' <b>{}</b>'.format(data['vehicle_number']) + '\n' +\
+        'Место:' + ' <b>{}</b>'.format(data['violation_location']) + '\n' +\
+        'Дата и время:' +\
+        ' <b>{}</b>'.format(data['violation_datetime']) + '\n' +\
         '\n' +\
-        'Также нарушение будет опубликовано в канале ' + config.CHANNEL
+        'Также нарушение будет опубликовано в канале' + ' ' + config.CHANNEL
 
     return text
 
@@ -493,8 +495,8 @@ async def ask_for_violation_address(chat_id, data):
 
     if 'previous_violation_address' in data:
         if data['previous_violation_address'] != '':
-            text += 'Предыдущий: <b>' + \
-                data['previous_violation_address'] + '</b>'
+            text += 'Предыдущий:' +\
+                ' <b>{}</b>'.format(data['previous_violation_address'])
 
             use_previous_button = types.InlineKeyboardButton(
                 text='Использовать предыдущий',
@@ -516,7 +518,7 @@ async def send_language_info(chat_id, data):
 
     lang_name = config.LANG_NAMES[data['letter_lang']]
 
-    text = 'Текущий язык посылаемого обращения - ' + lang_name + '.'
+    text = 'Текущий язык посылаемого обращения' + ' - ' + lang_name + '.'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -538,10 +540,10 @@ async def save_recipient(region, data):
 
 
 async def print_violation_address_info(region, address, chat_id):
-    text = 'Получатель письма: <b>' + config.REGIONAL_NAME[region] +\
-        '</b>.' + '\n' +\
+    text = 'Получатель письма:' +\
+        ' <b>{}</b>.'.format(config.REGIONAL_NAME[region]) + '\n' +\
         '\n' +\
-        'Адрес нарушения: <b>' + address + '</b>'
+        'Адрес нарушения:' + ' <b>{}</b>'.format(address)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -571,7 +573,7 @@ async def ask_for_violation_time(chat_id):
     text = 'Введите дату и время нарушения. Ввести текущее время ' +\
         'можно кнопкой снизу.' + '\n' +\
         '\n' +\
-        'Пример: <b>' + current_time + '</b>.'
+        'Пример:' + ' <b>{}</b>.'.format(current_time)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -687,7 +689,7 @@ async def verify_email_click(call, state: FSMContext):
         secret_code = await mail_verifier.verify(data['sender_email'])
 
     if secret_code == config.VERIFYING_FAIL:
-        text = 'При отправке кода произошла ошибка, попробуйте ' + '\n' +\
+        text = 'При отправке кода произошла ошибка, попробуйте ' +\
             'еще раз. Если стабильно не получается, то обратитесь в /feedback.'
 
         await Form.operational_mode.set()
@@ -758,7 +760,8 @@ async def change_language_click(call, state: FSMContext):
 
         lang_name = config.LANG_NAMES[data['letter_lang']]
 
-    text = 'Текущий язык посылаемого обращения - <b>' + lang_name + '</b>.'
+    text = 'Текущий язык посылаемого обращения' +\
+        ' - <b>{}</b>.'.format(lang_name)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -1062,7 +1065,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     text = 'Привет, этот бот упрощает посылку обращения в ГАИ о нарушении ' +\
         'правил парковки. Для работы ему потребуется от вас ' +\
-        'имя, адрес, email, телефон (по желанию). '
+        'имя, адрес, email, телефон (по желанию).'
 
     await bot.send_message(message.chat.id,
                            text)
@@ -1081,10 +1084,10 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         text = 'Личные данные:' + '\n' + '\n' +\
-            'Имя: <b>' + data['sender_name'] + '</b>' + '\n' +\
-            'Email: <b>' + data['sender_email'] + '</b>' + '\n' +\
-            'Адрес: <b>' + data['sender_address'] + '</b>' + '\n' +\
-            'Телефон: <b>' + data['sender_phone'] + '</b>' + '\n'
+            'Имя:' + ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+            'Email:' + ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+            'Адрес:' + ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+            'Телефон:' + ' <b>{}</b>'.format(data['sender_phone']) + '\n'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -1112,7 +1115,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
     await state.finish()
     await Form.initial.set()
 
-    text = 'Стер себе память ¯\_(ツ)_/¯'
+    text = 'Стер себе память' + ' ¯\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
@@ -1146,8 +1149,9 @@ async def cmd_help(message: types.Message):
         'Перед посылкой бот попросит еще раз все проверить, там тоже можно ' +\
         'отменить отправку.' + '\n' +\
         '\n' +\
-        'После отправки письма бот запостит в канал ' + config.CHANNEL + ' ' +\
-        'фото, адрес, дату нарушения. Можно подписаться и наблюдать.' + '\n' +\
+        ('После отправки письма бот запостит в канал {} ' +
+         'фото, адрес, дату нарушения. Можно подписаться ' +
+         'и наблюдать.').format(config.CHANNEL) + '\n' +\
         '\n' +\
         'Копия письма посылается вам в чат ботом.' + '\n' +\
         '\n' +\
@@ -1244,7 +1248,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         await state.set_state(data['saved_state'])
         data['saved_state'] = None
 
-    text = 'Можно продолжить работу с того же места.'
+    text = 'Продолжайте работу с места, где она была прервана.'
     await bot.send_message(message.chat.id, text)
 
 
@@ -1382,7 +1386,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
     text = 'Добавьте еще одно фото или перейдите ко вводу информации ' +\
         'о нарушении по кнопке "Гос. номер, адрес, время".' + '\n' +\
         '\n' +\
-        '<b>👮🏻‍♂️ По отправленным фото должен легко определяться гос. ' +\
+        '<b>👮🏻‍♂️ ' + 'По отправленным фото должен легко определяться гос. ' +\
         'номер нарушителя и само нарушение. В ГАИ фото рассматривают ' +\
         'распечатанными на чб принтере.</b>'
 
@@ -1510,7 +1514,8 @@ async def reject_wrong_input(message: types.Message):
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=Form.violation_photo)
 async def reject_wrong_violation_photo_input(message: types.Message):
-    text = 'Добавьте еще одно фото или нажмите "Гос. номер, адрес, время".'
+    text = 'Добавьте еще одно фото или перейдите ко вводу информации ' +\
+        'о нарушении по кнопке "Гос. номер, адрес, время".'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -1533,7 +1538,7 @@ async def reject_wrong_violation_photo_input(message: types.Message):
                            Form.violation_datetime,
                            Form.violation_location])
 async def reject_wrong_violation_data_input(message: types.Message):
-    text = 'Я ожидаю от вас текстовую информацию.'
+    text = 'Допускается ввод только текста.'
 
     await bot.send_message(message.chat.id, text)
 
