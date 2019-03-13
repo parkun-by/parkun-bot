@@ -19,12 +19,14 @@ from mailer import Mailer
 from photoitem import PhotoItem
 from states import Form
 from uploader import Uploader
+from locales import Locales
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
 mail_verifier = MailVerifier()
 uploader = Uploader()
 semaphore = asyncio.Semaphore()
+locales = Locales()
 
 
 def setup_logging():
@@ -73,31 +75,27 @@ REQUIRED_CREDENTIALS = ['sender_name',
                         'sender_address']
 
 
-async def invite_to_fill_credentials(chat_id):
-    message = 'Первым делом нужно ввести информацию о себе ' +\
-        '(ФИО, адрес, телефон, которые будут в письме в ГАИ) ' +\
-        'отправив команду /personal_info. Введенная информация сохранится ' +\
-        'для упрощения ввода нарушений. Очистить информацию о себе можно ' +\
-        'командой /reset.'
+async def invite_to_fill_credentials(chat_id, state):
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'first_steps')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     personal_info_button = types.InlineKeyboardButton(
-        text='Ввести информацию о себе',
+        text=locales.text(language, 'send_personal_info'),
         callback_data='/enter_personal_info')
 
     keyboard.add(personal_info_button)
 
     await bot.send_message(chat_id,
-                           message,
+                           text,
                            reply_markup=keyboard)
 
 
 async def invite_to_confirm_email(data, chat_id):
-    message = ('Для отправки обращений нужно подтвердить email. ' +
-               'После нажатия на кнопку будет выслано письмо на <b>{}</b> ' +
-               'с кодом, который нужно ввести боту.').format(
+    language = await get_ui_lang(data=data)
+    message = (locales.text(language, 'verify_email')).format(
                    data['sender_email']
                 )
 
@@ -105,7 +103,7 @@ async def invite_to_confirm_email(data, chat_id):
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     verify_email_button = types.InlineKeyboardButton(
-        text='Подтвердить email',
+        text=locales.text(language, 'verify_email_button'),
         callback_data='/verify_email')
 
     keyboard.add(verify_email_button)
@@ -118,29 +116,32 @@ async def invite_to_confirm_email(data, chat_id):
 
 async def share_violation(state, username, chat_id):
     parameters = await prepare_mail_parameters(state)
+    language = await get_ui_lang(state)
 
     try:
         mailer.send_mail(parameters)
-        text = 'Письмо отправлено в ГАИ и в {}.'.format(config.CHANNEL)
+        text = locales.text(language, 'letter_sent').format(config.CHANNEL)
         logger.info('Письмо отправлено - ' + str(username))
 
         async with state.proxy() as data:
             file = io.StringIO(parameters['html'])
-            file.name = 'Письмо.html'
+            file.name = locales.text(language, 'letter_html')
             await bot.send_document(chat_id, file)
 
-            caption = 'Дата и время:' +\
+            caption = locales.text(language, 'violation_datetime') +\
                 ' {}'.format(data['violation_datetime']) + '\n' +\
-                'Место:' + ' {}'.format(data['violation_location']) + '\n' +\
-                'Гос. номер:' + ' {}'.format(data['vehicle_number'])
+                locales.text(language, 'violation_location') +\
+                ' {}'.format(data['violation_location']) + '\n' +\
+                locales.text(language, 'violation_plate') + \
+                ' {}'.format(data['vehicle_number'])
 
             # в канал
             await send_photos_group_with_caption(data,
                                                  config.CHANNEL,
                                                  caption)
     except Exception as exc:
-        text = 'При отправке что-то пошло не так. Очень жаль.' + '\n' +\
-            await humanize_message(exc)
+        text = locales.text(language, 'sending_failed') + '\n' +\
+            await humanize_message(exc, language)
 
         logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
 
@@ -192,6 +193,7 @@ async def set_default_sender_info(data):
     set_default(data, 'verified', False)
     data['secret_code'] = ''
     set_default(data, 'letter_lang', config.RU)
+    set_default(data, 'ui_lang', config.BY)
     set_default(data, 'recipient', config.MINSK)
     set_default(data, 'previous_violation_address', '')
     data['saved_state'] = None
@@ -204,30 +206,35 @@ async def set_default_sender_info(data):
 
 
 async def compose_summary(data):
-    text = (
-        'Перед тем, как отправить обращение в <b>{}</b> на ящик {} ' +
-        'прошу проверить основную информацию и нажать кнопку ' +
-        '"Отправить письмо", если все ок:').format(
+    language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'check_please').format(
             config.REGIONAL_NAME[data['recipient']],
             config.EMAIL_TO[data['recipient']]) + '\n' +\
         '\n' +\
-        ('Язык отправляемого письма: <b>{}</b>.').format(
+        locales.text(language, 'letter_lang').format(
             config.LANG_NAMES[data['letter_lang']]) +\
         '\n' +\
         '\n' +\
-        'Обращающийся:' + '\n' +\
-        'Имя:' + ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
-        'Email:' + ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
-        'Адрес:' + ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
-        'Телефон:' + ' <b>{}</b>'.format(data['sender_phone']) + '\n' +\
+        locales.text(language, 'sender') + '\n' +\
+        locales.text(language, 'sender_name') +\
+        ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+        locales.text(language, 'sender_email') +\
+        ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+        locales.text(language, 'sender_address') +\
+        ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+        locales.text(language, 'sender_phone') +\
+        ' <b>{}</b>'.format(data['sender_phone']) + '\n' +\
         '\n' +\
-        'Нарушение:' + '\n' +\
-        'Гос. номер:' + ' <b>{}</b>'.format(data['vehicle_number']) + '\n' +\
-        'Место:' + ' <b>{}</b>'.format(data['violation_location']) + '\n' +\
-        'Дата и время:' +\
+        locales.text(language, 'violator') + '\n' +\
+        locales.text(language, 'violation_plate') +\
+        ' <b>{}</b>'.format(data['vehicle_number']) + '\n' +\
+        locales.text(language, 'violation_location') +\
+        ' <b>{}</b>'.format(data['violation_location']) + '\n' +\
+        locales.text(language, 'violation_datetime') +\
         ' <b>{}</b>'.format(data['violation_datetime']) + '\n' +\
         '\n' +\
-        'Также нарушение будет опубликовано в канале' + ' ' + config.CHANNEL
+        locales.text(language, 'channel_warning') + ' ' + config.CHANNEL
 
     return text
 
@@ -284,28 +291,31 @@ async def compose_letter_body(data):
 
 
 async def approve_sending(chat_id, state):
-    caption_button_text = 'Добавить примечание'
+    language = await get_ui_lang(state)
+
+    caption_button_text = locales.text(language, 'add_caption_button')
 
     async with state.proxy() as data:
         text = await compose_summary(data)
         await send_photos_group_with_caption(data, chat_id)
 
         if data['caption']:
-            caption_button_text = 'Изменить примечание'
+            caption_button_text = locales.text(language,
+                                               'change_caption_button')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     approve_sending_button = types.InlineKeyboardButton(
-        text='Отправить письмо',
+        text=locales.text(language, 'approve_sending_button'),
         callback_data='/approve_sending')
 
     cancel_button = types.InlineKeyboardButton(
-        text='Отмена',
+        text=locales.text(language, 'cancel_button'),
         callback_data='/cancel')
 
     enter_violation_info_button = types.InlineKeyboardButton(
-        text='Гос. номер, адрес, время',
+        text=locales.text(language, 'violation_info_button'),
         callback_data='/enter_violation_info')
 
     add_caption_button = types.InlineKeyboardButton(
@@ -322,12 +332,7 @@ async def approve_sending(chat_id, state):
 
 
 def get_subject(language):
-    if language == config.BY:
-        return 'Зварот аб парушэнні правілаў прыпынку і стаянкі ' +\
-               'транспартных сродкаў'
-    else:
-        return 'Обращение о нарушении правил остановки и стоянки ' +\
-               'транспортных средств'
+    return locales.text(language, 'violation_letter')
 
 
 async def prepare_mail_parameters(state):
@@ -380,12 +385,14 @@ async def verified_email(state):
         return data['verified']
 
 
-def get_cancel_keyboard():
+async def get_cancel_keyboard(data):
+    language = await get_ui_lang(data=data)
+
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup()
 
     cancel = types.InlineKeyboardButton(
-        text='Отмена',
+        text=locales.text(language, 'cancel_button'),
         callback_data='/cancel')
 
     keyboard.add(cancel)
@@ -393,12 +400,14 @@ def get_cancel_keyboard():
     return keyboard
 
 
-def get_skip_keyboard():
+async def get_skip_keyboard(data):
+    language = await get_ui_lang(data=data)
+
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     skip = types.InlineKeyboardButton(
-        text='Пропустить (оставить текущее значение)',
+        text=locales.text(language, 'skip_button'),
         callback_data='/skip')
 
     keyboard.add(skip)
@@ -406,10 +415,9 @@ def get_skip_keyboard():
     return keyboard
 
 
-async def humanize_message(exception):
+async def humanize_message(exception, language):
     invalid_email_msg = '\'message\': "valid \'from\' email address required"'
-    invalid_email_humanized = 'Для отправки письма нужно ввести свой ' +\
-        'существующий email командой /personal_info.'
+    invalid_email_humanized = locales.text(language, 'invalid_email')
 
     if invalid_email_msg in str(exception):
         return invalid_email_humanized
@@ -417,14 +425,13 @@ async def humanize_message(exception):
     return str(exception)
 
 
-async def ask_for_user_address(chat_id):
-    text = 'Введите свой адрес проживания, ' +\
-        'на него придет ответ из ГАИ.' + '\n' +\
-        'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
+async def ask_for_user_address(chat_id, language):
+    text = locales.text(language, 'input_sender_address') + '\n' +\
+        locales.text(language, 'bot_can_guess_address') + '\n' +\
         '\n' +\
-        'Пример: <b>г. Минск, пр. Независимости, д. 17, кв. 25</b>.'
+        locales.text(language, 'sender_address_example')
 
-    keyboard = get_skip_keyboard()
+    keyboard = await get_skip_keyboard()
 
     await bot.send_message(chat_id,
                            text,
@@ -434,14 +441,13 @@ async def ask_for_user_address(chat_id):
     await Form.sender_address.set()
 
 
-async def ask_for_user_email(chat_id):
-    text = 'Введите свой email, с него будут ' +\
-        'отправляться письма в ГАИ.' + '\n' +\
-        'С несуществующего адреса письмо не отправится.' + '\n' +\
+async def ask_for_user_email(chat_id, language):
+    text = locales.text(language, 'input_email') + '\n' +\
+        locales.text(language, 'nonexistent_email_warning') + '\n' +\
         '\n' +\
-        'Пример: <b>example@example.com</b>'
+        locales.text(language, 'email_example')
 
-    keyboard = get_skip_keyboard()
+    keyboard = await get_skip_keyboard()
 
     await bot.send_message(chat_id,
                            text,
@@ -451,12 +457,12 @@ async def ask_for_user_email(chat_id):
     await Form.sender_email.set()
 
 
-async def ask_for_user_phone(chat_id):
-    text = 'Введите свой номер телефона (необязательно).' + '\n' +\
+async def ask_for_user_phone(chat_id, language):
+    text = locales.text(language, 'input_phone') + '\n' +\
         '\n' +\
-        'Пример: <b>+375221111111</b>.'
+        locales.text(language, 'phone_example')
 
-    keyboard = get_skip_keyboard()
+    keyboard = await get_skip_keyboard()
 
     await bot.send_message(chat_id,
                            text,
@@ -467,39 +473,40 @@ async def ask_for_user_phone(chat_id):
 
 
 async def show_private_info_summary(chat_id, state):
-    if await invalid_credentials(state):
-        text = 'Без ввода полной информации о себе вы не сможете отправить ' +\
-               'обращение в ГАИ. Зато уже можете загрузить фото и ' +\
-               'посмотреть, как все работает.'
+    language = await get_ui_lang(state)
 
+    if await invalid_credentials(state):
+        text = locales.text(language, 'no_info_warning')
         await bot.send_message(chat_id, text)
     elif not await verified_email(state):
         async with state.proxy() as data:
             await invite_to_confirm_email(data, chat_id)
     else:
-        text = 'Все готово, можно слать фото нарушителей парковки.'
+        text = locales.text(language, 'ready_to_report')
         await bot.send_message(chat_id, text)
 
     await Form.operational_mode.set()
 
 
 async def ask_for_violation_address(chat_id, data):
-    text = 'Введите адрес, где произошло нарушение.' + '\n' +\
-        'Можно отправить локацию и бот попробует подобрать адрес.' + '\n' +\
+    language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'input_violation_address') + '\n' +\
+        locales.text(language, 'bot_can_guess_address') + '\n' +\
         '\n' +\
-        'Пример: <b>г. Минск, пр. Независимости, д. 17</b>.' + '\n' +\
+        locales.text(language, 'violation_address_example') + '\n' +\
         '\n'
 
     # настроим клавиатуру
-    keyboard = get_cancel_keyboard()
+    keyboard = await get_cancel_keyboard(data)
 
     if 'previous_violation_address' in data:
         if data['previous_violation_address'] != '':
-            text += 'Предыдущий:' +\
+            text += locales.text(language, 'previous_violation_address') +\
                 ' <b>{}</b>'.format(data['previous_violation_address'])
 
             use_previous_button = types.InlineKeyboardButton(
-                text='Использовать предыдущий',
+                text=locales.text(language, 'use_previous_button'),
                 callback_data='/use_previous')
 
             keyboard.add(use_previous_button)
@@ -513,18 +520,21 @@ async def ask_for_violation_address(chat_id, data):
 
 
 async def send_language_info(chat_id, data):
+    language = await get_ui_lang(data=data)
+
     if 'letter_lang' not in data:
         data['letter_lang'] = config.RU
 
     lang_name = config.LANG_NAMES[data['letter_lang']]
 
-    text = 'Текущий язык посылаемого обращения' + ' - ' + lang_name + '.'
+    text = locales.text(language, 'current_letter_lang') + \
+        ' - ' + lang_name + '.'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     change_language_button = types.InlineKeyboardButton(
-        text='Изменить',
+        text=locales.text(language, 'change_language_button'),
         callback_data='/change_language')
 
     keyboard.add(change_language_button)
@@ -539,21 +549,22 @@ async def save_recipient(region, data):
         data['recipient'] = region
 
 
-async def print_violation_address_info(region, address, chat_id):
-    text = 'Получатель письма:' +\
+async def print_violation_address_info(region, address, chat_id, language):
+    text = locales.text(language, 'recipient') +\
         ' <b>{}</b>.'.format(config.REGIONAL_NAME[region]) + '\n' +\
         '\n' +\
-        'Адрес нарушения:' + ' <b>{}</b>'.format(address)
+        locales.text(language, 'violation_address') + \
+        ' <b>{}</b>'.format(address)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_violation_addr_button = types.InlineKeyboardButton(
-        text='Изменить адрес',
+        text=locales.text(language, 'change_violation_addr_button'),
         callback_data='/enter_violation_addr')
 
     enter_recipient_button = types.InlineKeyboardButton(
-        text='Изменить получателя',
+        text=locales.text(language, 'change_recipient'),
         callback_data='/enter_recipient')
 
     keyboard.add(enter_violation_addr_button, enter_recipient_button)
@@ -567,23 +578,23 @@ async def print_violation_address_info(region, address, chat_id):
 async def save_violation_address(address, data):
     data['violation_location'] = address
 
-async def ask_for_violation_time(chat_id):
+async def ask_for_violation_time(chat_id, language):
     current_time = get_str_current_time()
 
-    text = 'Введите дату и время нарушения. Ввести текущее время ' +\
-        'можно кнопкой снизу.' + '\n' +\
+    text = locales.text(language, 'input_datetime') + '\n' +\
         '\n' +\
-        'Пример:' + ' <b>{}</b>.'.format(current_time)
+        locales.text(language, 'example') + \
+        ' <b>{}</b>.'.format(current_time)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     current_time_button = types.InlineKeyboardButton(
-        text='Текущее время',
+        text=locales.text(language, 'current_time_button'),
         callback_data='/current_time')
 
     cancel = types.InlineKeyboardButton(
-        text='Отмена',
+        text=locales.text(language, 'cancel_button'),
         callback_data='/cancel')
 
     keyboard.add(current_time_button, cancel)
@@ -636,9 +647,15 @@ async def set_violation_location(chat_id, address, state):
         await save_violation_address(address, data)
         await save_recipient(region, data)
         region = data['recipient']
+        language = await get_ui_lang(data=data)
 
-    await print_violation_address_info(region, address, chat_id)
-    await ask_for_violation_time(chat_id)
+    await print_violation_address_info(region,
+                                       address,
+                                       chat_id,
+                                       language)
+
+    await ask_for_violation_time(chat_id,
+                                 language)
 
 
 async def enter_personal_info(message, state):
@@ -647,12 +664,13 @@ async def enter_personal_info(message, state):
     async with state.proxy() as data:
         await set_default_sender_info(data)
         await send_language_info(message.chat.id, data)
+        language = await get_ui_lang(data=data)
 
-    text = 'Введите свое ФИО.' + '\n' +\
+    text = locales.text(language, 'input_fullname') + '\n' +\
         '\n' +\
-        'Пример: <b>Зенон Станиславович Позняк</b>.'
+        locales.text(language, 'fullname_example')
 
-    keyboard = get_skip_keyboard()
+    keyboard = await get_skip_keyboard()
 
     await bot.send_message(message.chat.id,
                            text,
@@ -660,6 +678,22 @@ async def enter_personal_info(message, state):
                            parse_mode='HTML')
 
     await Form.sender_name.set()
+
+
+async def get_ui_land_or_default(data):
+    try:
+        return data['ui_lang']
+    except KeyError:
+        set_default(data, 'ui_lang', config.RU)
+        return data['ui_lang']
+
+
+async def get_ui_lang(state=None, data=None):
+    if data:
+        return await get_ui_land_or_default(data)
+    elif state:
+        async with state.proxy() as my_data:
+            return await get_ui_land_or_default(my_data)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_personal_info',
@@ -679,9 +713,10 @@ async def verify_email_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+    language = await get_ui_lang(state)
 
     if await verified_email(state):
-        text = 'Ваш email уже подтвержден.'
+        text = locales.text(language, 'email_already_verified')
         await bot.send_message(call.message.chat.id, text)
         return
 
@@ -689,13 +724,12 @@ async def verify_email_click(call, state: FSMContext):
         secret_code = await mail_verifier.verify(data['sender_email'])
 
     if secret_code == config.VERIFYING_FAIL:
-        text = 'При отправке кода произошла ошибка, попробуйте ' +\
-            'еще раз. Если стабильно не получается, то обратитесь в /feedback.'
+        text = locales.text(language, 'email_verifying_fail')
 
         await Form.operational_mode.set()
     else:
-        text = 'Введите код, присланный ботом вам на почту.' + '\n' +\
-            'Скорее всего вы найдете его в папке "Спам".'
+        text = locales.text(language, 'enter_secret_code') + '\n' +\
+            locales.text(language, 'spam_folder')
 
         async with state.proxy() as data:
             data['secret_code'] = secret_code
@@ -717,12 +751,13 @@ async def personal_info_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_name)
-async def skip_name_click(call):
+async def skip_name_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода ФИО - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await ask_for_user_email(call.message.chat.id)
+    await ask_for_user_email(call.message.chat.id,
+                             await get_ui_lang(state))
 
 
 @dp.callback_query_handler(lambda call: call.data == '/use_previous',
@@ -758,16 +793,18 @@ async def change_language_click(call, state: FSMContext):
         else:
             data['letter_lang'] = config.RU
 
+        language = await get_ui_lang(data=data)
+
         lang_name = config.LANG_NAMES[data['letter_lang']]
 
-    text = 'Текущий язык посылаемого обращения' +\
+    text = locales.text(language, 'current_letter_lang') +\
         ' - <b>{}</b>.'.format(lang_name)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     change_language_button = types.InlineKeyboardButton(
-        text='Изменить',
+        text=locales.text(language, 'change_language_button'),
         callback_data='/change_language')
 
     keyboard.add(change_language_button)
@@ -781,22 +818,25 @@ async def change_language_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_email)
-async def skip_email_click(call):
+async def skip_email_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода email - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await ask_for_user_address(call.message.chat.id)
+    await ask_for_user_address(call.message.chat.id,
+                               await get_ui_lang(state))
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_address)
-async def skip_address_click(call):
+async def skip_address_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода адреса - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await ask_for_user_phone(call.message.chat.id)
+
+    await ask_for_user_phone(call.message.chat.id,
+                             await get_ui_lang(state))
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -823,12 +863,13 @@ async def current_time_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_sender_address',
                            state=Form.sender_phone)
-async def sender_address_click(call):
+async def sender_address_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода своего адреса - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await ask_for_user_address(call.message.chat.id)
+    await ask_for_user_address(call.message.chat.id,
+                               await get_ui_lang(state))
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
@@ -845,14 +886,15 @@ async def violation_address_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_recipient',
                            state=Form.violation_datetime)
-async def recipient_click(call):
+async def recipient_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода реципиента - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+    language = await get_ui_lang(state)
 
     # этот текст не менять или менять по всему файлу
-    text = 'Выберите получателя письма:'
+    text = locales.text(language, 'choose_recipient')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -872,7 +914,7 @@ async def recipient_click(call):
 
 
 @dp.callback_query_handler(
-    lambda call: call.message.text == 'Выберите получателя письма:',
+    lambda call: locales.text_exists('choose_recipient', call.message.text),
     state=Form.recipient)
 async def recipient_choosen_click(call, state: FSMContext):
     logger.info('Выбрал реципиента - ' + str(call.from_user.username))
@@ -884,8 +926,14 @@ async def recipient_choosen_click(call, state: FSMContext):
         await save_recipient(call.data, data)
         region = data['recipient']
 
-    await print_violation_address_info(region, address, call.message.chat.id)
-    await ask_for_violation_time(call.message.chat.id)
+    language = await get_ui_lang(state)
+
+    await print_violation_address_info(region,
+                                       address,
+                                       call.message.chat.id,
+                                       language)
+
+    await ask_for_violation_time(call.message.chat.id, language)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
@@ -897,16 +945,18 @@ async def enter_violation_info_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         await send_language_info(call.message.chat.id, data)
+        language = await get_ui_lang(data=data)
 
         # зададим сразу пустое примечание
         data['caption'] = ''
 
-    text = 'Введите гос. номер транспортного средства.' + '\n' +\
+    text = locales.text(language, 'input_plate') + '\n' +\
         '\n' +\
-        'Пример: <b>9999 АА-9</b>'
+        locales.text(language, 'plate_example')
 
     # настроим клавиатуру
-    keyboard = get_cancel_keyboard()
+    async with state.proxy() as data:
+        keyboard = await get_cancel_keyboard(data)
 
     await bot.answer_callback_query(call.id)
 
@@ -932,10 +982,13 @@ async def add_caption_click(call, state: FSMContext):
         current_state = await state.get_state()
         data['saved_state'] = current_state
 
-    text = 'Введите примечание к обращению (будет вставлено в тело письма).'
+        language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'input_caption')
 
     # настроим клавиатуру
-    keyboard = get_cancel_keyboard()
+    async with state.proxy() as data:
+        keyboard = await get_cancel_keyboard(data)
 
     await bot.answer_callback_query(call.id)
     await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
@@ -958,10 +1011,11 @@ async def answer_feedback_click(call, state: FSMContext):
         # сохраняем адресата
         data['feedback_post'] = call.message.text
 
-    text = 'Введите ответ на фидбэк.'
+        language = await get_ui_lang(data=data)
+        text = locales.text(language, 'input_reply')
 
-    # настроим клавиатуру
-    keyboard = get_cancel_keyboard()
+        # настроим клавиатуру
+        keyboard = await get_cancel_keyboard(data)
 
     await bot.answer_callback_query(call.id)
 
@@ -989,20 +1043,22 @@ async def cancel_violation_input(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
         if 'saved_state' in data:
             if data['saved_state'] is not None:
                 saved_state = data['saved_state']
                 await state.set_state(saved_state)
                 data['saved_state'] = None
 
-                text = 'Продолжайте работу с места, где она была прервана.'
+                text = locales.text(language, 'continue_work')
                 await bot.send_message(call.message.chat.id, text)
                 return
 
         await delete_prepared_violation(data)
         data['feedback_post'] = ''
 
-    text = 'Бот вернулся в режим ожидания фотокарточки нарушения.'
+    text = locales.text(language, 'operation_mode')
     await bot.send_message(call.message.chat.id, text)
     await Form.operational_mode.set()
 
@@ -1013,9 +1069,10 @@ async def send_letter_click(call, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ - ' +
                 str(call.from_user.username))
 
+    language = await get_ui_lang(state)
+
     if await invalid_credentials(state):
-        text = 'Для отправки нарушений в ГАИ нужно заполнить информацию ' +\
-            'о себе командой /personal_info'
+        text = locales.text(language, 'need_personal_info')
 
         logger.info('Письмо не отправлено, не введены личные данные - ' +
                     str(call.from_user.username))
@@ -1046,11 +1103,13 @@ async def send_letter_click(call, state: FSMContext):
 
 
 @dp.callback_query_handler(state='*')
-async def reject_button_click(call):
+async def reject_button_click(call, state: FSMContext):
     logger.info('Беспорядочно кликает на кнопки - ' +
                 str(call.from_user.username))
 
-    text = 'Действие неактуально.'
+    language = await get_ui_lang(state)
+
+    text = locales.text(language, 'irrelevant_action')
 
     await bot.answer_callback_query(call.id)
     await bot.send_message(call.message.chat.id, text)
@@ -1063,9 +1122,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
     """
     logger.info('Старт работы бота - ' + str(message.from_user.username))
 
-    text = 'Привет, этот бот упрощает посылку обращения в ГАИ о нарушении ' +\
-        'правил парковки. Для работы ему потребуется от вас ' +\
-        'имя, адрес, email, телефон (по желанию).'
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'greeting')
 
     await bot.send_message(message.chat.id,
                            text)
@@ -1075,7 +1133,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         await set_default_sender_info(data)
 
-    await invite_to_fill_credentials(message.chat.id)
+    await invite_to_fill_credentials(message.chat.id, state)
 
 
 @dp.message_handler(commands=['personal_info'], state='*')
@@ -1083,21 +1141,27 @@ async def show_personal_info(message: types.Message, state: FSMContext):
     logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
-        text = 'Личные данные:' + '\n' + '\n' +\
-            'Имя:' + ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
-            'Email:' + ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
-            'Адрес:' + ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
-            'Телефон:' + ' <b>{}</b>'.format(data['sender_phone']) + '\n'
+        language = await get_ui_lang(data=data)
+
+        text = locales.text(language, 'personal_data') + '\n' + '\n' +\
+            locales.text(language, 'sender_name') +\
+            ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+            locales.text(language, 'sender_email') +\
+            ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+            locales.text(language, 'sender_address') +\
+            ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+            locales.text(language, 'sender_phone') + \
+            ' <b>{}</b>'.format(data['sender_phone']) + '\n'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_personal_info_button = types.InlineKeyboardButton(
-        text='Редактировать',
+        text=locales.text(language, 'enter_personal_info_button'),
         callback_data='/enter_personal_info')
 
     delete_personal_info_button = types.InlineKeyboardButton(
-        text='Удалить',
+        text=locales.text(language, 'delete_personal_info_button'),
         callback_data='/reset')
 
     keyboard.add(enter_personal_info_button, delete_personal_info_button)
@@ -1111,61 +1175,54 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 @dp.message_handler(commands=['reset'], state='*')
 async def cmd_reset(message: types.Message, state: FSMContext):
     logger.info('Сброс бота - ' + str(message.from_user.username))
+    language = await get_ui_lang(state)
 
     await state.finish()
     await Form.initial.set()
 
-    text = 'Стер себе память' + ' ¯\_(ツ)_/¯'
+    text = locales.text(language, 'reset') + ' ¯\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
         await set_default_sender_info(data)
 
-    await invite_to_fill_credentials(message.chat.id)
+    await invite_to_fill_credentials(message.chat.id, state)
 
 
 @dp.message_handler(commands=['help'], state='*')
-async def cmd_help(message: types.Message):
+async def cmd_help(message: types.Message, state: FSMContext):
     logger.info('Вызов помощи - ' + str(message.from_user.username))
 
-    text = 'После однократного заполнения личных данных, можно прикрепить ' +\
-        'сразу несколько фото нарушения с телефона или отправив ' +\
-        'одну за одной.' + '\n' +\
+    language = await get_ui_lang(state)
+
+    text = locales.text(language, 'first_step_help') + '\n' +\
         '\n' +\
-        'Бот уведомит о языке отправляемого обращения - его можно ' +\
-        'изменить.' + '\n' +\
+        locales.text(language, 'language_help') + '\n' +\
         '\n' +\
-        'Адрес нарушения можно ввести руками или отправить локацию ' +\
-        'с телефона. Бот по адресу подберет получателя.' + '\n' +\
+        locales.text(language, 'address_help') + '\n' +\
         '\n' +\
-        'Номер ТС и время вводится руками (время еще можно кнопкой). ' +\
-        'Можно добавить фото разных нарушителей по одному адресу ' +\
-        'в одно время и перечислить их гос. номера.' + '\n' +\
+        locales.text(language, 'plate_help') + '\n' +\
         '\n' +\
-        'На любом шаге ввода нарушения можно нажать отмену, так что не ' +\
-        'стесняйтесь потестировать бота первой попавшейся под руку ' +\
-        'картинкой.' + '\n' +\
+        locales.text(language, 'feel_free_to_try_help') + '\n' +\
         '\n' +\
-        'Перед посылкой бот попросит еще раз все проверить, там тоже можно ' +\
-        'отменить отправку.' + '\n' +\
+        locales.text(language, 'before_sending_help') + '\n' +\
         '\n' +\
-        ('После отправки письма бот запостит в канал {} ' +
-         'фото, адрес, дату нарушения. Можно подписаться ' +
-         'и наблюдать.').format(config.CHANNEL) + '\n' +\
+        locales.text(language, 'channel_help').format(
+            config.CHANNEL) + '\n' +\
         '\n' +\
-        'Копия письма посылается вам в чат ботом.' + '\n' +\
+        locales.text(language, 'copy_of_letter_help') + '\n' +\
         '\n' +\
-        'По команде /feedback можно связаться с разработчиком.'
+        locales.text(language, 'feedback_help')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     privacy_policy = types.InlineKeyboardButton(
-        text='Политика конфиденциальности',
+        text=locales.text(language, 'privacy_policy_button'),
         url='https://telegra.ph/Politika-konfidencialnosti-01-09')
 
     letter_template = types.InlineKeyboardButton(
-        text='Шаблон письма',
+        text=locales.text(language, 'letter_template_button'),
         url='https://docs.google.com/document/d/' +
             '11kigeRPEdqbYcMcFVmg1lv66Fy-eOyf5i1PIQpSqcII/edit?usp=sharing')
 
@@ -1188,10 +1245,10 @@ async def write_feedback(message: types.Message, state: FSMContext):
         if current_state != Form.feedback.state:
             data['saved_state'] = current_state
 
-    text = 'Введите все, что вы обо мне думаете, а я передам это ' +\
-        'сообщение разработчику.'
+        language = await get_ui_lang(data=data)
+        text = locales.text(language, 'input_feedback')
 
-    keyboard = get_cancel_keyboard()
+        keyboard = await get_cancel_keyboard(data)
 
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.feedback.set()
@@ -1201,6 +1258,8 @@ async def write_feedback(message: types.Message, state: FSMContext):
 async def catch_feedback(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод фидбэка - ' +
                 str(message.from_user.username))
+
+    language = await get_ui_lang(state)
 
     await bot.forward_message(
         chat_id=config.ADMIN_ID,
@@ -1214,14 +1273,14 @@ async def catch_feedback(message: types.Message, state: FSMContext):
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     give_feedback_button = types.InlineKeyboardButton(
-        text='Ответить',
+        text=locales.text(language, 'reply_button'),
         callback_data='/answer_feedback')
 
     keyboard.add(give_feedback_button)
 
     await bot.send_message(config.ADMIN_ID, text, reply_markup=keyboard)
 
-    text = 'Спасибо за отзыв! Можно продолжить работу с того же места.'
+    text = locales.text(language, 'thanks_for_feedback')
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
@@ -1248,7 +1307,9 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
         await state.set_state(data['saved_state'])
         data['saved_state'] = None
 
-    text = 'Продолжайте работу с места, где она была прервана.'
+        language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'continue_work')
     await bot.send_message(message.chat.id, text)
 
 
@@ -1259,16 +1320,16 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         secret_code = data['secret_code']
+        language = await get_ui_lang(data=data)
 
     if secret_code == message.text:
         async with state.proxy() as data:
             data['verified'] = True
 
-        text = 'Ваша почта подтверждена, можно вводить нарушения.'
+        text = locales.text(language, 'email_verified')
     else:
-        text = 'Секретный код не совпадает, попробуйте запросить ' +\
-            'подтверждение еще раз (нажать на кнопку).' + '\n' +\
-            'Если стабильно не получается, то обратитесь в /feedback.'
+        text = locales.text(language, 'reply_verification') + '\n' +\
+            locales.text(language, 'press_feedback')
 
     await bot.send_message(message.chat.id, text)
     await Form.operational_mode.set()
@@ -1282,20 +1343,25 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_name'] = message.text
 
-    await ask_for_user_email(message.chat.id)
+    await ask_for_user_email(message.chat.id,
+                             await get_ui_lang(state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_email)
 async def catch_sender_email(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод email - ' + str(message.from_user.username))
+    language = await get_ui_lang(state)
 
     try:
         if message.text.split('@')[1] in blocklist:
             logger.info('Временный email - ' + str(message.from_user.username))
-            text = 'Нужно ввести постоянный email-адрес.'
+            text = locales.text(language, 'no_temporary_email')
             await bot.send_message(message.chat.id, text)
-            await ask_for_user_email(message.chat.id)
+
+            await ask_for_user_email(message.chat.id,
+                                     language)
+
             return
     except IndexError:
         pass
@@ -1303,8 +1369,8 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_email'] = message.text
         data['verified'] = False
-
-    await ask_for_user_address(message.chat.id)
+        await ask_for_user_address(message.chat.id,
+                                   language)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1316,7 +1382,8 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_address'] = message.text
 
-    await ask_for_user_phone(message.chat.id)
+    await ask_for_user_phone(message.chat.id,
+                             await get_ui_lang(state))
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
@@ -1330,12 +1397,13 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         address = await locator.get_address(coordinates, data['letter_lang'])
+        language = await get_ui_lang(data=data)
 
     if address is None:
         logger.info('Не распознал локацию - ' +
                     str(message.from_user.username))
 
-        text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
+        text = locales.text(language, 'cant_locate')
         await bot.send_message(message.chat.id, text)
         return
 
@@ -1343,7 +1411,7 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_sender_address = types.InlineKeyboardButton(
-        text='Изменить адрес',
+        text=locales.text(language, 'change_violation_addr_button'),
         callback_data='/enter_sender_address')
 
     keyboard.add(enter_sender_address)
@@ -1374,6 +1442,8 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки нарушения - ' +
                 str(message.from_user.username))
 
+    language = await get_ui_lang(state)
+
     if message.chat.id == 612423367:
         logger.info('КЕК БАН - ' +
                     str(message.from_user.username))
@@ -1383,22 +1453,19 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
     # прикрепления в письме
     await add_photo_to_attachments(message.photo[-1], state)
 
-    text = 'Добавьте еще одно фото или перейдите ко вводу информации ' +\
-        'о нарушении по кнопке "Гос. номер, адрес, время".' + '\n' +\
+    text = locales.text(language, 'photo_or_info') + '\n' +\
         '\n' +\
-        '<b>👮🏻‍♂️ ' + 'По отправленным фото должен легко определяться гос. ' +\
-        'номер нарушителя и само нарушение. В ГАИ фото рассматривают ' +\
-        'распечатанными на чб принтере.</b>'
+        '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_violation_info = types.InlineKeyboardButton(
-        text='Гос. номер, адрес, время',
+        text=locales.text(language, 'violation_info_button'),
         callback_data='/enter_violation_info')
 
     cancel = types.InlineKeyboardButton(
-        text='Отмена',
+        text=locales.text(language, 'cancel_button'),
         callback_data='/cancel')
 
     keyboard.add(enter_violation_info, cancel)
@@ -1434,11 +1501,13 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.ANY,
                     state=Form.caption)
-async def catch_vehicle_number(message: types.Message):
+async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод неправильного примечания - ' +
                 str(message.from_user.username))
 
-    text = 'Допускается ввод только текста.'
+    language = await get_ui_lang(state)
+
+    text = locales.text(language, 'text_only')
     await bot.send_message(message.chat.id, text)
 
 
@@ -1465,20 +1534,25 @@ async def catch_gps_violation_location(message: types.Message,
         region = await locator.get_region(coordinates)
         await save_recipient(region, data)
         region = data['recipient']
+        language = await get_ui_lang(data=data)
 
     if address is None:
         logger.info('Не распознал локацию - ' +
                     str(message.from_user.username))
 
-        text = 'Не удалось определить адрес. Введите, пожалуйста, руками.'
+        text = locales.text(language, 'cant_locate')
         await bot.send_message(message.chat.id, text)
         return
 
     async with state.proxy() as data:
         await save_violation_address(address, data)
 
-    await print_violation_address_info(region, address, message.chat.id)
-    await ask_for_violation_time(message.chat.id)
+    await print_violation_address_info(region,
+                                       address,
+                                       message.chat.id,
+                                       language)
+
+    await ask_for_violation_time(message.chat.id, language)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1495,37 +1569,38 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.initial)
-async def ignore_initial_input(message: types.Message):
-    await invite_to_fill_credentials(message.chat.id)
+async def ignore_initial_input(message: types.Message, state: FSMContext):
+    await invite_to_fill_credentials(message.chat.id, state)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=Form.operational_mode)
-async def reject_wrong_input(message: types.Message):
+async def reject_wrong_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не фотку, а что-то другое - ' +
                 str(message.from_user.username))
 
-    text = 'Я ожидаю от вас фото нарушений правил остановки и ' +\
-        'стоянки транспортных средств.'
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'great_expectations')
 
     await bot.send_message(message.chat.id, text)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=Form.violation_photo)
-async def reject_wrong_violation_photo_input(message: types.Message):
-    text = 'Добавьте еще одно фото или перейдите ко вводу информации ' +\
-        'о нарушении по кнопке "Гос. номер, адрес, время".'
+async def reject_wrong_violation_photo_input(message: types.Message,
+                                             state: FSMContext):
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'photo_or_info')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_violation_info = types.InlineKeyboardButton(
-        text='Гос. номер, адрес, время',
+        text=locales.text(language, 'violation_info_button'),
         callback_data='/enter_violation_info')
 
     cancel = types.InlineKeyboardButton(
-        text='Отмена',
+        text=locales.text(language, 'cancel_button'),
         callback_data='/cancel')
 
     keyboard.add(enter_violation_info, cancel)
@@ -1537,8 +1612,10 @@ async def reject_wrong_violation_photo_input(message: types.Message):
                     state=[Form.vehicle_number,
                            Form.violation_datetime,
                            Form.violation_location])
-async def reject_wrong_violation_data_input(message: types.Message):
-    text = 'Допускается ввод только текста.'
+async def reject_wrong_violation_data_input(message: types.Message,
+                                            state: FSMContext):
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'text_only')
 
     await bot.send_message(message.chat.id, text)
 
