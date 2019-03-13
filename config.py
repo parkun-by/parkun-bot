@@ -6,6 +6,10 @@ URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 BY = '_by'
 RU = '_ru'
 
+# UI language
+UI_BY = 'be-BY'
+UI_RU = 'ru-BY'
+
 LANG_NAMES = {
     BY: 'беларуский',
     RU: 'русский'
