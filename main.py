@@ -209,11 +209,11 @@ async def compose_summary(data):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'check_please').format(
-            config.REGIONAL_NAME[data['recipient']],
+            locales.text(language, data['recipient']),
             config.EMAIL_TO[data['recipient']]) + '\n' +\
         '\n' +\
         locales.text(language, 'letter_lang').format(
-            config.LANG_NAMES[data['letter_lang']]) +\
+            locales.text(language, 'lang' + data['letter_lang'])) +\
         '\n' +\
         '\n' +\
         locales.text(language, 'sender') + '\n' +\
@@ -337,7 +337,8 @@ def get_subject(language):
 
 async def prepare_mail_parameters(state):
     async with state.proxy() as data:
-        recipient = config.NAME_TO[data['recipient']][data['letter_lang']]
+        recipient = locales.text(data['letter_lang'],
+                                 'head_' + data['recipient'])
 
         parameters = {'to': {config.EMAIL_TO[data['recipient']]: recipient},
                       'from': [data['sender_email'], data['sender_name']],
@@ -400,9 +401,7 @@ async def get_cancel_keyboard(data):
     return keyboard
 
 
-async def get_skip_keyboard(data):
-    language = await get_ui_lang(data=data)
-
+async def get_skip_keyboard(language):
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
@@ -431,7 +430,7 @@ async def ask_for_user_address(chat_id, language):
         '\n' +\
         locales.text(language, 'sender_address_example')
 
-    keyboard = await get_skip_keyboard()
+    keyboard = await get_skip_keyboard(language)
 
     await bot.send_message(chat_id,
                            text,
@@ -447,7 +446,7 @@ async def ask_for_user_email(chat_id, language):
         '\n' +\
         locales.text(language, 'email_example')
 
-    keyboard = await get_skip_keyboard()
+    keyboard = await get_skip_keyboard(language)
 
     await bot.send_message(chat_id,
                            text,
@@ -462,7 +461,7 @@ async def ask_for_user_phone(chat_id, language):
         '\n' +\
         locales.text(language, 'phone_example')
 
-    keyboard = await get_skip_keyboard()
+    keyboard = await get_skip_keyboard(language)
 
     await bot.send_message(chat_id,
                            text,
@@ -525,10 +524,10 @@ async def send_language_info(chat_id, data):
     if 'letter_lang' not in data:
         data['letter_lang'] = config.RU
 
-    lang_name = config.LANG_NAMES[data['letter_lang']]
+    lang_name = locales.text(language, 'lang' + data['letter_lang'])
 
-    text = locales.text(language, 'current_letter_lang') + \
-        ' - ' + lang_name + '.'
+    text = locales.text(language, 'current_letter_lang') +\
+        ' <b>{}</b>.'.format(lang_name)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -539,7 +538,10 @@ async def send_language_info(chat_id, data):
 
     keyboard.add(change_language_button)
 
-    await bot.send_message(chat_id, text, reply_markup=keyboard)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
 
 
 async def save_recipient(region, data):
@@ -551,7 +553,7 @@ async def save_recipient(region, data):
 
 async def print_violation_address_info(region, address, chat_id, language):
     text = locales.text(language, 'recipient') +\
-        ' <b>{}</b>.'.format(config.REGIONAL_NAME[region]) + '\n' +\
+        ' <b>{}</b>.'.format(locales.text(language, region)) + '\n' +\
         '\n' +\
         locales.text(language, 'violation_address') + \
         ' <b>{}</b>'.format(address)
@@ -670,7 +672,7 @@ async def enter_personal_info(message, state):
         '\n' +\
         locales.text(language, 'fullname_example')
 
-    keyboard = await get_skip_keyboard()
+    keyboard = await get_skip_keyboard(language)
 
     await bot.send_message(message.chat.id,
                            text,
@@ -795,10 +797,10 @@ async def change_language_click(call, state: FSMContext):
 
         language = await get_ui_lang(data=data)
 
-        lang_name = config.LANG_NAMES[data['letter_lang']]
+        lang_name = locales.text(language, 'lang' + data['letter_lang'])
 
     text = locales.text(language, 'current_letter_lang') +\
-        ' - <b>{}</b>.'.format(lang_name)
+        ' <b>{}</b>.'.format(lang_name)
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -899,9 +901,9 @@ async def recipient_click(call, state: FSMContext):
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
-    for region in config.REGIONAL_NAME:
+    for region in config.REGIONS:
         button = types.InlineKeyboardButton(
-            text=config.REGIONAL_NAME[region],
+            text=locales.text(language, region),
             callback_data=region)
 
         keyboard.add(button)
@@ -1622,8 +1624,9 @@ async def reject_wrong_violation_data_input(message: types.Message,
 
 async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
-
+    logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
+    logger.info('Загрузили.')
 
 
 async def shutdown(dispatcher: Dispatcher):
