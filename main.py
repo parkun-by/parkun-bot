@@ -80,13 +80,17 @@ async def invite_to_fill_credentials(chat_id, state):
     text = locales.text(language, 'first_steps')
 
     # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     personal_info_button = types.InlineKeyboardButton(
         text=locales.text(language, 'send_personal_info'),
         callback_data='/enter_personal_info')
 
-    keyboard.add(personal_info_button)
+    settings_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'settings'),
+        callback_data='/settings')
+
+    keyboard.add(personal_info_button, settings_button)
 
     await bot.send_message(chat_id,
                            text,
@@ -519,24 +523,7 @@ async def ask_for_violation_address(chat_id, data):
 
 
 async def send_language_info(chat_id, data):
-    language = await get_ui_lang(data=data)
-
-    if 'letter_lang' not in data:
-        data['letter_lang'] = config.RU
-
-    lang_name = locales.text(language, 'lang' + data['letter_lang'])
-
-    text = locales.text(language, 'current_letter_lang') +\
-        ' <b>{}</b>.'.format(lang_name)
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-
-    change_language_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'change_language_button'),
-        callback_data='/change_language')
-
-    keyboard.add(change_language_button)
+    text, keyboard = await get_language_text_and_keyboard(data)
 
     await bot.send_message(chat_id,
                            text,
@@ -660,12 +647,38 @@ async def set_violation_location(chat_id, address, state):
                                  language)
 
 
+async def show_settings(message, state):
+    logger.info('Настройки - ' + str(message.from_user.username))
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'select_section')
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    personal_info_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'personal_info'),
+        callback_data='/personal_info')
+
+    language_settings_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'language_settings'),
+        callback_data='/language_settings')
+
+    keyboard.add(personal_info_button, language_settings_button)
+
+    await bot.send_message(message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
+
 async def enter_personal_info(message, state):
     logger.info('Настройка отправителя - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
         await set_default_sender_info(data)
-        await send_language_info(message.chat.id, data)
         language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'input_fullname') + '\n' +\
@@ -682,7 +695,7 @@ async def enter_personal_info(message, state):
     await Form.sender_name.set()
 
 
-async def get_ui_land_or_default(data):
+async def get_ui_lang_or_default(data):
     try:
         return data['ui_lang']
     except KeyError:
@@ -692,15 +705,113 @@ async def get_ui_land_or_default(data):
 
 async def get_ui_lang(state=None, data=None):
     if data:
-        return await get_ui_land_or_default(data)
+        return await get_ui_lang_or_default(data)
     elif state:
         async with state.proxy() as my_data:
-            return await get_ui_land_or_default(my_data)
+            return await get_ui_lang_or_default(my_data)
+
+
+async def show_personal_info(message: types.Message, state: FSMContext):
+    logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        text = locales.text(language, 'personal_data') + '\n' + '\n' +\
+            locales.text(language, 'sender_name') +\
+            ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+            locales.text(language, 'sender_email') +\
+            ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+            locales.text(language, 'sender_address') +\
+            ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+            locales.text(language, 'sender_phone') + \
+            ' <b>{}</b>'.format(data['sender_phone']) + '\n'
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    enter_personal_info_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'enter_personal_info_button'),
+        callback_data='/enter_personal_info')
+
+    delete_personal_info_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'delete_personal_info_button'),
+        callback_data='/reset')
+
+    keyboard.add(enter_personal_info_button, delete_personal_info_button)
+
+    await bot.send_message(message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
+
+async def get_language_text_and_keyboard(data):
+    language = await get_ui_lang(data=data)
+
+    if 'letter_lang' not in data:
+        data['letter_lang'] = config.RU
+
+    ui_lang_name = locales.text(language, 'lang' + language)
+    letter_lang_name = locales.text(language, 'lang' + data['letter_lang'])
+
+    text = locales.text(language, 'current_ui_lang') +\
+        ' <b>{}</b>.'.format(ui_lang_name) + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_letter_lang') +\
+        ' <b>{}</b>.'.format(letter_lang_name)
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    change_ui_language_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'change_ui_language_button'),
+        callback_data='/change_ui_language')
+
+    change_letter_language_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'change_letter_language_button'),
+        callback_data='/change_letter_language')
+
+    keyboard.add(change_ui_language_button, change_letter_language_button)
+
+    return text, keyboard
+
+
+@dp.callback_query_handler(lambda call: call.data == '/settings',
+                           state='*')
+async def settings_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки настроек - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    await show_settings(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/personal_info',
+                           state='*')
+async def personal_info_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки показа личных данных - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    await show_personal_info(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/language_settings',
+                           state='*')
+async def language_settings_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки языковых настроек - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        await send_language_info(call.message.chat.id, data)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_personal_info',
                            state='*')
-async def personal_info_click(call, state: FSMContext):
+async def enter_personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода личных данных - ' +
                 str(call.from_user.username))
 
@@ -743,7 +854,7 @@ async def verify_email_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/reset',
                            state='*')
-async def personal_info_click(call, state: FSMContext):
+async def delete_personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки удаления личных данных - ' +
                 str(call.from_user.username))
 
@@ -778,11 +889,35 @@ async def use_previous_click(call, state: FSMContext):
                                  state)
 
 
-@dp.callback_query_handler(lambda call: call.data == '/change_language',
-                           state=[Form.vehicle_number,
-                                  Form.sender_name])
+@dp.callback_query_handler(lambda call: call.data == '/change_ui_language',
+                           state='*')
 async def change_language_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки смены языка - ' +
+    logger.info('Обрабатываем нажатие кнопки смены языка бота - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        if await get_ui_lang(data=data) == config.RU:
+            data['ui_lang'] = config.BY
+        elif data['ui_lang'] == config.BY:
+            data['ui_lang'] = config.RU
+        else:
+            data['ui_lang'] = config.RU
+
+        text, keyboard = await get_language_text_and_keyboard(data)
+
+    await bot.edit_message_text(text,
+                                call.message.chat.id,
+                                call.message.message_id,
+                                reply_markup=keyboard,
+                                parse_mode='HTML')
+
+
+@dp.callback_query_handler(lambda call: call.data == '/change_letter_language',
+                           state='*')
+async def change_language_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки смены языка писем - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -795,21 +930,7 @@ async def change_language_click(call, state: FSMContext):
         else:
             data['letter_lang'] = config.RU
 
-        language = await get_ui_lang(data=data)
-
-        lang_name = locales.text(language, 'lang' + data['letter_lang'])
-
-    text = locales.text(language, 'current_letter_lang') +\
-        ' <b>{}</b>.'.format(lang_name)
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-
-    change_language_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'change_language_button'),
-        callback_data='/change_language')
-
-    keyboard.add(change_language_button)
+        text, keyboard = await get_language_text_and_keyboard(data)
 
     await bot.edit_message_text(text,
                                 call.message.chat.id,
@@ -946,7 +1067,6 @@ async def enter_violation_info_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     async with state.proxy() as data:
-        await send_language_info(call.message.chat.id, data)
         language = await get_ui_lang(data=data)
 
         # зададим сразу пустое примечание
@@ -1138,40 +1258,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await invite_to_fill_credentials(message.chat.id, state)
 
 
-@dp.message_handler(commands=['personal_info'], state='*')
-async def show_personal_info(message: types.Message, state: FSMContext):
-    logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
-        text = locales.text(language, 'personal_data') + '\n' + '\n' +\
-            locales.text(language, 'sender_name') +\
-            ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
-            locales.text(language, 'sender_email') +\
-            ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
-            locales.text(language, 'sender_address') +\
-            ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
-            locales.text(language, 'sender_phone') + \
-            ' <b>{}</b>'.format(data['sender_phone']) + '\n'
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    enter_personal_info_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'enter_personal_info_button'),
-        callback_data='/enter_personal_info')
-
-    delete_personal_info_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'delete_personal_info_button'),
-        callback_data='/reset')
-
-    keyboard.add(enter_personal_info_button, delete_personal_info_button)
-
-    await bot.send_message(message.chat.id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
+@dp.message_handler(commands=['settings'], state='*')
+async def show_settings_command(message: types.Message, state: FSMContext):
+    logger.info('Показ настроек команда - ' + str(message.from_user.username))
+    await show_settings(message, state)
 
 
 @dp.message_handler(commands=['reset'], state='*')
