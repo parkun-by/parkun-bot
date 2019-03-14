@@ -6,11 +6,6 @@ URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 BY = '_by'
 RU = '_ru'
 
-LANG_NAMES = {
-    BY: 'беларуский',
-    RU: 'русский',
-}
-
 # SendInBlue
 SIB_ACCESS_KEY = 'access_key'
 
