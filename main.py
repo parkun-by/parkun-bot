@@ -280,7 +280,8 @@ async def get_letter_photos(data):
     text = ''
 
     for photo_url in data['attachments']:
-        photo = photo_template.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
+        photo_link = photo_template.replace('__ССЫЛКА__', photo_url)
+        photo = photo_link.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
         text += photo
 
     return text
