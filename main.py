@@ -778,6 +778,17 @@ async def get_language_text_and_keyboard(data):
     return text, keyboard
 
 
+async def user_banned(*args):
+    bot_id = (await bot.get_me()).id
+
+    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
+        for name in args:
+            if name in data['banned_users']:
+                return True, data['banned_users'][name]
+
+    return False, ''
+
+
 @dp.callback_query_handler(lambda call: call.data == '/settings',
                            state='*')
 async def settings_click(call, state: FSMContext):
@@ -1265,6 +1276,59 @@ async def show_settings_command(message: types.Message, state: FSMContext):
     await show_settings(message, state)
 
 
+@dp.message_handler(commands=['unban'], state='*')
+async def ban_user_command(message: types.Message, state: FSMContext):
+    if message.chat.id != config.ADMIN_ID:
+        return
+
+    language = await get_ui_lang(state)
+    logger.info('Забанил человека - ' + str(message.from_user.username))
+
+    user = message.text.replace('/unban', '', 1).strip()
+
+    if not user:
+        text = locales.text(language, 'banned_name_expected')
+        await bot.send_message(message.chat.id, text)
+        return
+
+    bot_id = (await bot.get_me()).id
+
+    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
+        data['banned_users'].pop(user, None)
+        text = user + ' ' + locales.text(language, 'unbanned_succesfully')
+
+    await bot.send_message(message.chat.id, text)
+
+
+@dp.message_handler(commands=['ban'], state='*')
+async def ban_user_command(message: types.Message, state: FSMContext):
+    if message.chat.id != config.ADMIN_ID:
+        return
+
+    language = await get_ui_lang(state)
+    logger.info('Забанил человека - ' + str(message.from_user.username))
+
+    try:
+        user, caption = message.text.replace('/ban ', '', 1).split(' ', 1)
+    except ValueError:
+        text = locales.text(language, 'name_and_caption_expected')
+        await bot.send_message(message.chat.id, text)
+        return
+
+    bot_id = (await bot.get_me()).id
+
+    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
+        try:
+            data['banned_users'][user] = caption
+        except KeyError:
+            data['banned_users'] = {}
+            data['banned_users'][user] = caption
+
+        text = user + ' ' + locales.text(language, 'banned_succesfully')
+
+    await bot.send_message(message.chat.id, text)
+
+
 @dp.message_handler(commands=['reset'], state='*')
 async def cmd_reset(message: types.Message, state: FSMContext):
     logger.info('Сброс бота - ' + str(message.from_user.username))
@@ -1540,9 +1604,13 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
 
-    if message.chat.id == 612423367:
-        logger.info('КЕК БАН - ' +
-                    str(message.from_user.username))
+    banned, reason = await user_banned(message.from_user.username,
+                                       str(message.chat.id))
+
+    if banned:
+        text = locales.text(language, 'you_are_banned') + ' ' + reason
+
+        await bot.send_message(message.chat.id, text)
         return
 
     # Добавляем фотку наилучшего качества(последнюю в массиве) в список
