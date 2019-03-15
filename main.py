@@ -1547,7 +1547,8 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     # Добавляем фотку наилучшего качества(последнюю в массиве) в список
     # прикрепления в письме
-    await add_photo_to_attachments(message.photo[-1], state)
+    asyncio.run_coroutine_threadsafe(
+        add_photo_to_attachments(message.photo[-1], state), loop)
 
     text = locales.text(language, 'photo_or_info') + '\n' +\
         '\n' +\
