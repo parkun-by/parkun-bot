@@ -1489,8 +1489,11 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
                    str(message.location.latitude))
 
     async with state.proxy() as data:
-        address = await locator.get_address(coordinates, data['letter_lang'])
         language = await get_ui_lang(data=data)
+        address = await locator.get_address(coordinates, data['letter_lang'])
+
+        if address == config.ADDRESS_FAIL:
+            address = locales.text(language, 'no_address_detected')
 
     if address is None:
         logger.info('Не распознал локацию - ' +
@@ -1623,11 +1626,15 @@ async def catch_gps_violation_location(message: types.Message,
     coordinates = [message.location.longitude, message.location.latitude]
 
     async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
         address = await locator.get_address(coordinates, data['letter_lang'])
+
+        if address == config.ADDRESS_FAIL:
+            address = locales.text(language, 'no_address_detected')
+
         region = await locator.get_region(coordinates)
         await save_recipient(region, data)
         region = data['recipient']
-        language = await get_ui_lang(data=data)
 
     if address is None:
         logger.info('Не распознал локацию - ' +

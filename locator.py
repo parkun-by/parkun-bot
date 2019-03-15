@@ -144,7 +144,7 @@ class Locator():
                 address = address_bottom['name'] + ', ' +\
                     address_bottom['description']
             except IndexError:
-                address = 'Не удалось подобрать адрес.'
+                address = config.ADDRESS_FAIL
 
             return address
 
