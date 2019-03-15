@@ -4,14 +4,14 @@ import config
 
 class Locator():
     def __init__(self):
+        self._timeout = aiohttp.ClientTimeout(connect=5)
         self._http_session = aiohttp.ClientSession()
         self._boundaries = {}
 
     def __del__(self):
         self._http_session.close()
 
-    @classmethod
-    async def __get_boundary(cls, http_session, region_name):
+    async def __get_boundary(self, http_session, region_name):
         url = 'http://nominatim.openstreetmap.org/search?'
 
         params = (
@@ -20,18 +20,23 @@ class Locator():
             ('polygon_geojson', 1)
         )
 
-        async with http_session.get(url, params=params) as response:
-            if response.status != 200:
-                return None
+        try:
+            async with http_session.get(url,
+                                        params=params,
+                                        timeout=self._timeout) as response:
+                if response.status != 200:
+                    return None
 
-            resp_json = await response.json(content_type=None)
+                resp_json = await response.json(content_type=None)
 
-            try:
-                boundary = resp_json[0]['geojson']['coordinates'][0]
-            except IndexError:
-                boundary = []
+                try:
+                    boundary = resp_json[0]['geojson']['coordinates'][0]
+                except IndexError:
+                    boundary = []
+        except aiohttp.client_exceptions.ServerTimeoutError:
+            boundary = []
 
-            return boundary
+        return boundary
 
     async def download_boundaries(self):
         self._boundaries = {
