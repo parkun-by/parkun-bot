@@ -1276,8 +1276,22 @@ async def show_settings_command(message: types.Message, state: FSMContext):
     await show_settings(message, state)
 
 
+@dp.message_handler(commands=['banlist'], state='*')
+async def banlist_user_command(message: types.Message, state: FSMContext):
+    if message.chat.id != config.ADMIN_ID:
+        return
+
+    logger.info('Банлист - ' + str(message.from_user.username))
+
+    bot_id = (await bot.get_me()).id
+
+    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
+        text = str(data['banned_users'])
+        await bot.send_message(message.chat.id, text)
+
+
 @dp.message_handler(commands=['unban'], state='*')
-async def ban_user_command(message: types.Message, state: FSMContext):
+async def unban_user_command(message: types.Message, state: FSMContext):
     if message.chat.id != config.ADMIN_ID:
         return
 
