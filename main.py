@@ -65,11 +65,6 @@ dp = Dispatcher(bot, storage=storage)
 
 logger = setup_logging()
 
-CREDENTIALS = ['sender_name',
-               'sender_email',
-               'sender_address',
-               'sender_phone']
-
 REQUIRED_CREDENTIALS = ['sender_name',
                         'sender_email',
                         'sender_address']
@@ -184,29 +179,45 @@ async def delete_prepared_violation(data):
     data['caption'] = ''
 
 
-def set_default(data, key, value):
+def set_default(data, key):
     if key not in data:
-        data[key] = value
+        data[key] = get_default_value(key)
+
+
+def get_default_value(key):
+    default_values = {
+        'verified': False,
+        'letter_lang': config.RU,
+        'ui_lang': config.BY,
+        'recipient': config.MINSK,
+        'saved_state': None,
+        'attachments': [],
+        'photo_id': [],
+    }
+
+    try:
+        return default_values[key]
+    except KeyError:
+        return ''
 
 
 async def set_default_sender_info(data):
-    for user_info in CREDENTIALS:
-        if user_info not in data:
-            data[user_info] = ''
-
-    set_default(data, 'verified', False)
-    data['secret_code'] = ''
-    set_default(data, 'letter_lang', config.RU)
-    set_default(data, 'ui_lang', config.BY)
-    set_default(data, 'recipient', config.MINSK)
-    set_default(data, 'previous_violation_address', '')
-    data['saved_state'] = None
-
-    data['attachments'] = []
-    data['photo_id'] = []
-    data['vehicle_number'] = ''
-    data['violation_location'] = ''
-    data['violation_datetime'] = ''
+    set_default(data, 'sender_name')
+    set_default(data, 'sender_email')
+    set_default(data, 'sender_address')
+    set_default(data, 'sender_phone')
+    set_default(data, 'verified')
+    set_default(data, 'secret_code')
+    set_default(data, 'letter_lang')
+    set_default(data, 'ui_lang')
+    set_default(data, 'recipient')
+    set_default(data, 'previous_violation_address')
+    set_default(data, 'saved_state')
+    set_default(data, 'attachments')
+    set_default(data, 'photo_id')
+    set_default(data, 'vehicle_number')
+    set_default(data, 'violation_location')
+    set_default(data, 'violation_datetime')
 
 
 async def compose_summary(data):
@@ -723,20 +734,20 @@ async def enter_personal_info(message, state):
     await Form.sender_name.set()
 
 
-async def get_ui_lang_or_default(data):
+async def get_value(data, key):
     try:
-        return data['ui_lang']
+        return data[key]
     except KeyError:
-        set_default(data, 'ui_lang', config.RU)
-        return data['ui_lang']
+        set_default(data, key, get_default_value(key))
+        return data[key]
 
 
 async def get_ui_lang(state=None, data=None):
     if data:
-        return await get_ui_lang_or_default(data)
+        return await get_value(data, 'ui_lang')
     elif state:
         async with state.proxy() as my_data:
-            return await get_ui_lang_or_default(my_data)
+            return await get_value(my_data, 'ui_lang')
 
 
 async def show_personal_info(message: types.Message, state: FSMContext):
