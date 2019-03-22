@@ -95,7 +95,7 @@ async def invite_to_fill_credentials(chat_id, state):
 async def invite_to_confirm_email(data, chat_id):
     language = await get_ui_lang(data=data)
     message = (locales.text(language, 'verify_email')).format(
-                   data['sender_email']
+                    get_value(data, 'sender_email')
                 )
 
     # настроим клавиатуру
@@ -128,11 +128,11 @@ async def share_violation(state, username, chat_id):
             await bot.send_document(chat_id, file)
 
             caption = locales.text(language, 'violation_datetime') +\
-                ' {}'.format(data['violation_datetime']) + '\n' +\
+                ' {}'.format(get_value(data, 'violation_datetime')) + '\n' +\
                 locales.text(language, 'violation_location') +\
-                ' {}'.format(data['violation_location']) + '\n' +\
+                ' {}'.format(get_value(data, 'violation_location')) + '\n' +\
                 locales.text(language, 'violation_plate') + \
-                ' {}'.format(data['vehicle_number'])
+                ' {}'.format(get_value(data, 'vehicle_number'))
 
             # в канал
             await send_photos_group_with_caption(data,
@@ -169,7 +169,7 @@ async def add_photo_to_attachments(photo, state):
 async def delete_prepared_violation(data):
     # в этом месте сохраним адрес нарушения для использования в
     # следующем обращении
-    data['previous_violation_address'] = data['violation_location']
+    data['previous_violation_address'] = get_value(data, 'violation_location')
 
     data['attachments'] = []
     data['photo_id'] = []
@@ -193,6 +193,7 @@ def get_default_value(key):
         'saved_state': None,
         'attachments': [],
         'photo_id': [],
+        'banned_users': {},
     }
 
     try:
@@ -224,30 +225,30 @@ async def compose_summary(data):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'check_please').format(
-            locales.text(language, data['recipient']),
-            config.EMAIL_TO[data['recipient']]) + '\n' +\
+            locales.text(language, get_value(data, 'recipient')),
+            config.EMAIL_TO[get_value(data, 'recipient')]) + '\n' +\
         '\n' +\
         locales.text(language, 'letter_lang').format(
-            locales.text(language, 'lang' + data['letter_lang'])) +\
+            locales.text(language, 'lang' + get_value(data, 'letter_lang'))) +\
         '\n' +\
         '\n' +\
         locales.text(language, 'sender') + '\n' +\
         locales.text(language, 'sender_name') +\
-        ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_name')) + '\n' +\
         locales.text(language, 'sender_email') +\
-        ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
         locales.text(language, 'sender_address') +\
-        ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_address')) + '\n' +\
         locales.text(language, 'sender_phone') +\
-        ' <b>{}</b>'.format(data['sender_phone']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_phone')) + '\n' +\
         '\n' +\
         locales.text(language, 'violator') + '\n' +\
         locales.text(language, 'violation_plate') +\
-        ' <b>{}</b>'.format(data['vehicle_number']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'vehicle_number')) + '\n' +\
         locales.text(language, 'violation_location') +\
-        ' <b>{}</b>'.format(data['violation_location']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'violation_location')) + '\n' +\
         locales.text(language, 'violation_datetime') +\
-        ' <b>{}</b>'.format(data['violation_datetime']) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'violation_datetime')) + '\n' +\
         '\n' +\
         locales.text(language, 'channel_warning') + ' ' + config.CHANNEL
 
@@ -257,7 +258,8 @@ async def compose_summary(data):
 async def get_letter_header(data):
     template = path.join('letters',
                          'footer',
-                         data['recipient'] + data['letter_lang'] + '.html')
+                         get_value(data, 'recipient') +
+                         get_value(data, 'letter_lang') + '.html')
 
     with open(template, 'r') as file:
         text = file.read()
@@ -266,18 +268,29 @@ async def get_letter_header(data):
 
 
 async def get_letter_body(data):
-    template = path.join('letters', 'body' + data['letter_lang'] + '.html')
+    template = path.join('letters',
+                         'body' + get_value(data, 'letter_lang') + '.html')
 
     with open(template, 'r') as file:
         text = file.read()
 
-    text = text.replace('__ГОСНОМЕРТС__', data['vehicle_number'])
-    text = text.replace('__МЕСТОНАРУШЕНИЯ__', data['violation_location'])
-    text = text.replace('__ДАТАИВРЕМЯ__', data['violation_datetime'])
-    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', data['sender_name'])
-    text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__', data['sender_address'])
-    text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__', data['sender_phone'])
-    text = text.replace('__ПРИМЕЧАНИЕ__', data['caption'])
+    text = text.replace('__ГОСНОМЕРТС__', get_value(data, 'vehicle_number'))
+
+    text = text.replace('__МЕСТОНАРУШЕНИЯ__',
+                        get_value(data, 'violation_location'))
+
+    text = text.replace('__ДАТАИВРЕМЯ__',
+                        get_value(data, 'violation_datetime'))
+
+    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_value(data, 'sender_name'))
+
+    text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__',
+                        get_value(data, 'sender_address'))
+
+    text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__',
+                        get_value(data, 'sender_phone'))
+
+    text = text.replace('__ПРИМЕЧАНИЕ__', get_value(data, 'caption'))
 
     return text
 
@@ -290,7 +303,7 @@ async def get_letter_photos(data):
 
     text = ''
 
-    for photo_url in data['attachments']:
+    for photo_url in get_value(data, 'attachments'):
         photo = photo_template.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
         text += photo
 
@@ -313,10 +326,10 @@ async def get_letter_photos_links(data):
 
     text = ''
 
-    for count, photo_url in enumerate(data['attachments']):
+    for count, photo_url in enumerate(get_value(data, 'attachments')):
         photo_link_header = photo_link_template.replace(
             '__ССЫЛКА_ЗАГОЛОВОК__',
-            get_photos_links_header(count, data['letter_lang']))
+            get_photos_links_header(count, get_value(data, 'letter_lang')))
 
         photo_link = photo_link_header.replace('__ССЫЛКА__', photo_url)
         text += photo_link
@@ -342,7 +355,7 @@ async def approve_sending(chat_id, state):
         text = await compose_summary(data)
         await send_photos_group_with_caption(data, chat_id)
 
-        if data['caption']:
+        if get_value(data, 'caption'):
             caption_button_text = locales.text(language,
                                                'change_caption_button')
 
@@ -380,14 +393,16 @@ def get_subject(language):
 
 async def prepare_mail_parameters(state):
     async with state.proxy() as data:
-        recipient = locales.text(data['letter_lang'],
-                                 'head_' + data['recipient'])
+        recipient = locales.text(get_value(data, 'letter_lang'),
+                                 'head_' + get_value(data, 'recipient'))
 
-        parameters = {'to': {config.EMAIL_TO[data['recipient']]: recipient},
-                      'from': [data['sender_email'], data['sender_name']],
-                      'subject': get_subject(data['letter_lang']),
-                      'html': await compose_letter_body(data),
-                      'attachment': data['attachments']}
+        parameters = {
+            'to': {config.EMAIL_TO[get_value(data, 'recipient')]: recipient},
+            'from': [get_value(data, 'sender_email'),
+                     get_value(data, 'sender_name')],
+            'subject': get_subject(get_value(data, 'letter_lang')),
+            'html': await compose_letter_body(data),
+            'attachment': get_value(data, 'attachments')}
 
         return parameters
 
@@ -422,11 +437,7 @@ async def invalid_credentials(state):
 
 async def verified_email(state):
     async with state.proxy() as data:
-        if 'verified' not in data:
-            data['verified'] = False
-            return False
-
-        return data['verified']
+        return get_value(data, 'verified')
 
 
 async def get_cancel_keyboard(data):
@@ -543,9 +554,10 @@ async def ask_for_violation_address(chat_id, data):
     keyboard = await get_cancel_keyboard(data)
 
     if 'previous_violation_address' in data:
-        if data['previous_violation_address'] != '':
+        if get_value(data, 'previous_violation_address') != '':
             text += locales.text(language, 'previous_violation_address') +\
-                ' <b>{}</b>'.format(data['previous_violation_address'])
+                ' <b>{}</b>'.format(get_value(data,
+                                              'previous_violation_address'))
 
             use_previous_button = types.InlineKeyboardButton(
                 text=locales.text(language, 'use_previous_button'),
@@ -636,7 +648,7 @@ async def ask_for_violation_time(chat_id, language):
 
 
 async def send_photos_group_with_caption(data, chat_id, caption=''):
-    photos_id = data['photo_id']
+    photos_id = get_value(data, 'photo_id')
 
     photos = []
 
@@ -674,7 +686,7 @@ async def set_violation_location(chat_id, address, state):
     async with state.proxy() as data:
         await save_violation_address(address, data)
         await save_recipient(region, data)
-        region = data['recipient']
+        region = get_value(data, 'recipient')
         language = await get_ui_lang(data=data)
 
     await print_violation_address_info(region,
@@ -734,7 +746,7 @@ async def enter_personal_info(message, state):
     await Form.sender_name.set()
 
 
-async def get_value(data, key):
+def get_value(data, key):
     try:
         return data[key]
     except KeyError:
@@ -744,10 +756,10 @@ async def get_value(data, key):
 
 async def get_ui_lang(state=None, data=None):
     if data:
-        return await get_value(data, 'ui_lang')
+        return get_value(data, 'ui_lang')
     elif state:
         async with state.proxy() as my_data:
-            return await get_value(my_data, 'ui_lang')
+            return get_value(my_data, 'ui_lang')
 
 
 async def show_personal_info(message: types.Message, state: FSMContext):
@@ -758,13 +770,13 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
             locales.text(language, 'sender_name') +\
-            ' <b>{}</b>'.format(data['sender_name']) + '\n' +\
+            ' <b>{}</b>'.format(get_value(data, 'sender_name')) + '\n' +\
             locales.text(language, 'sender_email') +\
-            ' <b>{}</b>'.format(data['sender_email']) + '\n' +\
+            ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
             locales.text(language, 'sender_address') +\
-            ' <b>{}</b>'.format(data['sender_address']) + '\n' +\
+            ' <b>{}</b>'.format(get_value(data, 'sender_address')) + '\n' +\
             locales.text(language, 'sender_phone') + \
-            ' <b>{}</b>'.format(data['sender_phone']) + '\n'
+            ' <b>{}</b>'.format(get_value(data, 'sender_phone')) + '\n'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -788,11 +800,9 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 async def get_language_text_and_keyboard(data):
     language = await get_ui_lang(data=data)
 
-    if 'letter_lang' not in data:
-        data['letter_lang'] = config.RU
-
     ui_lang_name = locales.text(language, 'lang' + language)
-    letter_lang_name = locales.text(language, 'lang' + data['letter_lang'])
+    letter_lang_name = locales.text(language,
+                                    'lang' + get_value(data, 'letter_lang'))
 
     text = locales.text(language, 'current_ui_lang') +\
         ' <b>{}</b>.'.format(ui_lang_name) + '\n' +\
@@ -821,8 +831,8 @@ async def user_banned(*args):
 
     async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
         for name in args:
-            if name in data['banned_users']:
-                return True, data['banned_users'][name]
+            if name in get_value(data, 'banned_users'):
+                return True, get_value(data, 'banned_users')[name]
 
     return False, ''
 
@@ -884,7 +894,8 @@ async def verify_email_click(call, state: FSMContext):
         return
 
     async with state.proxy() as data:
-        secret_code = await mail_verifier.verify(data['sender_email'])
+        secret_code = await mail_verifier.verify(get_value(data,
+                                                           'sender_email'))
 
     if secret_code == config.VERIFYING_FAIL:
         text = locales.text(language, 'email_verifying_fail')
@@ -932,7 +943,7 @@ async def use_previous_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        previous_address = data['previous_violation_address']
+        previous_address = get_value(data, 'previous_violation_address')
 
     await set_violation_location(call.message.chat.id,
                                  previous_address,
@@ -950,7 +961,7 @@ async def change_language_click(call, state: FSMContext):
     async with state.proxy() as data:
         if await get_ui_lang(data=data) == config.RU:
             data['ui_lang'] = config.BY
-        elif data['ui_lang'] == config.BY:
+        elif await get_ui_lang(data=data) == config.BY:
             data['ui_lang'] = config.RU
         else:
             data['ui_lang'] = config.RU
@@ -973,9 +984,9 @@ async def change_language_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        if data['letter_lang'] == config.RU:
+        if get_value(data, 'letter_lang') == config.RU:
             data['letter_lang'] = config.BY
-        elif data['letter_lang'] == config.BY:
+        elif get_value(data, 'letter_lang') == config.BY:
             data['letter_lang'] = config.RU
         else:
             data['letter_lang'] = config.RU
@@ -1095,9 +1106,9 @@ async def recipient_choosen_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        address = data['violation_location']
+        address = get_value(data, 'violation_location')
         await save_recipient(call.data, data)
-        region = data['recipient']
+        region = get_value(data, 'recipient')
 
     language = await get_ui_lang(state)
 
@@ -1120,7 +1131,7 @@ async def enter_violation_info_click(call, state: FSMContext):
         language = await get_ui_lang(data=data)
 
         # зададим сразу пустое примечание
-        data['caption'] = ''
+        set_default(data, 'caption')
 
     text = locales.text(language, 'input_plate') + '\n' +\
         '\n' +\
@@ -1148,7 +1159,7 @@ async def add_caption_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         # зададим сразу пустое примечание
-        data['caption'] = ''
+        set_default(data, 'caption')
 
         # сохраним состояние, чтобы к нему вернуться
         current_state = await state.get_state()
@@ -1218,8 +1229,8 @@ async def cancel_violation_input(call, state: FSMContext):
         language = await get_ui_lang(data=data)
 
         if 'saved_state' in data:
-            if data['saved_state'] is not None:
-                saved_state = data['saved_state']
+            if get_value(data, 'saved_state') is not None:
+                saved_state = get_value(data, 'saved_state')
                 await state.set_state(saved_state)
                 data['saved_state'] = None
 
@@ -1324,7 +1335,7 @@ async def banlist_user_command(message: types.Message, state: FSMContext):
     bot_id = (await bot.get_me()).id
 
     async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
-        text = str(data['banned_users'])
+        text = str(get_value(data, 'banned_users'))
         await bot.send_message(message.chat.id, text)
 
 
@@ -1370,11 +1381,9 @@ async def ban_user_command(message: types.Message, state: FSMContext):
     bot_id = (await bot.get_me()).id
 
     async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
-        try:
-            data['banned_users'][user] = caption
-        except KeyError:
-            data['banned_users'] = {}
-            data['banned_users'][user] = caption
+        banned_users = get_value(data, 'banned_users')
+        banned_users[user] = caption
+        data['banned_users'] = banned_users
 
         text = user + ' ' + locales.text(language, 'banned_succesfully')
 
@@ -1493,7 +1502,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
-        saved_state = data['saved_state']
+        saved_state = get_value(data, 'saved_state')
         await state.set_state(saved_state)
         data['saved_state'] = None
 
@@ -1505,7 +1514,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        feedback = data['feedback_post'].split(' ')
+        feedback = get_value(data, 'feedback_post').split(' ')
         feedback_chat_id = feedback[0]
         feedback_message_id = feedback[1]
 
@@ -1513,7 +1522,7 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
                                message.text,
                                reply_to_message_id=feedback_message_id)
 
-        await state.set_state(data['saved_state'])
+        await state.set_state(get_value(data, 'saved_state'))
         data['saved_state'] = None
 
         language = await get_ui_lang(data=data)
@@ -1528,7 +1537,7 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
     logger.info('Ввод секретного кода - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
-        secret_code = data['secret_code']
+        secret_code = get_value(data, 'secret_code')
         language = await get_ui_lang(data=data)
 
     if secret_code == message.text:
@@ -1606,7 +1615,9 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-        address = await locator.get_address(coordinates, data['letter_lang'])
+
+        address = await locator.get_address(coordinates,
+                                            get_value(data, 'letter_lang'))
 
         if address == config.ADDRESS_FAIL:
             address = locales.text(language, 'no_address_detected')
@@ -1748,14 +1759,15 @@ async def catch_gps_violation_location(message: types.Message,
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-        address = await locator.get_address(coordinates, data['letter_lang'])
+        address = await locator.get_address(coordinates,
+                                            get_value(data, 'letter_lang'))
 
         if address == config.ADDRESS_FAIL:
             address = locales.text(language, 'no_address_detected')
 
         region = await locator.get_region(coordinates)
         await save_recipient(region, data)
-        region = data['recipient']
+        region = get_value(data, 'recipient')
 
     if address is None:
         logger.info('Не распознал локацию - ' +
