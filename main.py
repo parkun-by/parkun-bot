@@ -280,9 +280,35 @@ async def get_letter_photos(data):
     text = ''
 
     for photo_url in data['attachments']:
-        photo_link = photo_template.replace('__ССЫЛКА__', photo_url)
-        photo = photo_link.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
+        photo = photo_template.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
         text += photo
+
+    return text
+
+
+def get_photos_links_header(count, language):
+    # первой ссылке добавим общий заголовок
+    if count == 0:
+        return locales.text(language, 'letter_link_header')
+
+    return ''
+
+
+async def get_letter_photos_links(data):
+    template = path.join('letters', 'photo_links.html')
+
+    with open(template, 'r') as file:
+        photo_link_template = file.read()
+
+    text = ''
+
+    for count, photo_url in enumerate(data['attachments']):
+        photo_link_header = photo_link_template.replace(
+            '__ССЫЛКА_ЗАГОЛОВОК__',
+            get_photos_links_header(count, data['letter_lang']))
+
+        photo_link = photo_link_header.replace('__ССЫЛКА__', photo_url)
+        text += photo_link
 
     return text
 
@@ -291,8 +317,9 @@ async def compose_letter_body(data):
     header = await get_letter_header(data)
     body = await get_letter_body(data)
     photos = await get_letter_photos(data)
+    photo_links = await get_letter_photos_links(data)
 
-    return header + body + photos
+    return header + body + photos + photo_links
 
 
 async def approve_sending(chat_id, state):
