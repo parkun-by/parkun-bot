@@ -750,7 +750,7 @@ def get_value(data, key):
     try:
         return data[key]
     except KeyError:
-        set_default(data, key, get_default_value(key))
+        set_default(data, key)
         return data[key]
 
 
