@@ -1039,6 +1039,8 @@ async def current_time_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода текущего времени - ' +
                 str(call.from_user.username))
 
+    await bot.answer_callback_query(call.id)
+
     current_time = get_str_current_time()
 
     message = await bot.send_message(call.message.chat.id, current_time)
@@ -1127,6 +1129,8 @@ async def enter_violation_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
                 str(call.from_user.username))
 
+    await bot.answer_callback_query(call.id)
+
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
@@ -1141,8 +1145,6 @@ async def enter_violation_info_click(call, state: FSMContext):
     async with state.proxy() as data:
         keyboard = await get_cancel_keyboard(data)
 
-    await bot.answer_callback_query(call.id)
-
     await bot.send_message(call.message.chat.id,
                            text,
                            reply_markup=keyboard,
@@ -1156,6 +1158,8 @@ async def enter_violation_info_click(call, state: FSMContext):
 async def add_caption_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода примечания - ' +
                 str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
         # зададим сразу пустое примечание
@@ -1173,7 +1177,6 @@ async def add_caption_click(call, state: FSMContext):
     async with state.proxy() as data:
         keyboard = await get_cancel_keyboard(data)
 
-    await bot.answer_callback_query(call.id)
     await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
     await Form.caption.set()
 
@@ -1183,6 +1186,8 @@ async def add_caption_click(call, state: FSMContext):
 async def answer_feedback_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ответа на фидбэк - ' +
                 str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
         # сохраняем текущее состояние
@@ -1199,8 +1204,6 @@ async def answer_feedback_click(call, state: FSMContext):
 
         # настроим клавиатуру
         keyboard = await get_cancel_keyboard(data)
-
-    await bot.answer_callback_query(call.id)
 
     await bot.send_message(call.message.chat.id,
                            text,
@@ -1252,6 +1255,8 @@ async def send_letter_click(call, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ - ' +
                 str(call.from_user.username))
 
+    await bot.answer_callback_query(call.id)
+
     language = await get_ui_lang(state)
 
     if await invalid_credentials(state):
@@ -1272,13 +1277,6 @@ async def send_letter_click(call, state: FSMContext):
                               call.from_user.username,
                               call.message.chat.id)
 
-    # из-за того, что письмо может отправляться долго,
-    # телеграм может погасить кружочек ожидания сам, и тогда будет исключение
-    try:
-        await bot.answer_callback_query(call.id)
-    except InvalidQueryID:
-        pass
-
     async with state.proxy() as data:
         await delete_prepared_violation(data)
 
@@ -1290,11 +1288,11 @@ async def reject_button_click(call, state: FSMContext):
     logger.info('Беспорядочно кликает на кнопки - ' +
                 str(call.from_user.username))
 
+    await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
 
     text = locales.text(language, 'irrelevant_action')
 
-    await bot.answer_callback_query(call.id)
     await bot.send_message(call.message.chat.id, text)
 
 
