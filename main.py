@@ -895,7 +895,8 @@ async def verify_email_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         secret_code = await mail_verifier.verify(get_value(data,
-                                                           'sender_email'))
+                                                           'sender_email'),
+                                                 language)
 
     if secret_code == config.VERIFYING_FAIL:
         text = locales.text(language, 'email_verifying_fail')

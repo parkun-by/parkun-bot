@@ -9,9 +9,10 @@ class MailVerifier:
     def __del__(self):
         self._http_session.close()
 
-    async def verify(self, email):
+    async def verify(self, email, language):
         params = (
             ('address', email),
+            ('language', language),
         )
 
         async with self._http_session.get(config.MAIL_VERIFIER_URL,
