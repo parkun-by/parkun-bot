@@ -20,6 +20,7 @@ from photoitem import PhotoItem
 from states import Form
 from uploader import Uploader
 from locales import Locales
+from broadcaster import Broadcaster
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
@@ -27,6 +28,7 @@ mail_verifier = MailVerifier()
 uploader = Uploader()
 semaphore = asyncio.Semaphore()
 locales = Locales()
+broadcaster = Broadcaster()
 
 
 def setup_logging():
@@ -113,6 +115,28 @@ async def invite_to_confirm_email(data, chat_id):
                            parse_mode='HTML')
 
 
+async def send_letter_textfile_to_user(parameters, language, chat_id):
+    file = io.StringIO(parameters['html'])
+    file.name = locales.text(language, 'letter_html')
+    await bot.send_document(chat_id, file)
+
+
+async def send_violation_to_channel(data):
+    language = await get_ui_lang(data=data)
+
+    caption = locales.text(language, 'violation_datetime') +\
+        ' {}'.format(get_value(data, 'violation_datetime')) + '\n' +\
+        locales.text(language, 'violation_location') +\
+        ' {}'.format(get_value(data, 'violation_location')) + '\n' +\
+        locales.text(language, 'violation_plate') + \
+        ' {}'.format(get_value(data, 'vehicle_number'))
+
+    # в канал
+    await send_photos_group_with_caption(data,
+                                         config.CHANNEL,
+                                         caption)
+
+
 async def share_violation(state, username, chat_id):
     parameters = await prepare_mail_parameters(state)
     language = await get_ui_lang(state)
@@ -122,22 +146,12 @@ async def share_violation(state, username, chat_id):
         text = locales.text(language, 'letter_sent').format(config.CHANNEL)
         logger.info('Письмо отправлено - ' + str(username))
 
+        await send_letter_textfile_to_user(parameters, language, chat_id)
+
         async with state.proxy() as data:
-            file = io.StringIO(parameters['html'])
-            file.name = locales.text(language, 'letter_html')
-            await bot.send_document(chat_id, file)
+            await send_violation_to_channel(data)
+            await broadcaster.share(data)
 
-            caption = locales.text(language, 'violation_datetime') +\
-                ' {}'.format(get_value(data, 'violation_datetime')) + '\n' +\
-                locales.text(language, 'violation_location') +\
-                ' {}'.format(get_value(data, 'violation_location')) + '\n' +\
-                locales.text(language, 'violation_plate') + \
-                ' {}'.format(get_value(data, 'vehicle_number'))
-
-            # в канал
-            await send_photos_group_with_caption(data,
-                                                 config.CHANNEL,
-                                                 caption)
     except Exception as exc:
         text = locales.text(language, 'sending_failed') + '\n' +\
             await humanize_message(exc, language)
