@@ -57,3 +57,9 @@ CHANNEL = '@channel_name'
 # verifier
 MAIL_VERIFIER_URL = 'PUT_VERIFIER_URL'
 VERIFYING_FAIL = '42'
+
+# Twitter
+CONSUMER_KEY = 'consumer_key'
+CONSUMER_SECRET = 'consumer_secret'
+ACCESS_TOKEN = 'access_token'
+ACCESS_TOKEN_SECRET = 'access_token_secret'
