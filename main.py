@@ -163,11 +163,11 @@ async def share_violation(state, username, chat_id):
 
         logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
 
+    await bot.send_message(chat_id, text)
+
     async with state.proxy() as data:
         await send_violation_to_channel(data)
         await broadcaster.share(data)
-
-    await bot.send_message(chat_id, text)
 
 
 async def add_photo_to_attachments(photo, state, user_id):
