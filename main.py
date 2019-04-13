@@ -1245,6 +1245,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.violation_datetime,
                                   Form.violation_location,
                                   Form.sending_approvement,
+                                  Form.letter_sending,
                                   Form.feedback,
                                   Form.feedback_answering,
                                   Form.caption])

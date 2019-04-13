@@ -1,6 +1,6 @@
 import config
 import asyncio
-import aiofiles
+import math
 
 # NOTE: the package name is peony and not peony-twitter
 from peony import PeonyClient
@@ -17,6 +17,31 @@ class Twitter:
         self.get_param = getter
         self.locales = locales
 
+    def _pad(self, seq, target_length, padding):
+        """Extend the sequence seq with padding (default: None) so as to make
+        its length up to target_length. Return seq.
+        """
+        length = len(seq)
+        seq.extend([padding] * (target_length - length))
+        return seq
+
+    def _get_chunks(self, my_list, number):
+        for i in range(0, len(my_list), number):
+            yield my_list[i:i + number]
+
+    def _get_tweet_queue(self, file_paths, caption):
+        tweets_photos = list(self._get_chunks(file_paths,
+                                              config.MAX_TWI_PHOTOS))
+        tweets_text = list(self._get_chunks(caption,
+                                            config.MAX_TWI_CHARACTERS))
+
+        tweet_count = max(len(tweets_photos), len(tweets_text))
+
+        tweets_photos = self._pad(tweets_photos, tweet_count, [])
+        tweets_text = self._pad(tweets_text, tweet_count, '')
+
+        return list(zip(tweets_text, tweets_photos))
+
     async def post(self, data):
         language = self.get_param(data, 'ui_lang')
         file_paths = self.get_param(data, 'photo_files_paths')
@@ -28,16 +53,21 @@ class Twitter:
             self.locales.text(language, 'violation_plate') + \
             ' {}'.format(self.get_param(data, 'vehicle_number'))
 
-        media_ids = []
+        tweet_queue = self._get_tweet_queue(file_paths, caption)
+        reply_to = None
 
-        for file_path in file_paths:
-                uploaded = await self.client.upload_media(file_path,
-                                                          chunk_size=2**18,
-                                                          chunked=True)
-                media_ids.append(uploaded.media_id)
+        for tweet in tweet_queue:
+            media_ids = []
 
-        await self.client.api.statuses.update.post(status=caption,
-                                                   media_ids=media_ids)
+            for file_path in tweet[1]:
+                    uploaded = await self.client.upload_media(file_path,
+                                                              chunk_size=2**18,
+                                                              chunked=True)
+                    media_ids.append(uploaded.media_id)
 
-        # print(file_paths)
-        # await self.client.api.statuses.update.post(status="I'm using Peony!!")
+            tweet = await self.client.api.statuses.update.post(
+                status=tweet[0],
+                media_ids=media_ids,
+                in_reply_to_status_id=reply_to)
+
+            reply_to = tweet.data.id
