@@ -136,7 +136,7 @@ async def send_violation_to_channel(data):
     caption = locales.text(language, 'violation_datetime') +\
         ' {}'.format(get_value(data, 'violation_datetime')) + '\n' +\
         locales.text(language, 'violation_location') +\
-        ' {}'.format(get_value(data, 'violation_location')) + '\n' +\
+        ' {}'.format(get_value(data, 'violation_address')) + '\n' +\
         locales.text(language, 'violation_plate') + \
         ' {}'.format(get_value(data, 'vehicle_number'))
 
@@ -196,13 +196,14 @@ async def add_photo_to_attachments(photo, state, user_id):
 async def delete_prepared_violation(data, user_id):
     # в этом месте сохраним адрес нарушения для использования в
     # следующем обращении
-    data['previous_violation_address'] = get_value(data, 'violation_location')
+    data['previous_violation_address'] = get_value(data, 'violation_address')
 
     data['attachments'] = []
     data['photo_id'] = []
     data['photo_files_paths'] = []
     data['vehicle_number'] = ''
-    data['violation_location'] = ''
+    data['violation_address'] = ''
+    data['violation_location'] = []
     data['violation_datetime'] = ''
     data['caption'] = ''
 
@@ -226,6 +227,7 @@ def get_default_value(key):
         'photo_id': [],
         'photo_files_paths': [],
         'banned_users': {},
+        'violation_location': [],
     }
 
     try:
@@ -250,6 +252,7 @@ async def set_default_sender_info(data):
     set_default(data, 'photo_id')
     set_default(data, 'photo_files_paths')
     set_default(data, 'vehicle_number')
+    set_default(data, 'violation_address')
     set_default(data, 'violation_location')
     set_default(data, 'violation_datetime')
 
@@ -279,7 +282,7 @@ async def compose_summary(data):
         locales.text(language, 'violation_plate') +\
         ' <b>{}</b>'.format(get_value(data, 'vehicle_number')) + '\n' +\
         locales.text(language, 'violation_location') +\
-        ' <b>{}</b>'.format(get_value(data, 'violation_location')) + '\n' +\
+        ' <b>{}</b>'.format(get_value(data, 'violation_address')) + '\n' +\
         locales.text(language, 'violation_datetime') +\
         ' <b>{}</b>'.format(get_value(data, 'violation_datetime')) + '\n' +\
         '\n' +\
@@ -310,7 +313,7 @@ async def get_letter_body(data):
     text = text.replace('__ГОСНОМЕРТС__', get_value(data, 'vehicle_number'))
 
     text = text.replace('__МЕСТОНАРУШЕНИЯ__',
-                        get_value(data, 'violation_location'))
+                        get_value(data, 'violation_address'))
 
     text = text.replace('__ДАТАИВРЕМЯ__',
                         get_value(data, 'violation_datetime'))
@@ -648,8 +651,9 @@ async def print_violation_address_info(region, address, chat_id, language):
                            parse_mode='HTML')
 
 
-async def save_violation_address(address, data):
-    data['violation_location'] = address
+async def save_violation_address(address, coordinates, data):
+    data['violation_address'] = address
+    data['violation_location'] = coordinates
 
 async def ask_for_violation_time(chat_id, language):
     current_time = get_str_current_time()
@@ -717,7 +721,7 @@ async def set_violation_location(chat_id, address, state):
     region = await locator.get_region(coordinates)
 
     async with state.proxy() as data:
-        await save_violation_address(address, data)
+        await save_violation_address(address, coordinates, data)
         await save_recipient(region, data)
         region = get_value(data, 'recipient')
         language = await get_ui_lang(data=data)
@@ -1134,7 +1138,7 @@ async def recipient_choosen_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        address = get_value(data, 'violation_location')
+        address = get_value(data, 'violation_address')
         await save_recipient(call.data, data)
         region = get_value(data, 'recipient')
 
@@ -1825,7 +1829,7 @@ async def catch_gps_violation_location(message: types.Message,
         return
 
     async with state.proxy() as data:
-        await save_violation_address(address, data)
+        await save_violation_address(address, coordinates, data)
 
     await print_violation_address_info(region,
                                        address,

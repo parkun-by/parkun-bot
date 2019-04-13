@@ -45,11 +45,15 @@ class Twitter:
     async def post(self, data):
         language = self.get_param(data, 'ui_lang')
         file_paths = self.get_param(data, 'photo_files_paths')
+        coordinates = self.get_param(data, 'violation_location')
+
+        if not coordinates:
+            coordinates = [None, None]
 
         caption = self.locales.text(language, 'violation_datetime') +\
             ' {}'.format(self.get_param(data, 'violation_datetime')) + '\n' +\
             self.locales.text(language, 'violation_location') +\
-            ' {}'.format(self.get_param(data, 'violation_location')) + '\n' +\
+            ' {}'.format(self.get_param(data, 'violation_address')) + '\n' +\
             self.locales.text(language, 'violation_plate') + \
             ' {}'.format(self.get_param(data, 'vehicle_number'))
 
@@ -68,6 +72,9 @@ class Twitter:
             tweet = await self.client.api.statuses.update.post(
                 status=tweet[0],
                 media_ids=media_ids,
-                in_reply_to_status_id=reply_to)
+                in_reply_to_status_id=reply_to,
+                lat=coordinates[1],
+                long=coordinates[0]
+            )
 
             reply_to = tweet.data.id
