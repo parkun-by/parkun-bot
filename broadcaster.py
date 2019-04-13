@@ -2,8 +2,8 @@ from twitter import Twitter
 
 
 class Broadcaster:
-    def __init__(self):
-        self.twitter = Twitter()
+    def __init__(self, getter, locales):
+        self.twitter = Twitter(getter, locales)
 
-    async def share(self, message):
-        await self.twitter.post(message)
+    async def share(self, data):
+        await self.twitter.post(data)

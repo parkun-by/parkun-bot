@@ -28,7 +28,16 @@ mail_verifier = MailVerifier()
 uploader = Uploader()
 semaphore = asyncio.Semaphore()
 locales = Locales()
-broadcaster = Broadcaster()
+
+
+def get_value(data, key):
+    try:
+        return data[key]
+    except KeyError:
+        set_default(data, key)
+        return data[key]
+
+broadcaster = Broadcaster(get_value, locales)
 
 
 def setup_logging():
@@ -148,49 +157,57 @@ async def share_violation(state, username, chat_id):
 
         await send_letter_textfile_to_user(parameters, language, chat_id)
 
-        async with state.proxy() as data:
-            await send_violation_to_channel(data)
-            await broadcaster.share(data)
-
     except Exception as exc:
         text = locales.text(language, 'sending_failed') + '\n' +\
             await humanize_message(exc, language)
 
         logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
 
+    async with state.proxy() as data:
+        await send_violation_to_channel(data)
+        await broadcaster.share(data)
+
     await bot.send_message(chat_id, text)
 
 
-async def add_photo_to_attachments(photo, state):
+async def add_photo_to_attachments(photo, state, user_id):
     file = await bot.get_file(photo['file_id'])
 
-    image_url = await uploader.get_permanent_url(
-        config.URL_BASE + file.file_path)
+    image_url, image_path = await uploader.get_permanent_url(
+        config.URL_BASE + file.file_path, user_id)
 
     # потанцевально узкое место, все потоки всех пользователей будут ждать
     # пока кто-то один аппендит, если я правильно понимаю
     # нужно сделать каждому пользователю свой личный семафорчик, но я пока
     # что не знаю как
     async with semaphore, state.proxy() as data:
-        if ('attachments' not in data) or ('photo_id' not in data):
+        if (('attachments' not in data) or
+                ('photo_id' not in data) or
+                ('photo_files_paths' not in data)):
             data['attachments'] = []
             data['photo_id'] = []
+            data['photo_files_paths'] = []
 
         data['attachments'].append(image_url)
         data['photo_id'].append(photo['file_id'])
+        data['photo_files_paths'].append(image_path)
 
 
-async def delete_prepared_violation(data):
+async def delete_prepared_violation(data, user_id):
     # в этом месте сохраним адрес нарушения для использования в
     # следующем обращении
     data['previous_violation_address'] = get_value(data, 'violation_location')
 
     data['attachments'] = []
     data['photo_id'] = []
+    data['photo_files_paths'] = []
     data['vehicle_number'] = ''
     data['violation_location'] = ''
     data['violation_datetime'] = ''
     data['caption'] = ''
+
+    # также удалим временные файлы картинок нарушений
+    uploader.clear_storage(user_id)
 
 
 def set_default(data, key):
@@ -207,6 +224,7 @@ def get_default_value(key):
         'saved_state': None,
         'attachments': [],
         'photo_id': [],
+        'photo_files_paths': [],
         'banned_users': {},
     }
 
@@ -230,6 +248,7 @@ async def set_default_sender_info(data):
     set_default(data, 'saved_state')
     set_default(data, 'attachments')
     set_default(data, 'photo_id')
+    set_default(data, 'photo_files_paths')
     set_default(data, 'vehicle_number')
     set_default(data, 'violation_location')
     set_default(data, 'violation_datetime')
@@ -760,14 +779,6 @@ async def enter_personal_info(message, state):
     await Form.sender_name.set()
 
 
-def get_value(data, key):
-    try:
-        return data[key]
-    except KeyError:
-        set_default(data, key)
-        return data[key]
-
-
 async def get_ui_lang(state=None, data=None):
     if data:
         return get_value(data, 'ui_lang')
@@ -1139,7 +1150,7 @@ async def recipient_choosen_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_info',
                            state=[Form.violation_photo,
-                                  Form.violation_sending])
+                                  Form.sending_approvement])
 async def enter_violation_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
                 str(call.from_user.username))
@@ -1169,7 +1180,7 @@ async def enter_violation_info_click(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/add_caption',
-                           state=[Form.violation_sending])
+                           state=[Form.sending_approvement])
 async def add_caption_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода примечания - ' +
                 str(call.from_user.username))
@@ -1233,7 +1244,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.vehicle_number,
                                   Form.violation_datetime,
                                   Form.violation_location,
-                                  Form.violation_sending,
+                                  Form.sending_approvement,
                                   Form.feedback,
                                   Form.feedback_answering,
                                   Form.caption])
@@ -1256,7 +1267,7 @@ async def cancel_violation_input(call, state: FSMContext):
                 await bot.send_message(call.message.chat.id, text)
                 return
 
-        await delete_prepared_violation(data)
+        await delete_prepared_violation(data, call.message.chat.id)
         data['feedback_post'] = ''
 
     text = locales.text(language, 'operation_mode')
@@ -1265,7 +1276,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
-                           state=Form.violation_sending)
+                           state=Form.sending_approvement)
 async def send_letter_click(call, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ - ' +
                 str(call.from_user.username))
@@ -1281,19 +1292,28 @@ async def send_letter_click(call, state: FSMContext):
                     str(call.from_user.username))
 
         await bot.send_message(call.message.chat.id, text)
+
+        async with state.proxy() as data:
+            await delete_prepared_violation(data, call.message.chat.id)
+
     elif not await verified_email(state):
         logger.info('Письмо не отправлено, email не подтвержден - ' +
                     str(call.from_user.username))
 
         async with state.proxy() as data:
             await invite_to_confirm_email(data, call.message.chat.id)
-    else:
-        await share_violation(state,
-                              call.from_user.username,
-                              call.message.chat.id)
+            await delete_prepared_violation(data, call.message.chat.id)
 
-    async with state.proxy() as data:
-        await delete_prepared_violation(data)
+    else:
+        try:
+            await share_violation(state,
+                                  call.from_user.username,
+                                  call.message.chat.id)
+        finally:
+            async with state.proxy() as data:
+                await delete_prepared_violation(data, call.message.chat.id)
+
+            await Form.operational_mode.set()
 
     await Form.operational_mode.set()
 
@@ -1692,7 +1712,8 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
     # Добавляем фотку наилучшего качества(последнюю в массиве) в список
     # прикрепления в письме
     asyncio.run_coroutine_threadsafe(
-        add_photo_to_attachments(message.photo[-1], state), loop)
+        add_photo_to_attachments(message.photo[-1], state, message.chat.id),
+        loop)
 
     text = locales.text(language, 'photo_or_info') + '\n' +\
         '\n' +\
@@ -1736,7 +1757,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
         data['saved_state'] = None
         data['caption'] = message.text.strip()
 
-    await Form.violation_sending.set()
+    await Form.sending_approvement.set()
     await approve_sending(message.chat.id, state)
 
 
@@ -1810,7 +1831,7 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['violation_datetime'] = message.text
 
-    await Form.violation_sending.set()
+    await Form.sending_approvement.set()
     await approve_sending(message.chat.id, state)
 
 

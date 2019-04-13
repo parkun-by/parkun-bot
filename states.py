@@ -14,7 +14,7 @@ class Form(StatesGroup):
     violation_location = State()  # In storage as 'Form:violation_location'
     recipient = State()  # In storage as 'Form:recipient'
     violation_datetime = State()  # In storage as 'Form:violation_datetime'
-    violation_sending = State()  # In storage as 'Form:violation_sending'
+    sending_approvement = State()  # In storage as 'Form:sending_approvement'
     feedback = State()  # In storage as 'Form:feedback'
     feedback_answering = State()  # In storage as 'Form:feedback_answering'
     caption = State()  # In storage as 'Form:caption'
