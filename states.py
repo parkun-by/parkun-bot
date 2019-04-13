@@ -19,3 +19,4 @@ class Form(StatesGroup):
     feedback_answering = State()  # In storage as 'Form:feedback_answering'
     caption = State()  # In storage as 'Form:caption'
     email_verifying = State()  # In storage as 'Form:email_verifying'
+    letter_sending = State()  # In storage as 'Form:letter_sending'

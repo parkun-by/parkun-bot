@@ -1276,12 +1276,24 @@ async def cancel_violation_input(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
+                           state=Form.letter_sending)
+async def send_letter_click(call, state: FSMContext):
+    await bot.answer_callback_query(call.id)
+    language = await get_ui_lang(state)
+
+    text = locales.text(language, 'letter_sending_in_progress')
+
+    await bot.send_message(call.message.chat.id, text)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.sending_approvement)
 async def send_letter_click(call, state: FSMContext):
     logger.info('Отправляем письмо в ГАИ - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+    await Form.letter_sending.set()
 
     language = await get_ui_lang(state)
 
