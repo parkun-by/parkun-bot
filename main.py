@@ -286,7 +286,8 @@ async def compose_summary(data):
         locales.text(language, 'violation_datetime') +\
         ' <b>{}</b>'.format(get_value(data, 'violation_datetime')) + '\n' +\
         '\n' +\
-        locales.text(language, 'channel_warning') + ' ' + config.CHANNEL
+        locales.text(language, 'channel_warning').format(config.CHANNEL,
+                                                         config.TWI_URL)
 
     return text
 
@@ -420,7 +421,8 @@ async def approve_sending(chat_id, state):
     await bot.send_message(chat_id,
                            text,
                            reply_markup=keyboard,
-                           parse_mode='HTML')
+                           parse_mode='HTML',
+                           disable_web_page_preview=True)
 
 
 def get_subject(language):
