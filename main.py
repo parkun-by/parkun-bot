@@ -575,7 +575,7 @@ async def show_private_info_summary(chat_id, state):
             await invite_to_confirm_email(data, chat_id)
     else:
         text = locales.text(language, 'ready_to_report')
-        await bot.send_message(chat_id, text)
+        await bot.send_message(chat_id, text, parse_mode='HTML')
 
     await Form.operational_mode.set()
 
@@ -1466,22 +1466,7 @@ async def cmd_help(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
 
-    text = locales.text(language, 'first_step_help') + '\n' +\
-        '\n' +\
-        locales.text(language, 'language_help') + '\n' +\
-        '\n' +\
-        locales.text(language, 'address_help') + '\n' +\
-        '\n' +\
-        locales.text(language, 'plate_help') + '\n' +\
-        '\n' +\
-        locales.text(language, 'feel_free_to_try_help') + '\n' +\
-        '\n' +\
-        locales.text(language, 'before_sending_help') + '\n' +\
-        '\n' +\
-        locales.text(language, 'channel_help').format(
-            config.CHANNEL) + '\n' +\
-        '\n' +\
-        locales.text(language, 'copy_of_letter_help') + '\n' +\
+    text = locales.text(language, 'manual_help') + '\n' +\
         '\n' +\
         locales.text(language, 'feedback_help')
 
@@ -1503,7 +1488,11 @@ async def cmd_help(message: types.Message, state: FSMContext):
 
     keyboard.add(privacy_policy, letter_template, changelog)
 
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await bot.send_message(message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML',
+                           disable_web_page_preview=True)
 
 
 @dp.message_handler(commands=['feedback'], state='*')
@@ -1602,7 +1591,7 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
         text = locales.text(language, 'reply_verification') + '\n' +\
             locales.text(language, 'press_feedback')
 
-    await bot.send_message(message.chat.id, text)
+    await bot.send_message(message.chat.id, text, parse_mode='HTML')
     await Form.operational_mode.set()
 
 
