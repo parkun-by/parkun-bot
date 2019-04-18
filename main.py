@@ -328,6 +328,7 @@ async def get_letter_body(data):
                         get_value(data, 'sender_phone'))
 
     text = text.replace('__ПРИМЕЧАНИЕ__', get_value(data, 'caption'))
+    text = text.replace('__EMAIL__', get_value(data, 'sender_email'))
 
     return text
 
