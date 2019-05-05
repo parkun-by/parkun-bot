@@ -1,5 +1,6 @@
 import aiohttp
 import config
+import json
 
 
 class Locator():
@@ -28,12 +29,15 @@ class Locator():
                     return None
 
                 resp_json = await response.json(content_type=None)
+                boundary = resp_json[0]['geojson']['coordinates'][0]
 
-                try:
-                    boundary = resp_json[0]['geojson']['coordinates'][0]
-                except IndexError:
-                    boundary = []
         except aiohttp.client_exceptions.ServerTimeoutError:
+            boundary = []
+
+        except json.decoder.JSONDecodeError:
+            boundary = []
+
+        except IndexError:
             boundary = []
 
         return boundary
