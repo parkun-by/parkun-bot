@@ -94,14 +94,17 @@ class Locator():
 
     def __areas_in_region(self, boundaries):
         '''Если регион разбит на части, то будем возвращать каждую'''
-        if isinstance(boundaries[0][0], list):
-            for boundary in boundaries:
-                if isinstance(boundary[0][0], list):
-                    yield self.__areas_in_region(boundary)
-                else:
-                    yield boundary
-        else:
-            yield boundaries
+        try:
+            if isinstance(boundaries[0][0], list):
+                for boundary in boundaries:
+                    if isinstance(boundary[0][0], list):
+                        yield self.__areas_in_region(boundary)
+                    else:
+                        yield boundary
+            else:
+                yield boundaries
+        except IndexError:
+            yield []
 
     async def get_region(self, coordinates):
         if not isinstance(coordinates, list):
