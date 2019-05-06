@@ -170,6 +170,32 @@ async def share_violation(state, username, chat_id):
         await broadcaster.share(data)
 
 
+def ensure_attachments_availability(data):
+    if (('attachments' not in data) or
+            ('photo_id' not in data) or
+            ('photo_files_paths' not in data) or
+            ('photos_amount' not in data)):
+        data['attachments'] = []
+        data['photo_id'] = []
+        data['photo_files_paths'] = []
+        data['photos_amount'] = 0
+
+
+async def violation_storage_full(state):
+    # потанцевально узкое место, все потоки всех пользователей будут ждать
+    # пока кто-то один проверяет, если я правильно понимаю
+    # нужно сделать каждому пользователю свой личный семафорчик, но я пока
+    # что не знаю как
+    async with semaphore, state.proxy() as data:
+        ensure_attachments_availability(data)
+
+        if data['photos_amount'] < config.MAX_VIOLATION_PHOTOS:
+            data['photos_amount'] += 1
+            return False
+        else:
+            return True
+
+
 async def add_photo_to_attachments(photo, state, user_id):
     file = await bot.get_file(photo['file_id'])
 
@@ -181,12 +207,7 @@ async def add_photo_to_attachments(photo, state, user_id):
     # нужно сделать каждому пользователю свой личный семафорчик, но я пока
     # что не знаю как
     async with semaphore, state.proxy() as data:
-        if (('attachments' not in data) or
-                ('photo_id' not in data) or
-                ('photo_files_paths' not in data)):
-            data['attachments'] = []
-            data['photo_id'] = []
-            data['photo_files_paths'] = []
+        ensure_attachments_availability(data)
 
         data['attachments'].append(image_url)
         data['photo_id'].append(photo['file_id'])
@@ -201,6 +222,7 @@ async def delete_prepared_violation(data, user_id):
     data['attachments'] = []
     data['photo_id'] = []
     data['photo_files_paths'] = []
+    data['photos_amount'] = 0
     data['vehicle_number'] = ''
     data['violation_address'] = ''
     data['violation_location'] = []
@@ -226,6 +248,7 @@ def get_default_value(key):
         'attachments': [],
         'photo_id': [],
         'photo_files_paths': [],
+        'photos_amount': 0,
         'banned_users': {},
         'violation_location': [],
     }
@@ -251,6 +274,7 @@ async def set_default_sender_info(data):
     set_default(data, 'attachments')
     set_default(data, 'photo_id')
     set_default(data, 'photo_files_paths')
+    set_default(data, 'photos_amount')
     set_default(data, 'vehicle_number')
     set_default(data, 'violation_address')
     set_default(data, 'violation_location')
@@ -1703,6 +1727,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
 
+    # проверим не забанен ли пользователь
     banned, reason = await user_banned(message.from_user.username,
                                        str(message.chat.id))
 
@@ -1712,15 +1737,22 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
         await bot.send_message(message.chat.id, text)
         return
 
-    # Добавляем фотку наилучшего качества(последнюю в массиве) в список
-    # прикрепления в письме
-    asyncio.run_coroutine_threadsafe(
-        add_photo_to_attachments(message.photo[-1], state, message.chat.id),
-        loop)
+    # Проверим есть ли место под еще одно фото нарушения
+    if await violation_storage_full(state):
+        text = locales.text(language, 'violation_storage_full') +\
+               str(config.MAX_VIOLATION_PHOTOS)
+    else:
+        # Добавляем фотку наилучшего качества(последнюю в массиве) в список
+        # прикрепления в письме
+        asyncio.run_coroutine_threadsafe(
+            add_photo_to_attachments(message.photo[-1],
+                                     state,
+                                     message.chat.id),
+            loop)
 
-    text = locales.text(language, 'photo_or_info') + '\n' +\
-        '\n' +\
-        '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
+        text = locales.text(language, 'photo_or_info') + '\n' +\
+            '\n' +\
+            '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)

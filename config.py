@@ -2,6 +2,8 @@
 API_TOKEN = 'PUT_TOKEN_HERE'
 URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 
+MAX_VIOLATION_PHOTOS = 10
+
 # letter language
 BY = '_by'
 RU = '_ru'
