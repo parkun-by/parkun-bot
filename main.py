@@ -456,13 +456,7 @@ def get_str_current_time():
     hour = str(current_time.hour).rjust(2, '0')
     minute = str(current_time.minute).rjust(2, '0')
 
-    formatted_current_time = '{}.{}.{} {}:{}'.format(day,
-                                                     month,
-                                                     year,
-                                                     hour,
-                                                     minute)
-
-    return formatted_current_time
+    return f'{day}.{month}.{year} {hour}:{minute}'
 
 
 async def invalid_credentials(state):
