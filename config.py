@@ -36,7 +36,7 @@ EMAIL_TO = {
     VITSEBSK_REGION: 'UVD_Vitebsk@mvd.gov.by',
     HOMEL_REGION: 'uvd_gomel@mvd.gov.by',
     HRODNA_REGION: 'UVD_Grodno@mvd.gov.by',
-    MINSK_REGION: 'priemnaja@uvd-mo.gov.by',
+    MINSK_REGION: 'pismo_guvd_minsk@mia.by',
     MAHILEU_REGION: 'uvd@mogilev.by',
 }
 
