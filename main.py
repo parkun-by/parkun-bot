@@ -30,11 +30,15 @@ semaphore = asyncio.Semaphore()
 locales = Locales()
 
 
-def get_value(data, key):
+def get_value(data, key, placeholder=None):
     try:
-        return data[key]
+        return get_text(data[key], placeholder)
     except KeyError:
         set_default(data, key)
+
+        if placeholder:
+            return placeholder
+
         return data[key]
 
 broadcaster = Broadcaster(get_value, locales)
@@ -79,6 +83,13 @@ logger = setup_logging()
 REQUIRED_CREDENTIALS = ['sender_name',
                         'sender_email',
                         'sender_address']
+
+
+def get_text(raw_text, placeholder):
+    if not raw_text and placeholder:
+        return placeholder
+
+    return raw_text
 
 
 async def invite_to_fill_credentials(chat_id, state):
@@ -535,9 +546,12 @@ async def humanize_message(exception, language):
     return str(exception)
 
 
-async def ask_for_user_address(chat_id, language):
+async def ask_for_user_address(chat_id, language, current_address):
     text = locales.text(language, 'input_sender_address') + '\n' +\
         locales.text(language, 'bot_can_guess_address') + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_value') +\
+        f'<b>{current_address}</b>' +\
         '\n' +\
         locales.text(language, 'sender_address_example')
 
@@ -551,9 +565,11 @@ async def ask_for_user_address(chat_id, language):
     await Form.sender_address.set()
 
 
-async def ask_for_user_email(chat_id, language):
+async def ask_for_user_email(chat_id, language, current_email):
     text = locales.text(language, 'input_email') + '\n' +\
         locales.text(language, 'nonexistent_email_warning') + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_value') + f'<b>{current_email}</b>' +\
         '\n' +\
         locales.text(language, 'email_example')
 
@@ -567,8 +583,10 @@ async def ask_for_user_email(chat_id, language):
     await Form.sender_email.set()
 
 
-async def ask_for_user_phone(chat_id, language):
+async def ask_for_user_phone(chat_id, language, current_phone):
     text = locales.text(language, 'input_phone') + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_value') + f'<b>{current_phone}</b>' +\
         '\n' +\
         locales.text(language, 'phone_example')
 
@@ -790,7 +808,13 @@ async def enter_personal_info(message, state):
         await set_default_sender_info(data)
         language = await get_ui_lang(data=data)
 
+        full_name = get_value(data,
+                              'sender_name',
+                              locales.text(language, 'empty_input'))
+
     text = locales.text(language, 'input_fullname') + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_value') + f'<b>{full_name}</b>' +\
         '\n' +\
         locales.text(language, 'fullname_example')
 
@@ -817,16 +841,21 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
+        empty_input = locales.text(language, 'empty_input')
+
+        full_name = get_value(data, 'sender_name', empty_input)
+        email = get_value(data, 'sender_email', empty_input)
+        address = get_value(data, 'sender_address', empty_input)
+        phone_number = get_value(data, 'sender_phone', empty_input)
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
-            locales.text(language, 'sender_name') +\
-            ' <b>{}</b>'.format(get_value(data, 'sender_name')) + '\n' +\
-            locales.text(language, 'sender_email') +\
-            ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
-            locales.text(language, 'sender_address') +\
-            ' <b>{}</b>'.format(get_value(data, 'sender_address')) + '\n' +\
-            locales.text(language, 'sender_phone') + \
-            ' <b>{}</b>'.format(get_value(data, 'sender_phone')) + '\n'
+            locales.text(language, 'sender_name') + f' <b>{full_name}</b>' +\
+            '\n' +\
+            locales.text(language, 'sender_email') + f' <b>{email}</b>' +\
+            '\n' +\
+            locales.text(language, 'sender_address') + f' <b>{address}</b>' +\
+            '\n' +\
+            locales.text(language, 'sender_phone') + f' <b>{phone_number}</b>'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -981,8 +1010,16 @@ async def skip_name_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        current_user_email = get_value(
+            data, 'sender_email', locales.text(language, 'empty_input'))
+
     await ask_for_user_email(call.message.chat.id,
-                             await get_ui_lang(state))
+                             language,
+                             current_user_email)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/use_previous',
@@ -1058,8 +1095,17 @@ async def skip_email_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        current_user_address = get_value(data,
+                                         'sender_address',
+                                         locales.text(language, 'empty_input'))
+
     await ask_for_user_address(call.message.chat.id,
-                               await get_ui_lang(state))
+                               language,
+                               current_user_address)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1070,8 +1116,15 @@ async def skip_address_click(call, state: FSMContext):
 
     await bot.answer_callback_query(call.id)
 
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        current_user_phone = get_value(
+            data, 'sender_phone', locales.text(language, 'empty_input'))
+
     await ask_for_user_phone(call.message.chat.id,
-                             await get_ui_lang(state))
+                             language,
+                             current_user_phone)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1105,8 +1158,17 @@ async def sender_address_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        current_user_address = get_value(data,
+                                         'sender_address',
+                                         locales.text(language, 'empty_input'))
+
     await ask_for_user_address(call.message.chat.id,
-                               await get_ui_lang(state))
+                               language,
+                               current_user_address)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
@@ -1620,16 +1682,25 @@ async def catch_sender_name(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_name'] = message.text
+        language = await get_ui_lang(data=data)
+        current_user_email = get_value(
+            data, 'sender_email', locales.text(language, 'empty_input'))
 
     await ask_for_user_email(message.chat.id,
-                             await get_ui_lang(state))
+                             language,
+                             current_user_email)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_email)
 async def catch_sender_email(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод email - ' + str(message.from_user.username))
-    language = await get_ui_lang(state)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        current_user_email = get_value(
+            data, 'sender_email', locales.text(language, 'empty_input'))
 
     try:
         if message.text.split('@')[1] in blocklist:
@@ -1638,7 +1709,8 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
             await bot.send_message(message.chat.id, text)
 
             await ask_for_user_email(message.chat.id,
-                                     language)
+                                     language,
+                                     current_user_email)
 
             return
     except IndexError:
@@ -1647,8 +1719,14 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_email'] = message.text
         data['verified'] = False
+
+        current_user_address = get_value(data,
+                                         'sender_address',
+                                         locales.text(language, 'empty_input'))
+
         await ask_for_user_address(message.chat.id,
-                                   language)
+                                   language,
+                                   current_user_address)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1659,9 +1737,14 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_address'] = message.text
+        language = await get_ui_lang(data=data)
+
+        current_user_phone = get_value(
+            data, 'sender_phone', locales.text(language, 'empty_input'))
 
     await ask_for_user_phone(message.chat.id,
-                             await get_ui_lang(state))
+                             language,
+                             current_user_phone)
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
