@@ -162,7 +162,7 @@ async def share_violation(state, username, chat_id):
     language = await get_ui_lang(state)
 
     try:
-        mailer.send_mail(parameters)
+        # mailer.send_mail(parameters)
         text = locales.text(language, 'letter_sent').format(config.CHANNEL)
         logger.info('Письмо отправлено - ' + str(username))
 
@@ -1833,9 +1833,13 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
                                      message.chat.id),
             loop)
 
+        # text = locales.text(language, 'photo_or_info') + '\n' +\
+        #     '\n' +\
+        #     '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
+
         text = locales.text(language, 'photo_or_info') + '\n' +\
             '\n' +\
-            '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
+            '🔥🔥🔥' + ' ' + locales.text(language, 'service_is_stopped')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -1850,7 +1854,11 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     keyboard.add(enter_violation_info, cancel)
 
-    await message.reply(text, reply_markup=keyboard, parse_mode='HTML')
+    await message.reply(text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                        disable_web_page_preview=True)
+
     await Form.violation_photo.set()
 
 
