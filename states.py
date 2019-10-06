@@ -4,19 +4,21 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 # States
 class Form(StatesGroup):
     initial = State()  # In storage as 'Form:initial'
-    sender_name = State()  # In storage as 'Form:sender_name'
-    sender_email = State()  # In storage as 'Form:sender_email'
-    sender_address = State()  # In storage as 'Form:sender_address'
-    sender_phone = State()  # In storage as 'Form:sender_phone'
-    operational_mode = State()  # In storage as 'Form:operational_mode'
-    violation_photo = State()  # In storage as 'Form:violation_photo'
-    vehicle_number = State()  # In storage as 'Form:vehicle_number'
-    violation_location = State()  # In storage as 'Form:violation_location'
-    recipient = State()  # In storage as 'Form:recipient'
-    violation_datetime = State()  # In storage as 'Form:violation_datetime'
-    sending_approvement = State()  # In storage as 'Form:sending_approvement'
-    feedback = State()  # In storage as 'Form:feedback'
-    feedback_answering = State()  # In storage as 'Form:feedback_answering'
-    caption = State()  # In storage as 'Form:caption'
-    email_verifying = State()  # In storage as 'Form:email_verifying'
-    letter_sending = State()  # In storage as 'Form:letter_sending'
+    sender_first_name = State()
+    sender_last_name = State()
+    sender_patronymic = State()
+    sender_email = State()
+    sender_address = State()
+    sender_phone = State()
+    operational_mode = State()
+    violation_photo = State()
+    vehicle_number = State()
+    violation_location = State()
+    recipient = State()
+    violation_datetime = State()
+    sending_approvement = State()
+    feedback = State()
+    feedback_answering = State()
+    caption = State()
+    email_verifying = State()
+    letter_sending = State()
