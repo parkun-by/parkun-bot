@@ -80,7 +80,9 @@ dp = Dispatcher(bot, storage=storage)
 
 logger = setup_logging()
 
-REQUIRED_CREDENTIALS = ['sender_name',
+REQUIRED_CREDENTIALS = ['sender_first_name',
+                        'sender_last_name',
+                        'sender_patronymic',
                         'sender_email',
                         'sender_address']
 
@@ -270,8 +272,10 @@ def get_default_value(key):
         return ''
 
 
-async def set_default_sender_info(data):
-    set_default(data, 'sender_name')
+def set_default_sender_info(data):
+    set_default(data, 'sender_first_name')
+    set_default(data, 'sender_last_name')
+    set_default(data, 'sender_patronymic')
     set_default(data, 'sender_email')
     set_default(data, 'sender_address')
     set_default(data, 'sender_phone')
@@ -292,6 +296,14 @@ async def set_default_sender_info(data):
     set_default(data, 'violation_datetime')
 
 
+def get_full_name(data):
+    first_name = get_value(data, "sender_first_name")
+    last_name = get_value(data, "sender_last_name")
+    patronymic = get_value(data, "sender_patronymic")
+
+    return f'{first_name} {patronymic} {last_name}'.strip()
+
+
 async def compose_summary(data):
     language = await get_ui_lang(data=data)
 
@@ -305,7 +317,7 @@ async def compose_summary(data):
         '\n' +\
         locales.text(language, 'sender') + '\n' +\
         locales.text(language, 'sender_name') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_name')) + '\n' +\
+        ' <b>{}</b>'.format(get_full_name(data)) + '\n' +\
         locales.text(language, 'sender_email') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
         locales.text(language, 'sender_address') +\
@@ -354,7 +366,7 @@ async def get_letter_body(data):
     text = text.replace('__ДАТАИВРЕМЯ__',
                         get_value(data, 'violation_datetime'))
 
-    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_value(data, 'sender_name'))
+    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_full_name(data))
 
     text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__',
                         get_value(data, 'sender_address'))
@@ -473,7 +485,7 @@ async def prepare_mail_parameters(state):
         parameters = {
             'to': {config.EMAIL_TO[get_value(data, 'recipient')]: recipient},
             'from': [get_value(data, 'sender_email'),
-                     get_value(data, 'sender_name')],
+                     get_full_name(data)],
             'subject': get_subject(get_value(data, 'letter_lang')),
             'html': await compose_letter_body(data),
             'attachment': get_value(data, 'attachments')}
@@ -802,31 +814,58 @@ async def show_settings(message, state):
                            parse_mode='HTML')
 
 
-async def enter_personal_info(message, state):
-    logger.info('Настройка отправителя - ' + str(message.from_user.username))
+def get_input_name_invite_text(language, name, invitation, example):
+    text = locales.text(language, invitation) + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_value') + f'<b>{name}</b>' +\
+        '\n' +\
+        locales.text(language, example)
 
+    return text
+
+
+async def show_name_part_invitation(part_name, state, chat_id):
     async with state.proxy() as data:
-        await set_default_sender_info(data)
+        set_default_sender_info(data)
         language = await get_ui_lang(data=data)
 
-        full_name = get_value(data,
-                              'sender_name',
+        name_part = get_value(data,
+                              f'sender_{part_name}',
                               locales.text(language, 'empty_input'))
 
-    text = locales.text(language, 'input_fullname') + '\n' +\
-        '\n' +\
-        locales.text(language, 'current_value') + f'<b>{full_name}</b>' +\
-        '\n' +\
-        locales.text(language, 'fullname_example')
+    text = get_input_name_invite_text(language,
+                                      name_part,
+                                      f'input_{part_name}',
+                                      f'{part_name}_example')
 
     keyboard = await get_skip_keyboard(language)
 
-    await bot.send_message(message.chat.id,
+    await bot.send_message(chat_id,
                            text,
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
-    await Form.sender_name.set()
+
+async def enter_first_name(message, state):
+    logger.info('Ввод имени отправителя - ' + str(message.from_user.username))
+    await show_name_part_invitation('first_name', state, message.chat.id)
+    await Form.sender_first_name.set()
+
+
+async def enter_patronymic(message, state):
+    logger.info('Ввод отчества отправителя - ' +
+                str(message.from_user.username))
+
+    await show_name_part_invitation('patronymic', state, message.chat.id)
+    await Form.sender_patronymic.set()
+
+
+async def enter_last_name(message, state):
+    logger.info('Ввод фамилии отправителя - ' +
+                str(message.from_user.username))
+
+    await show_name_part_invitation('last_name', state, message.chat.id)
+    await Form.sender_last_name.set()
 
 
 async def get_ui_lang(state=None, data=None):
@@ -844,7 +883,7 @@ async def show_personal_info(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
         empty_input = locales.text(language, 'empty_input')
 
-        full_name = get_value(data, 'sender_name', empty_input)
+        full_name = get_full_name(data) or empty_input
         email = get_value(data, 'sender_email', empty_input)
         address = get_value(data, 'sender_address', empty_input)
         phone_number = get_value(data, 'sender_phone', empty_input)
@@ -956,7 +995,7 @@ async def enter_personal_info_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await enter_personal_info(call.message, state)
+    await enter_first_name(call.message, state)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/verify_email',
@@ -1005,9 +1044,29 @@ async def delete_personal_info_click(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_name)
-async def skip_name_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода ФИО - ' +
+                           state=Form.sender_first_name)
+async def skip_first_name_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода имени - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    await enter_patronymic(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_patronymic)
+async def skip_patronymic_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода отчества - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    await enter_last_name(call.message, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_last_name)
+async def skip_last_name_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода фамилии - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -1448,7 +1507,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await Form.initial.set()
 
     async with state.proxy() as data:
-        await set_default_sender_info(data)
+        set_default_sender_info(data)
 
     await invite_to_fill_credentials(message.chat.id, state)
 
@@ -1536,7 +1595,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
-        await set_default_sender_info(data)
+        set_default_sender_info(data)
 
     await invite_to_fill_credentials(message.chat.id, state)
 
@@ -1632,7 +1691,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.feedback_answering)
-async def catch_sender_name(message: types.Message, state: FSMContext):
+async def catch_feedback(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ответ на фидбэк - ' +
                 str(message.from_user.username))
 
@@ -1677,12 +1736,36 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.sender_name)
-async def catch_sender_name(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод ФИО - ' + str(message.from_user.username))
+                    state=Form.sender_first_name)
+async def catch_sender_first_name(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод имени - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
-        data['sender_name'] = message.text
+        data['sender_first_name'] = message.text
+
+    await enter_patronymic(message, state)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.sender_patronymic)
+async def catch_sender_patronymic(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод отчества - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        data['sender_patronymic'] = message.text
+
+    await enter_last_name(message, state)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.sender_last_name)
+async def catch_sender_last_name(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод фамилии - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        data['sender_last_name'] = message.text
         language = await get_ui_lang(data=data)
         current_user_email = get_value(
             data, 'sender_email', locales.text(language, 'empty_input'))
