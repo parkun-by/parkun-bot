@@ -4,12 +4,11 @@ import logging
 from datetime import datetime
 from os import path
 
-import pytz
+from dateutil import tz
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils import executor
-from aiogram.utils.exceptions import InvalidQueryID
 from disposable_email_domains import blocklist
 
 import config
@@ -40,6 +39,7 @@ def get_value(data, key, placeholder=None):
             return placeholder
 
         return data[key]
+
 
 broadcaster = Broadcaster(get_value, locales)
 
@@ -117,8 +117,8 @@ async def invite_to_fill_credentials(chat_id, state):
 async def invite_to_confirm_email(data, chat_id):
     language = await get_ui_lang(data=data)
     message = (locales.text(language, 'verify_email')).format(
-                    get_value(data, 'sender_email')
-                )
+        get_value(data, 'sender_email')
+    )
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -482,7 +482,7 @@ async def prepare_mail_parameters(state):
 
 
 def get_str_current_time():
-    tz_minsk = pytz.timezone('Europe/Minsk')
+    tz_minsk = tz.gettz('Europe/Minsk')
     current_time = datetime.now(tz_minsk)
 
     day = str(current_time.day).rjust(2, '0')
@@ -694,6 +694,7 @@ async def save_violation_address(address, coordinates, data):
     data['violation_address'] = address
     data['violation_location'] = coordinates
 
+
 async def ask_for_violation_time(chat_id, language):
     current_time = get_str_current_time()
 
@@ -742,7 +743,7 @@ async def send_photos_group_with_caption(data, chat_id, caption=''):
 
 
 def prepare_registration_number(number: str):
-    '''заменяем в номере все символы на киррилические'''
+    """заменяем в номере все символы на киррилические"""
 
     kyrillic = 'ABCEHKMOPTXYІ'
     latin = 'ABCEHKMOPTXYI'
@@ -1459,7 +1460,7 @@ async def show_settings_command(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands=['banlist'], state='*')
-async def banlist_user_command(message: types.Message, state: FSMContext):
+async def banlist_user_command(message: types.Message):
     if message.chat.id != config.ADMIN_ID:
         return
 

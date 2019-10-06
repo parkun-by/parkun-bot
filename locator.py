@@ -3,7 +3,7 @@ import config
 import json
 
 
-class Locator():
+class Locator:
     def __init__(self):
         self._timeout = aiohttp.ClientTimeout(connect=5)
         self._http_session = aiohttp.ClientSession()
@@ -74,7 +74,6 @@ class Locator():
         }
 
     def __point_is_in_polygon(self, boundary, longitude, latitude):
-        i = 0
         overlap = False
         vertices_amount = len(boundary)
         j = vertices_amount - 1
@@ -93,7 +92,7 @@ class Locator():
         return overlap
 
     def __areas_in_region(self, boundaries):
-        '''Если регион разбит на части, то будем возвращать каждую'''
+        """Если регион разбит на части, то будем возвращать каждую"""
         try:
             if isinstance(boundaries[0][0], list):
                 for boundary in boundaries:
@@ -155,8 +154,6 @@ class Locator():
 
             return address
 
-        return None
-
     async def get_coordinates(self, address):
         params = (
             ('geocode', address),
@@ -184,5 +181,3 @@ class Locator():
                 return None
 
             return coordinates
-
-        return None

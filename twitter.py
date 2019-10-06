@@ -1,6 +1,5 @@
 import config
-import asyncio
-import math
+
 
 # NOTE: the package name is peony and not peony-twitter
 from peony import PeonyClient

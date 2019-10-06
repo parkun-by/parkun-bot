@@ -15,8 +15,9 @@ class Uploader:
         shutil.rmtree(self.tempdir, ignore_errors=True)
 
     def _get_user_dir(self, user_id):
+        dir_path = os.path.join(self.tempdir, str(user_id))
+
         try:
-            dir_path = os.path.join(self.tempdir, str(user_id))
             os.mkdir(dir_path)
             return dir_path
         except FileExistsError:
