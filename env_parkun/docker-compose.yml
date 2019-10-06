@@ -1,0 +1,17 @@
+version: '3'
+
+volumes:
+  redis-data:
+
+networks:
+  parkun:
+
+services:
+  redis:
+    image: redis:alpine3.10
+    ports:
+      - 16379:6379
+    volumes:
+      - redis-data:/data
+    networks:
+      - parkun
