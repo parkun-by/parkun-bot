@@ -2,12 +2,14 @@ version: '3'
 
 volumes:
   redis-data:
+  wiremock-data:
 
 networks:
   parkun:
 
 services:
   redis:
+    container_name: parkun_redis
     image: redis:alpine3.10
     ports:
       - 16379:6379
@@ -15,3 +17,15 @@ services:
       - redis-data:/data
     networks:
       - parkun
+
+  wiremock:
+    container_name: parkun_wiremock
+    image: rodolpheche/wiremock:2.25.0-alpine
+    networks:
+      - parkun
+    ports:
+      - 18080:8080
+    volumes:
+      - wiremock-data:/home/wiremock
+      - ./wiremock/mappings:/home/wiremock/mappings
+
