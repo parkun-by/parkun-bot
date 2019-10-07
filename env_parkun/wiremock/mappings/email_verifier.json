@@ -1,0 +1,11 @@
+{
+    "id": "71ec2174-e8d3-4460-a05b-7b4be4769fb4",
+    "request": {
+        "urlPathPattern": "/validate",
+        "method": "GET"
+    },
+    "response": {
+        "status": 200,
+        "jsonBody": 111
+    }
+}
