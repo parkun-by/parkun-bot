@@ -1,0 +1,10 @@
+{
+    "id": "34fcd636-d918-4336-8860-49679adba4a1",
+    "request": {
+        "urlPathPattern": "/yandex_maps",
+        "method": "GET"
+    },
+    "response": {
+        "status": 404
+    }
+}
