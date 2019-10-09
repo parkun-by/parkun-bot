@@ -20,6 +20,7 @@ from states import Form
 from uploader import Uploader
 from locales import Locales
 from broadcaster import Broadcaster
+from validator import Validator
 
 mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
@@ -27,6 +28,7 @@ mail_verifier = MailVerifier()
 uploader = Uploader()
 semaphore = asyncio.Semaphore()
 locales = Locales()
+validator = Validator()
 
 
 def get_value(data, key, placeholder=None):
@@ -401,6 +403,16 @@ def get_photos_links_header(count, language):
         return locales.text(language, 'letter_link_header')
 
     return ''
+
+
+async def check_validity(pattern, message, language):
+    error_message = validator.valid(message.text, *pattern)
+
+    if error_message:
+        await message.reply(locales.text(language, error_message))
+        return False
+    else:
+        return True
 
 
 async def get_letter_photos_links(data):
@@ -1739,6 +1751,11 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
                     state=Form.sender_first_name)
 async def catch_sender_first_name(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод имени - ' + str(message.from_user.username))
+    language = await get_ui_lang(state)
+
+    if not await check_validity(validator.first_name, message, language):
+        await enter_first_name(message, state)
+        return
 
     async with state.proxy() as data:
         data['sender_first_name'] = message.text
@@ -1752,6 +1769,12 @@ async def catch_sender_patronymic(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод отчества - ' +
                 str(message.from_user.username))
 
+    language = await get_ui_lang(state)
+
+    if not await check_validity(validator.patronymic, message, language):
+        await enter_patronymic(message, state)
+        return
+
     async with state.proxy() as data:
         data['sender_patronymic'] = message.text
 
@@ -1764,9 +1787,14 @@ async def catch_sender_last_name(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод фамилии - ' +
                 str(message.from_user.username))
 
+    language = await get_ui_lang(state)
+
+    if not await check_validity(validator.last_name, message, language):
+        await enter_last_name(message, state)
+        return
+
     async with state.proxy() as data:
         data['sender_last_name'] = message.text
-        language = await get_ui_lang(data=data)
         current_user_email = get_value(
             data, 'sender_email', locales.text(language, 'empty_input'))
 
