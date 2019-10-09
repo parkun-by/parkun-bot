@@ -280,7 +280,7 @@ def set_default_sender_info(data):
     set_default(data, 'sender_patronymic')
     set_default(data, 'sender_email')
     set_default(data, 'sender_address')
-    set_default(data, 'sender_phone')
+    set_default(data, 'sender_zipcode')
     set_default(data, 'verified')
     set_default(data, 'secret_code')
     set_default(data, 'letter_lang')
@@ -324,8 +324,8 @@ async def compose_summary(data):
         ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
         locales.text(language, 'sender_address') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_address')) + '\n' +\
-        locales.text(language, 'sender_phone') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_phone')) + '\n' +\
+        locales.text(language, 'sender_zipcode') +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_zipcode')) + '\n' +\
         '\n' +\
         locales.text(language, 'violator') + '\n' +\
         locales.text(language, 'violation_plate') +\
@@ -373,8 +373,8 @@ async def get_letter_body(data):
     text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__',
                         get_value(data, 'sender_address'))
 
-    text = text.replace('__ТЕЛЕФОНЗАЯВИТЕЛЯ__',
-                        get_value(data, 'sender_phone'))
+    text = text.replace('__ИНДЕКСЗАЯВИТЕЛЯ__',
+                        get_value(data, 'sender_zipcode'))
 
     text = text.replace('__ПРИМЕЧАНИЕ__', get_value(data, 'caption'))
     text = text.replace('__EMAIL__', get_value(data, 'sender_email'))
@@ -607,12 +607,12 @@ async def ask_for_user_email(chat_id, language, current_email):
     await Form.sender_email.set()
 
 
-async def ask_for_user_phone(chat_id, language, current_phone):
-    text = locales.text(language, 'input_phone') + '\n' +\
+async def ask_for_user_zipcode(chat_id, language, current_zipcode):
+    text = locales.text(language, 'input_zipcode') + '\n' +\
         '\n' +\
-        locales.text(language, 'current_value') + f'<b>{current_phone}</b>' +\
+        locales.text(language, 'current_value') + f'<b>{current_zipcode}</b>' +\
         '\n' +\
-        locales.text(language, 'phone_example')
+        locales.text(language, 'zipcode_example')
 
     keyboard = await get_skip_keyboard(language)
 
@@ -621,7 +621,7 @@ async def ask_for_user_phone(chat_id, language, current_phone):
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
-    await Form.sender_phone.set()
+    await Form.sender_zipcode.set()
 
 
 async def show_private_info_summary(chat_id, state):
@@ -898,7 +898,7 @@ async def show_personal_info(message: types.Message, state: FSMContext):
         full_name = get_full_name(data) or empty_input
         email = get_value(data, 'sender_email', empty_input)
         address = get_value(data, 'sender_address', empty_input)
-        phone_number = get_value(data, 'sender_phone', empty_input)
+        zipcode = get_value(data, 'sender_zipcode', empty_input)
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
             locales.text(language, 'sender_name') + f' <b>{full_name}</b>' +\
@@ -907,7 +907,7 @@ async def show_personal_info(message: types.Message, state: FSMContext):
             '\n' +\
             locales.text(language, 'sender_address') + f' <b>{address}</b>' +\
             '\n' +\
-            locales.text(language, 'sender_phone') + f' <b>{phone_number}</b>'
+            locales.text(language, 'sender_zipcode') + f' <b>{zipcode}</b>'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -1191,18 +1191,18 @@ async def skip_address_click(call, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        current_user_phone = get_value(
-            data, 'sender_phone', locales.text(language, 'empty_input'))
+        current_user_zipcode = get_value(
+            data, 'sender_zipcode', locales.text(language, 'empty_input'))
 
-    await ask_for_user_phone(call.message.chat.id,
-                             language,
-                             current_user_phone)
+    await ask_for_user_zipcode(call.message.chat.id,
+                               language,
+                               current_user_zipcode)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_phone)
-async def skip_phone_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода телефона - ' +
+                           state=Form.sender_zipcode)
+async def skip_zipcode_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода индекса - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -1224,7 +1224,7 @@ async def current_time_click(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_sender_address',
-                           state=Form.sender_phone)
+                           state=Form.sender_zipcode)
 async def sender_address_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода своего адреса - ' +
                 str(call.from_user.username))
@@ -1851,12 +1851,12 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
         data['sender_address'] = message.text
         language = await get_ui_lang(data=data)
 
-        current_user_phone = get_value(
-            data, 'sender_phone', locales.text(language, 'empty_input'))
+        current_user_zipcode = get_value(
+            data, 'sender_zipcode', locales.text(language, 'empty_input'))
 
-    await ask_for_user_phone(message.chat.id,
-                             language,
-                             current_user_phone)
+    await ask_for_user_zipcode(message.chat.id,
+                               language,
+                               current_user_zipcode)
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
@@ -1902,13 +1902,13 @@ async def catch_gps_sender_address(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.sender_phone)
-async def catch_sender_phone(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод телефона - ' +
+                    state=Form.sender_zipcode)
+async def catch_sender_zipcode(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод индекса - ' +
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        data['sender_phone'] = message.text
+        data['sender_zipcode'] = message.text
 
     await show_private_info_summary(message.chat.id, state)
 

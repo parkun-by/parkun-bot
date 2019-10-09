@@ -9,7 +9,7 @@ class Form(StatesGroup):
     sender_patronymic = State()
     sender_email = State()
     sender_address = State()
-    sender_phone = State()
+    sender_zipcode = State()
     operational_mode = State()
     violation_photo = State()
     vehicle_number = State()
