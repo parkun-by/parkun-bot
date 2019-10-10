@@ -577,20 +577,18 @@ async def humanize_message(exception, language):
     return str(exception)
 
 
-async def ask_for_sender_city(chat_id, data):
+async def ask_for_sender_info(chat_id, data, info_type, next_state):
     language = await get_ui_lang(data=data)
 
-    current_city = get_value(
-        data,
-        'sender_city',
+    current_value = get_value(data,
+                              info_type,
         locales.text(language, 'empty_input'))
 
-    text = locales.text(language, 'input_sender_city') + '\n' +\
+    text = locales.text(language, f'input_{info_type}') + '\n' +\
         '\n' +\
-        locales.text(language, 'current_value') +\
-        f'<b>{current_city}</b>' +\
+        locales.text(language, 'current_value') + f'<b>{current_value}</b>' +\
         '\n' +\
-        locales.text(language, 'sender_city_example')
+        locales.text(language, f'{info_type}_example')
 
     keyboard = await get_skip_keyboard(language)
 
@@ -599,77 +597,7 @@ async def ask_for_sender_city(chat_id, data):
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
-    await Form.sender_city.set()
-
-
-async def ask_for_sender_street(chat_id, data):
-    language = await get_ui_lang(data=data)
-
-    current_street = get_value(data,
-                               'sender_street',
-                               locales.text(language, 'empty_input'))
-
-    text = locales.text(language, 'input_sender_street') + '\n' +\
-        '\n' +\
-        locales.text(language, 'current_value') +\
-        f'<b>{current_street}</b>' +\
-        '\n' +\
-        locales.text(language, 'sender_street_example')
-
-    keyboard = await get_skip_keyboard(language)
-
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.sender_street.set()
-
-
-async def ask_for_sender_house(chat_id, data):
-    language = await get_ui_lang(data=data)
-
-    current_house = get_value(data,
-                              'sender_house',
-                              locales.text(language, 'empty_input'))
-
-    text = locales.text(language, 'input_sender_house') + '\n' +\
-        '\n' +\
-        locales.text(language, 'current_value') + f'<b>{current_house}</b>' +\
-        '\n' +\
-        locales.text(language, 'sender_house_example')
-
-    keyboard = await get_skip_keyboard(language)
-
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.sender_house.set()
-
-
-async def ask_for_sender_block(chat_id, data):
-    language = await get_ui_lang(data=data)
-
-    current_block = get_value(data,
-                              'sender_block',
-                              locales.text(language, 'empty_input'))
-
-    text = locales.text(language, 'input_sender_block') + '\n' +\
-        '\n' +\
-        locales.text(language, 'current_value') + f'<b>{current_block}</b>' +\
-        '\n' +\
-        locales.text(language, 'sender_house_example')
-
-    keyboard = await get_skip_keyboard(language)
-
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.sender_block.set()
+    await next_state.set()
 
 
 async def ask_for_user_email(chat_id, language, current_email):
@@ -688,29 +616,6 @@ async def ask_for_user_email(chat_id, language, current_email):
                            parse_mode='HTML')
 
     await Form.sender_email.set()
-
-
-async def ask_for_sender_zipcode(chat_id, data):
-    language = await get_ui_lang(data=data)
-
-    current_zipcode = get_value(
-        data, 'sender_zipcode', locales.text(language, 'empty_input'))
-
-    text = locales.text(language, 'input_zipcode') + '\n' + \
-        '\n' +\
-        locales.text(language, 'current_value') + \
-        f'<b>{current_zipcode}</b>' +\
-        '\n' +\
-        locales.text(language, 'zipcode_example')
-
-    keyboard = await get_skip_keyboard(language)
-
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.sender_zipcode.set()
 
 
 async def show_private_info_summary(chat_id, state):
@@ -1266,7 +1171,10 @@ async def skip_email_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        await ask_for_sender_city(call.message.chat.id, data)
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_city',
+                                  Form.sender_city)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1278,8 +1186,10 @@ async def skip_city_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        await ask_for_sender_street(call.message.chat.id, data)
-
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_street',
+                                  Form.sender_street)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_street)
@@ -1290,8 +1200,10 @@ async def skip_city_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        await ask_for_sender_house(call.message.chat.id, data)
-
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_house',
+                                  Form.sender_house)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_house)
@@ -1302,8 +1214,10 @@ async def skip_house_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        await ask_for_sender_block(call.message.chat.id, data)
-
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_block',
+                                  Form.sender_block)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_block)
@@ -1314,8 +1228,10 @@ async def skip_block_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        await ask_for_sender_zipcode(call.message.chat.id, data)
-
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_zipcode',
+                                  Form.sender_zipcode)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_zipcode)
@@ -1929,7 +1845,10 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_email'] = message.text
         data['verified'] = False
-        await ask_for_sender_city(message.chat.id, data)
+        await ask_for_sender_info(message.chat.id,
+                                  data,
+                                  'sender_city',
+                                  Form.sender_city)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1942,12 +1861,18 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
         if not await check_validity(validator.city, message, language):
-            await ask_for_sender_city(message.chat.id, data)
+            await ask_for_sender_info(message.chat.id,
+                                      data,
+                                      'sender_city',
+                                      Form.sender_city)
             return
 
     async with state.proxy() as data:
         data['sender_city'] = message.text
-        await ask_for_sender_street(message.chat.id, data)
+        await ask_for_sender_info(message.chat.id,
+                                  data,
+                                  'sender_street',
+                                  Form.sender_street)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1960,12 +1885,18 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
         if not await check_validity(validator.street, message, language):
-            await ask_for_sender_street(message.chat.id, data)
+            await ask_for_sender_info(message.chat.id,
+                                      data,
+                                      'sender_street',
+                                      Form.sender_street)
             return
 
     async with state.proxy() as data:
         data['sender_street'] = message.text
-        await ask_for_sender_house(message.chat.id, data)
+        await ask_for_sender_info(message.chat.id,
+                                  data,
+                                  'sender_house',
+                                  Form.sender_house)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1976,7 +1907,10 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_house'] = message.text
-        await ask_for_sender_block(message.chat.id, data)
+        await ask_for_sender_info(message.chat.id,
+                                  data,
+                                  'sender_block',
+                                  Form.sender_block)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1987,7 +1921,10 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_block'] = message.text
-        await ask_for_sender_zipcode(message.chat.id, data)
+        await ask_for_sender_info(message.chat.id,
+                                  data,
+                                  'sender_zipcode',
+                                  Form.sender_zipcode)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
