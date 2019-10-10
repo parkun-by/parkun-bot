@@ -86,7 +86,7 @@ REQUIRED_CREDENTIALS = ['sender_first_name',
                         'sender_last_name',
                         'sender_patronymic',
                         'sender_email',
-                        'sender_address']
+                        'sender_city']
 
 
 def get_text(raw_text, placeholder):
@@ -279,7 +279,7 @@ def set_default_sender_info(data):
     set_default(data, 'sender_last_name')
     set_default(data, 'sender_patronymic')
     set_default(data, 'sender_email')
-    set_default(data, 'sender_address')
+    set_default(data, 'sender_city')
     set_default(data, 'sender_zipcode')
     set_default(data, 'verified')
     set_default(data, 'secret_code')
@@ -322,8 +322,8 @@ async def compose_summary(data):
         ' <b>{}</b>'.format(get_full_name(data)) + '\n' +\
         locales.text(language, 'sender_email') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
-        locales.text(language, 'sender_address') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_address')) + '\n' +\
+        locales.text(language, 'sender_city') +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_city')) + '\n' +\
         locales.text(language, 'sender_zipcode') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_zipcode')) + '\n' +\
         '\n' +\
@@ -370,8 +370,8 @@ async def get_letter_body(data):
 
     text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_full_name(data))
 
-    text = text.replace('__АДРЕСЗАЯВИТЕЛЯ__',
-                        get_value(data, 'sender_address'))
+    text = text.replace('__ГОРОДЗАЯВИТЕЛЯ__',
+                        get_value(data, 'sender_city'))
 
     text = text.replace('__ИНДЕКСЗАЯВИТЕЛЯ__',
                         get_value(data, 'sender_zipcode'))
@@ -570,14 +570,13 @@ async def humanize_message(exception, language):
     return str(exception)
 
 
-async def ask_for_user_address(chat_id, language, current_address):
-    text = locales.text(language, 'input_sender_address') + '\n' +\
-        locales.text(language, 'bot_can_guess_address') + '\n' +\
+async def ask_for_sender_city(chat_id, language, current_city):
+    text = locales.text(language, 'input_sender_city') + '\n' +\
         '\n' +\
         locales.text(language, 'current_value') +\
-        f'<b>{current_address}</b>' +\
+        f'<b>{current_city}</b>' +\
         '\n' +\
-        locales.text(language, 'sender_address_example')
+        locales.text(language, 'sender_city_example')
 
     keyboard = await get_skip_keyboard(language)
 
@@ -586,7 +585,7 @@ async def ask_for_user_address(chat_id, language, current_address):
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
-    await Form.sender_address.set()
+    await Form.sender_city.set()
 
 
 async def ask_for_user_email(chat_id, language, current_email):
@@ -608,9 +607,10 @@ async def ask_for_user_email(chat_id, language, current_email):
 
 
 async def ask_for_user_zipcode(chat_id, language, current_zipcode):
-    text = locales.text(language, 'input_zipcode') + '\n' +\
+    text = locales.text(language, 'input_zipcode') + '\n' + \
         '\n' +\
-        locales.text(language, 'current_value') + f'<b>{current_zipcode}</b>' +\
+        locales.text(language, 'current_value') + \
+        f'<b>{current_zipcode}</b>' +\
         '\n' +\
         locales.text(language, 'zipcode_example')
 
@@ -897,7 +897,7 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 
         full_name = get_full_name(data) or empty_input
         email = get_value(data, 'sender_email', empty_input)
-        address = get_value(data, 'sender_address', empty_input)
+        city = get_value(data, 'sender_city', empty_input)
         zipcode = get_value(data, 'sender_zipcode', empty_input)
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
@@ -905,7 +905,7 @@ async def show_personal_info(message: types.Message, state: FSMContext):
             '\n' +\
             locales.text(language, 'sender_email') + f' <b>{email}</b>' +\
             '\n' +\
-            locales.text(language, 'sender_address') + f' <b>{address}</b>' +\
+            locales.text(language, 'sender_city') + f' <b>{city}</b>' +\
             '\n' +\
             locales.text(language, 'sender_zipcode') + f' <b>{zipcode}</b>'
 
@@ -1171,19 +1171,20 @@ async def skip_email_click(call, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        current_user_address = get_value(data,
-                                         'sender_address',
-                                         locales.text(language, 'empty_input'))
+        current_sender_city = get_value(
+            data,
+            'sender_city',
+            locales.text(language, 'empty_input'))
 
-    await ask_for_user_address(call.message.chat.id,
-                               language,
-                               current_user_address)
+    await ask_for_sender_city(call.message.chat.id,
+                              language,
+                              current_sender_city)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_address)
-async def skip_address_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода адреса - ' +
+                           state=Form.sender_city)
+async def skip_city_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода города - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -1221,26 +1222,6 @@ async def current_time_click(call, state: FSMContext):
 
     message = await bot.send_message(call.message.chat.id, current_time)
     await catch_violation_time(message, state)
-
-
-@dp.callback_query_handler(lambda call: call.data == '/enter_sender_address',
-                           state=Form.sender_zipcode)
-async def sender_address_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки ввода своего адреса - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
-        current_user_address = get_value(data,
-                                         'sender_address',
-                                         locales.text(language, 'empty_input'))
-
-    await ask_for_user_address(call.message.chat.id,
-                               language,
-                               current_user_address)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
@@ -1603,7 +1584,7 @@ async def cmd_reset(message: types.Message, state: FSMContext):
     await state.finish()
     await Form.initial.set()
 
-    text = locales.text(language, 'reset') + ' ¯\_(ツ)_/¯'
+    text = locales.text(language, 'reset') + ' ¯\\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
@@ -1832,24 +1813,35 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         data['sender_email'] = message.text
         data['verified'] = False
 
-        current_user_address = get_value(data,
-                                         'sender_address',
-                                         locales.text(language, 'empty_input'))
+        current_sender_city = get_value(data,
+                                        'sender_city',
+                                        locales.text(language, 'empty_input'))
 
-        await ask_for_user_address(message.chat.id,
-                                   language,
-                                   current_user_address)
+        await ask_for_sender_city(message.chat.id,
+                                  language,
+                                  current_sender_city)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.sender_address)
-async def catch_sender_address(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод адреса - ' +
+                    state=Form.sender_city)
+async def catch_sender_city(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод города - ' +
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        data['sender_address'] = message.text
         language = await get_ui_lang(data=data)
+        current_sender_city = get_value(data,
+                                        'sender_city',
+                                        locales.text(language, 'empty_input'))
+
+    if not await check_validity(validator.city, message, language):
+        await ask_for_sender_city(message.chat.id,
+                                  language,
+                                  current_sender_city)
+        return
+
+    async with state.proxy() as data:
+        data['sender_city'] = message.text
 
         current_user_zipcode = get_value(
             data, 'sender_zipcode', locales.text(language, 'empty_input'))
@@ -1857,48 +1849,6 @@ async def catch_sender_address(message: types.Message, state: FSMContext):
     await ask_for_user_zipcode(message.chat.id,
                                language,
                                current_user_zipcode)
-
-
-@dp.message_handler(content_types=types.ContentType.LOCATION,
-                    state=Form.sender_address)
-async def catch_gps_sender_address(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод адреса по локации - ' +
-                str(message.from_user.username))
-
-    coordinates = (str(message.location.longitude) + ', ' +
-                   str(message.location.latitude))
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
-        address = await locator.get_address(coordinates,
-                                            get_value(data, 'letter_lang'))
-
-        if address == config.ADDRESS_FAIL:
-            address = locales.text(language, 'no_address_detected')
-
-    if address is None:
-        logger.info('Не распознал локацию - ' +
-                    str(message.from_user.username))
-
-        text = locales.text(language, 'cant_locate')
-        await bot.send_message(message.chat.id, text)
-        return
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    enter_sender_address = types.InlineKeyboardButton(
-        text=locales.text(language, 'change_violation_addr_button'),
-        callback_data='/enter_sender_address')
-
-    keyboard.add(enter_sender_address)
-
-    bot_message = await bot.send_message(message.chat.id,
-                                         address,
-                                         reply_markup=keyboard)
-
-    await catch_sender_address(bot_message, state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1997,18 +1947,6 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 
     await Form.sending_approvement.set()
     await approve_sending(message.chat.id, state)
-
-
-@dp.message_handler(content_types=types.ContentType.ANY,
-                    state=Form.caption)
-async def catch_vehicle_number(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод неправильного примечания - ' +
-                str(message.from_user.username))
-
-    language = await get_ui_lang(state)
-
-    text = locales.text(language, 'text_only')
-    await bot.send_message(message.chat.id, text)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2116,9 +2054,18 @@ async def reject_wrong_violation_photo_input(message: types.Message,
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=[Form.vehicle_number,
                            Form.violation_datetime,
-                           Form.violation_location])
-async def reject_wrong_violation_data_input(message: types.Message,
-                                            state: FSMContext):
+                           Form.violation_location,
+                           Form.caption,
+                           Form.sender_first_name,
+                           Form.sender_last_name,
+                           Form.sender_patronymic,
+                           Form.sender_email,
+                           Form.sender_city,
+                           Form.sender_zipcode])
+async def reject_non_text_input(message: types.Message, state: FSMContext):
+    logger.info('Посылает не текст, а что-то другое - ' +
+                str(message.from_user.username))
+
     language = await get_ui_lang(state)
     text = locales.text(language, 'text_only')
 
