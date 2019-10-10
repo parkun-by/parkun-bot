@@ -287,6 +287,7 @@ def set_default_sender_info(data):
     set_default(data, 'sender_street')
     set_default(data, 'sender_house')
     set_default(data, 'sender_block')
+    set_default(data, 'sender_flat')
     set_default(data, 'sender_zipcode')
     set_default(data, 'verified')
     set_default(data, 'secret_code')
@@ -582,7 +583,7 @@ async def ask_for_sender_info(chat_id, data, info_type, next_state):
 
     current_value = get_value(data,
                               info_type,
-        locales.text(language, 'empty_input'))
+                              locales.text(language, 'empty_input'))
 
     text = locales.text(language, f'input_{info_type}') + '\n' +\
         '\n' +\
@@ -1223,6 +1224,20 @@ async def skip_house_click(call, state: FSMContext):
                            state=Form.sender_block)
 async def skip_block_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода корпуса - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_flat',
+                                  Form.sender_flat)
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_flat)
+async def skip_block_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода квартиры - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -1923,6 +1938,20 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
         data['sender_block'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
+                                  'sender_flat',
+                                  Form.sender_flat)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.sender_flat)
+async def catch_sender_flat(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод квартиры - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        data['sender_flat'] = message.text
+        await ask_for_sender_info(message.chat.id,
+                                  data,
                                   'sender_zipcode',
                                   Form.sender_zipcode)
 
@@ -2140,6 +2169,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_street,
                            Form.sender_house,
                            Form.sender_block,
+                           Form.sender_flat,
                            Form.sender_zipcode])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
