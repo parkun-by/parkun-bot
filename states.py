@@ -11,6 +11,7 @@ class Form(StatesGroup):
     sender_city = State()
     sender_street = State()
     sender_house = State()
+    sender_block = State()
     sender_zipcode = State()
     operational_mode = State()
     violation_photo = State()
