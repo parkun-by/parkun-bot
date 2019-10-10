@@ -89,6 +89,7 @@ REQUIRED_CREDENTIALS = [
     'sender_email',
     'sender_city',
     'sender_zipcode',
+    'sender_house',
 ]
 
 
@@ -284,6 +285,7 @@ def set_default_sender_info(data):
     set_default(data, 'sender_email')
     set_default(data, 'sender_city')
     set_default(data, 'sender_street')
+    set_default(data, 'sender_house')
     set_default(data, 'sender_zipcode')
     set_default(data, 'verified')
     set_default(data, 'secret_code')
@@ -621,6 +623,29 @@ async def ask_for_sender_street(chat_id, data):
                            parse_mode='HTML')
 
     await Form.sender_street.set()
+
+
+async def ask_for_sender_house(chat_id, data):
+    language = await get_ui_lang(data=data)
+
+    current_house = get_value(data,
+                              'sender_house',
+                              locales.text(language, 'empty_input'))
+
+    text = locales.text(language, 'input_sender_house') + '\n' +\
+        '\n' +\
+        locales.text(language, 'current_value') + f'<b>{current_house}</b>' +\
+        '\n' +\
+        locales.text(language, 'sender_house_example')
+
+    keyboard = await get_skip_keyboard(language)
+
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
+    await Form.sender_house.set()
 
 
 async def ask_for_user_email(chat_id, language, current_email):
@@ -1241,7 +1266,18 @@ async def skip_city_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
+        await ask_for_sender_house(call.message.chat.id, data)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_house)
+async def skip_city_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода дома - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
         await ask_for_sender_zipcode(call.message.chat.id, data)
 
 
@@ -1901,6 +1937,25 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_street'] = message.text
+        await ask_for_sender_house(message.chat.id, data)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.sender_house)
+async def catch_sender_house(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод дома - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        current_sender_house = get_value(
+            data,
+            'sender_house',
+            locales.text(language, 'empty_input'))
+
+    async with state.proxy() as data:
+        data['sender_house'] = message.text
         await ask_for_sender_zipcode(message.chat.id, data)
 
 
@@ -2115,6 +2170,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_email,
                            Form.sender_city,
                            Form.sender_street,
+                           Form.sender_house,
                            Form.sender_zipcode])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
