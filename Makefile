@@ -6,7 +6,7 @@ py_env:
 	pip install -r requirements.txt
 
 extra_env:
-	docker-compose -f env_parkun/docker-compose.yml up -d
+	docker-compose -f env_parkun/docker-compose.yml up -d --build
 
 stop_extra_env:
 	docker-compose -f env_parkun/docker-compose.yml down

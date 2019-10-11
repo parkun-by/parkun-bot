@@ -3,6 +3,7 @@ version: '3'
 volumes:
   redis-data:
   wiremock-data:
+  rabbit-data:
 
 networks:
   parkun:
@@ -28,4 +29,17 @@ services:
     volumes:
       - wiremock-data:/home/wiremock
       - ./wiremock/mappings:/home/wiremock/mappings
+
+  rabbit:
+    container_name: parkun_rabbit
+    networks:
+      - parkun
+    ports:
+      - 5672:5672
+      - 15672:15672
+    build:
+      context: ./rabbitmq
+      dockerfile: Dockerfile
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
 
