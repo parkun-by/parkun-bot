@@ -306,12 +306,32 @@ def set_default_sender_info(data):
     set_default(data, 'violation_datetime')
 
 
-def get_full_name(data):
+def get_sender_full_name(data):
     first_name = get_value(data, "sender_first_name")
     last_name = get_value(data, "sender_last_name")
     patronymic = get_value(data, "sender_patronymic")
 
     return f'{first_name} {patronymic} {last_name}'.strip()
+
+
+def get_sender_address(data):
+    city = get_value(data, 'sender_city')
+    street = get_value(data, 'sender_street')
+    house = get_value(data, 'sender_house')
+    block = get_value(data, 'sender_block')
+    flat = get_value(data, 'sender_flat')
+    zipcode = get_value(data, 'sender_zipcode')
+
+    if house:
+        house = f'д.{house}'
+
+    if block:
+        block = f'корп.{block}'
+
+    if flat:
+        flat = f'кв.{flat}'
+
+    return f'{zipcode}, {city}, {street}, {house}, {block}, {flat}'.strip()
 
 
 async def compose_summary(data):
@@ -327,10 +347,10 @@ async def compose_summary(data):
         '\n' +\
         locales.text(language, 'sender') + '\n' +\
         locales.text(language, 'sender_name') +\
-        ' <b>{}</b>'.format(get_full_name(data)) + '\n' +\
+        ' <b>{}</b>'.format(get_sender_full_name(data)) + '\n' +\
         locales.text(language, 'sender_email') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
-        locales.text(language, 'sender_city') +\
+        locales.text(language, 'sender_address') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_city')) + '\n' +\
         locales.text(language, 'sender_zipcode') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_zipcode')) + '\n' +\
@@ -376,7 +396,7 @@ async def get_letter_body(data):
     text = text.replace('__ДАТАИВРЕМЯ__',
                         get_value(data, 'violation_datetime'))
 
-    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_full_name(data))
+    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_sender_full_name(data))
 
     text = text.replace('__ГОРОДЗАЯВИТЕЛЯ__',
                         get_value(data, 'sender_city'))
@@ -505,7 +525,7 @@ async def prepare_mail_parameters(state):
         parameters = {
             'to': {config.EMAIL_TO[get_value(data, 'recipient')]: recipient},
             'from': [get_value(data, 'sender_email'),
-                     get_full_name(data)],
+                     get_sender_full_name(data)],
             'subject': get_subject(get_value(data, 'letter_lang')),
             'html': await compose_letter_body(data),
             'attachment': get_value(data, 'attachments')}
@@ -898,9 +918,9 @@ async def show_personal_info(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
         empty_input = locales.text(language, 'empty_input')
 
-        full_name = get_full_name(data) or empty_input
+        full_name = get_sender_full_name(data) or empty_input
         email = get_value(data, 'sender_email', empty_input)
-        city = get_value(data, 'sender_city', empty_input)
+        address = get_sender_address(data) or empty_input
         zipcode = get_value(data, 'sender_zipcode', empty_input)
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
@@ -908,9 +928,7 @@ async def show_personal_info(message: types.Message, state: FSMContext):
             '\n' +\
             locales.text(language, 'sender_email') + f' <b>{email}</b>' +\
             '\n' +\
-            locales.text(language, 'sender_city') + f' <b>{city}</b>' +\
-            '\n' +\
-            locales.text(language, 'sender_zipcode') + f' <b>{zipcode}</b>'
+            locales.text(language, 'sender_address') + f' <b>{address}</b>'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
