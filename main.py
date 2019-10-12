@@ -1936,13 +1936,9 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
                                      message.chat.id),
             loop)
 
-        # text = locales.text(language, 'photo_or_info') + '\n' +\
-        #     '\n' +\
-        #     '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
-
         text = locales.text(language, 'photo_or_info') + '\n' +\
             '\n' +\
-            '🔥🔥🔥' + ' ' + locales.text(language, 'service_is_stopped')
+            '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
