@@ -166,7 +166,7 @@ async def send_violation_to_channel(data):
                                          caption)
 
 
-async def compose_appeal(data):
+async def compose_appeal(data, chat_id, message_id):
     return {
         'text': get_appeal_text(data),
         'police_department':
@@ -180,12 +180,14 @@ async def compose_appeal(data):
         'sender_block': get_value(data, 'sender_block'),
         'sender_flat': get_value(data, 'sender_flat'),
         'sender_zipcode': get_value(data, 'sender_zipcode'),
+        'sender_id': chat_id,
+        'appeal_id': message_id,
     }
 
 
-async def send_violation(state, username, chat_id):
+async def send_violation(state, username, chat_id, message_id):
     async with state.proxy() as data:
-        appeal = await compose_appeal(data)
+        appeal = await compose_appeal(data, chat_id, message_id)
         language = await get_ui_lang(data=data)
 
     try:
@@ -1445,7 +1447,8 @@ async def send_letter_click(call, state: FSMContext):
         try:
             await send_violation(state,
                                  call.from_user.username,
-                                 call.message.chat.id)
+                                 call.message.chat.id,
+                                 call.message.message_id)
         finally:
             async with state.proxy() as data:
                 await delete_prepared_violation(data, call.message.chat.id)
