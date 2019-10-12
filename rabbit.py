@@ -1,6 +1,7 @@
 import aiohttp
 import config
 import json
+from exceptions import ErrorWhilePutInQueue
 
 
 class Rabbit:
@@ -22,7 +23,9 @@ class Rabbit:
         }
 
         async with self._http_session.post(url, json=data) as response:
-            print(response)
+            if response.status != 200:
+                raise ErrorWhilePutInQueue(
+                    f'Ошибка при отправке обращения: {response.reason}')
 
     async def send_appeal(self, body):
         await self._send(config.RABBIT_EXCHANGE_APPEAL, body)
