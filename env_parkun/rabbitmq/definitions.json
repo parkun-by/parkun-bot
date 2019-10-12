@@ -13,7 +13,12 @@
         {
             "name": "parkun_bot",
             "password": "parkun_bot",
-            "tags": "administrator"
+            "tags": ""
+        },
+        {
+            "name": "appeal_sender",
+            "password": "appeal_sender",
+            "tags": ""
         }
     ],
     "permissions": [
@@ -26,6 +31,13 @@
         },
         {
             "user": "parkun_bot",
+            "vhost": "/",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        },
+        {
+            "user": "appeal_sender",
             "vhost": "/",
             "configure": ".*",
             "write": ".*",
