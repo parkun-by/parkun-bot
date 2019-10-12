@@ -13,14 +13,20 @@ class Rabbit:
             loop=loop
         )
 
-    async def send(self, body):
+    async def _send(self, exchange_name, body):
         async with self.connection:
             self.channel = await self.connection.channel()
             self.exchange = await self.channel.declare_exchange(
-                config.RABBIT_EXCHANGE,
+                exchange_name,
                 type='fanout',
                 durable='true')
 
             await self.exchange.publish(
                 aio_pika.Message(body=json.dumps(body).encode()),
                 routing_key='violation')
+
+    async def send_appeal(self, body):
+        await self._send(config.RABBIT_EXCHANGE_APPEAL, body)
+
+    async def send_sharing(self, body):
+        await self._send(config.RABBIT_EXCHANGE_SHARING, body)

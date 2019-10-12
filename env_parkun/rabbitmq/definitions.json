@@ -34,7 +34,16 @@
     ],
     "exchanges": [
         {
-            "name": "parkun",
+            "name": "appeal",
+            "vhost": "/",
+            "type": "fanout",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        },
+        {
+            "name": "sharing",
             "vhost": "/",
             "type": "fanout",
             "durable": true,
@@ -45,14 +54,14 @@
     ],
     "queues": [
         {
-            "name": "appeal",
+            "name": "to_police",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
-            "name": "sharing",
+            "name": "social_networks",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
@@ -61,17 +70,17 @@
     ],
     "bindings": [
         {
-            "source": "parkun",
+            "source": "appeal",
             "vhost": "/",
-            "destination": "appeal",
+            "destination": "to_police",
             "destination_type": "queue",
             "routing_key": "*",
             "arguments": {}
         },
         {
-            "source": "parkun",
+            "source": "sharing",
             "vhost": "/",
-            "destination": "sharing",
+            "destination": "social_networks",
             "destination_type": "queue",
             "routing_key": "*",
             "arguments": {}

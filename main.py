@@ -189,7 +189,7 @@ async def send_violation(state, username, chat_id):
         language = await get_ui_lang(data=data)
 
     try:
-        await rabbitmq.send(appeal)
+        await rabbitmq.send_appeal(appeal)
         text = locales.text(language, 'letter_sent').format(config.CHANNEL)
         logger.info('Обращение отправлено - ' + str(username))
 
