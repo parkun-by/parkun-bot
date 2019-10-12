@@ -1,29 +1,28 @@
-import aio_pika
+import aiohttp
 import config
 import json
 
 
 class Rabbit:
     def __init__(self):
-        pass
+        self._http_session = aiohttp.ClientSession()
 
-    async def init(self, loop):
-        self.connection = await aio_pika.connect_robust(
-            config.RABBIT_ADDRESS,
-            loop=loop
-        )
+    def __del__(self):
+        self._http_session.close()
 
     async def _send(self, exchange_name, body):
-        async with self.connection:
-            self.channel = await self.connection.channel()
-            self.exchange = await self.channel.declare_exchange(
-                exchange_name,
-                type='fanout',
-                durable='true')
+        url = config.RABBIT_ADDRESS + \
+            f'/api/exchanges/parkun/{exchange_name}/publish'
 
-            await self.exchange.publish(
-                aio_pika.Message(body=json.dumps(body).encode()),
-                routing_key='violation')
+        data = {
+            'properties': {},
+            'routing_key': 'violation',
+            'payload': json.dumps(body),
+            'payload_encoding': 'string'
+        }
+
+        async with self._http_session.post(url, json=data) as response:
+            print(response)
 
     async def send_appeal(self, body):
         await self._send(config.RABBIT_EXCHANGE_APPEAL, body)

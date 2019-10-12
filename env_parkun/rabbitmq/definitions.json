@@ -1,7 +1,7 @@
 {
     "vhosts": [
         {
-            "name": "/"
+            "name": "parkun"
         }
     ],
     "users": [
@@ -13,32 +13,32 @@
         {
             "name": "parkun_bot",
             "password": "parkun_bot",
-            "tags": ""
+            "tags": "administrator"
         },
         {
             "name": "appeal_sender",
             "password": "appeal_sender",
-            "tags": ""
+            "tags": "administrator"
         }
     ],
     "permissions": [
         {
             "user": "admin",
-            "vhost": "/",
+            "vhost": "parkun",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
         },
         {
             "user": "parkun_bot",
-            "vhost": "/",
+            "vhost": "parkun",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
         },
         {
             "user": "appeal_sender",
-            "vhost": "/",
+            "vhost": "parkun",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
@@ -47,7 +47,7 @@
     "exchanges": [
         {
             "name": "appeal",
-            "vhost": "/",
+            "vhost": "parkun",
             "type": "fanout",
             "durable": true,
             "auto_delete": false,
@@ -56,7 +56,7 @@
         },
         {
             "name": "sharing",
-            "vhost": "/",
+            "vhost": "parkun",
             "type": "fanout",
             "durable": true,
             "auto_delete": false,
@@ -67,14 +67,14 @@
     "queues": [
         {
             "name": "to_police",
-            "vhost": "/",
+            "vhost": "parkun",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
             "name": "social_networks",
-            "vhost": "/",
+            "vhost": "parkun",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
@@ -83,7 +83,7 @@
     "bindings": [
         {
             "source": "appeal",
-            "vhost": "/",
+            "vhost": "parkun",
             "destination": "to_police",
             "destination_type": "queue",
             "routing_key": "*",
@@ -91,7 +91,7 @@
         },
         {
             "source": "sharing",
-            "vhost": "/",
+            "vhost": "parkun",
             "destination": "social_networks",
             "destination_type": "queue",
             "routing_key": "*",

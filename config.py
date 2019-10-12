@@ -68,6 +68,8 @@ MAX_TWI_PHOTOS = 4
 TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
 
 # RabbitMQ
-RABBIT_ADDRESS = 'amqp://parkun_bot:parkun_bot@127.0.0.1/'
+RABBIT_LOGIN = 'parkun_bot'
+RABBIT_PASSWORD = 'parkun_bot'
+RABBIT_ADDRESS = f'http://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@localhost:15672'
 RABBIT_EXCHANGE_APPEAL = 'appeal'
 RABBIT_EXCHANGE_SHARING = 'sharing'

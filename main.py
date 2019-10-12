@@ -171,9 +171,9 @@ async def compose_appeal(data):
         'text': get_appeal_text(data),
         'police_department':
             config.DEPARTMENT_NAMES[get_value(data, 'recipient')],
-        'sender_first_name': get_value(data, "sender_first_name"),
-        'sender_last_name': get_value(data, "sender_last_name"),
-        'sender_patronymic': get_value(data, "sender_patronymic"),
+        'sender_first_name': get_value(data, 'sender_first_name'),
+        'sender_last_name': get_value(data, 'sender_last_name'),
+        'sender_patronymic': get_value(data, 'sender_patronymic'),
         'sender_city': get_value(data, 'sender_city'),
         'sender_street': get_value(data, 'sender_street'),
         'sender_house': get_value(data, 'sender_house'),
@@ -2118,9 +2118,6 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
     logger.info('Загрузили.')
-    logger.info('Подключаемся к кролику.')
-    await rabbitmq.init(loop=loop)
-    logger.info('Подключились.')
 
 
 async def shutdown(dispatcher: Dispatcher):
