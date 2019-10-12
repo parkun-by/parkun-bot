@@ -9,9 +9,6 @@ MAX_VIOLATION_PHOTOS = 10
 BY = '_by'
 RU = '_ru'
 
-# SendInBlue
-SIB_ACCESS_KEY = 'access_key'
-
 # regionalization
 MINSK = 'minsk'
 BREST_REGION = 'brest_region'
@@ -31,14 +28,14 @@ REGIONS = [
     MAHILEU_REGION,
 ]
 
-EMAIL_TO = {
-    MINSK: 'PUT_YOUR_TEST_EMAIL',
-    BREST_REGION: 'PUT_YOUR_TEST_EMAIL',
-    VITSEBSK_REGION: 'PUT_YOUR_TEST_EMAIL',
-    HOMEL_REGION: 'PUT_YOUR_TEST_EMAIL',
-    HRODNA_REGION: 'PUT_YOUR_TEST_EMAIL',
-    MINSK_REGION: 'PUT_YOUR_TEST_EMAIL',
-    MAHILEU_REGION: 'PUT_YOUR_TEST_EMAIL',
+DEPARTMENT_NAMES = {
+    MINSK: 'ГУВД Мингорисполкома',
+    BREST_REGION: 'УВД Брестского облисполкома',
+    VITSEBSK_REGION: 'УВД Витебского облисполкома',
+    HOMEL_REGION: 'УВД Гомельского облисполкома',
+    HRODNA_REGION: 'УВД Гродненского облисполкома',
+    MINSK_REGION: 'УВД Минского облисполкома',
+    MAHILEU_REGION: 'УВД Могилевского облисполкома',
 }
 
 # redis
@@ -69,3 +66,7 @@ ACCESS_TOKEN_SECRET = 'access_token_secret'
 MAX_TWI_CHARACTERS = 280
 MAX_TWI_PHOTOS = 4
 TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
+
+# RabbitMQ
+RABBIT_ADDRESS = 'amqp://parkun_bot:parkun_bot@127.0.0.1/'
+RABBIT_EXCHANGE = 'parkun'

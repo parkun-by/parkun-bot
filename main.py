@@ -12,23 +12,24 @@ from aiogram.utils import executor
 from disposable_email_domains import blocklist
 
 import config
+from appeal_text import AppealText
 from locator import Locator
 from mail_verifier import MailVerifier
-from mailer import Mailer
 from photoitem import PhotoItem
 from states import Form
 from uploader import Uploader
 from locales import Locales
 from broadcaster import Broadcaster
 from validator import Validator
+from rabbit import Rabbit
 
-mailer = Mailer(config.SIB_ACCESS_KEY)
 locator = Locator()
 mail_verifier = MailVerifier()
 uploader = Uploader()
 semaphore = asyncio.Semaphore()
 locales = Locales()
 validator = Validator()
+rabbitmq = Rabbit()
 
 
 def get_value(data, key, placeholder=None):
@@ -143,8 +144,8 @@ async def invite_to_confirm_email(data, chat_id):
                            parse_mode='HTML')
 
 
-async def send_letter_textfile_to_user(parameters, language, chat_id):
-    file = io.StringIO(parameters['html'])
+async def send_appeal_textfile_to_user(appeal_text, language, chat_id):
+    file = io.StringIO(appeal_text)
     file.name = locales.text(language, 'letter_html')
     await bot.send_document(chat_id, file)
 
@@ -165,21 +166,37 @@ async def send_violation_to_channel(data):
                                          caption)
 
 
-async def share_violation(state, username, chat_id):
-    parameters = await prepare_mail_parameters(state)
-    language = await get_ui_lang(state)
+async def compose_appeal(data):
+    return {
+        'text': get_appeal_text(data),
+        'police_department':
+            config.DEPARTMENT_NAMES[get_value(data, 'recipient')],
+        'sender_first_name': get_value(data, "sender_first_name"),
+        'sender_last_name': get_value(data, "sender_last_name"),
+        'sender_patronymic': get_value(data, "sender_patronymic"),
+        'sender_city': get_value(data, 'sender_city'),
+        'sender_street': get_value(data, 'sender_street'),
+        'sender_house': get_value(data, 'sender_house'),
+        'sender_block': get_value(data, 'sender_block'),
+        'sender_flat': get_value(data, 'sender_flat'),
+        'sender_zipcode': get_value(data, 'sender_zipcode'),
+    }
+
+
+async def send_violation(state, username, chat_id):
+    async with state.proxy() as data:
+        appeal = await compose_appeal(data)
+        language = await get_ui_lang(data=data)
 
     try:
-        # mailer.send_mail(parameters)
+        await rabbitmq.send(appeal)
         text = locales.text(language, 'letter_sent').format(config.CHANNEL)
-        logger.info('Письмо отправлено - ' + str(username))
+        logger.info('Обращение отправлено - ' + str(username))
 
-        await send_letter_textfile_to_user(parameters, language, chat_id)
+        await send_appeal_textfile_to_user(appeal['text'], language, chat_id)
 
     except Exception as exc:
-        text = locales.text(language, 'sending_failed') + '\n' +\
-            await humanize_message(exc, language)
-
+        text = locales.text(language, 'sending_failed') + '\n' + str(exc)
         logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
 
     await bot.send_message(chat_id, text)
@@ -338,8 +355,7 @@ async def compose_summary(data):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'check_please').format(
-            locales.text(language, get_value(data, 'recipient')),
-            config.EMAIL_TO[get_value(data, 'recipient')]) + '\n' +\
+            locales.text(language, get_value(data, 'recipient'))) + '\n' +\
         '\n' +\
         locales.text(language, 'letter_lang').format(
             locales.text(language, 'lang' + get_value(data, 'letter_lang'))) +\
@@ -351,7 +367,7 @@ async def compose_summary(data):
         locales.text(language, 'sender_email') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
         locales.text(language, 'sender_address') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_city')) + '\n' +\
+        ' <b>{}</b>'.format(get_sender_address(data)) + '\n' +\
         locales.text(language, 'sender_zipcode') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_zipcode')) + '\n' +\
         '\n' +\
@@ -369,70 +385,6 @@ async def compose_summary(data):
     return text
 
 
-async def get_letter_header(data):
-    template = path.join('letters',
-                         'footer',
-                         get_value(data, 'recipient') +
-                         get_value(data, 'letter_lang') + '.html')
-
-    with open(template, 'r') as file:
-        text = file.read()
-
-    return text
-
-
-async def get_letter_body(data):
-    template = path.join('letters',
-                         'body' + get_value(data, 'letter_lang') + '.html')
-
-    with open(template, 'r') as file:
-        text = file.read()
-
-    text = text.replace('__ГОСНОМЕРТС__', get_value(data, 'vehicle_number'))
-
-    text = text.replace('__МЕСТОНАРУШЕНИЯ__',
-                        get_value(data, 'violation_address'))
-
-    text = text.replace('__ДАТАИВРЕМЯ__',
-                        get_value(data, 'violation_datetime'))
-
-    text = text.replace('__ИМЯЗАЯВИТЕЛЯ__', get_sender_full_name(data))
-
-    text = text.replace('__ГОРОДЗАЯВИТЕЛЯ__',
-                        get_value(data, 'sender_city'))
-
-    text = text.replace('__ИНДЕКСЗАЯВИТЕЛЯ__',
-                        get_value(data, 'sender_zipcode'))
-
-    text = text.replace('__ПРИМЕЧАНИЕ__', get_value(data, 'caption'))
-    text = text.replace('__EMAIL__', get_value(data, 'sender_email'))
-
-    return text
-
-
-async def get_letter_photos(data):
-    template = path.join('letters', 'photo.html')
-
-    with open(template, 'r') as file:
-        photo_template = file.read()
-
-    text = ''
-
-    for photo_url in get_value(data, 'attachments'):
-        photo = photo_template.replace('__ФОТОНАРУШЕНИЯ__', photo_url)
-        text += photo
-
-    return text
-
-
-def get_photos_links_header(count, language):
-    # первой ссылке добавим общий заголовок
-    if count == 0:
-        return locales.text(language, 'letter_link_header')
-
-    return ''
-
-
 async def check_validity(pattern, message, language):
     error_message = validator.valid(message.text, *pattern)
 
@@ -443,32 +395,28 @@ async def check_validity(pattern, message, language):
         return True
 
 
-async def get_letter_photos_links(data):
-    template = path.join('letters', 'photo_links.html')
-
-    with open(template, 'r') as file:
-        photo_link_template = file.read()
-
+def get_photos_links(data):
     text = ''
 
-    for count, photo_url in enumerate(get_value(data, 'attachments')):
-        photo_link_header = photo_link_template.replace(
-            '__ССЫЛКА_ЗАГОЛОВОК__',
-            get_photos_links_header(count, get_value(data, 'letter_lang')))
+    for photo_url in get_value(data, 'attachments'):
+        text += f'''{photo_url}
+'''
 
-        photo_link = photo_link_header.replace('__ССЫЛКА__', photo_url)
-        text += photo_link
-
-    return text
+    return text.strip()
 
 
-async def compose_letter_body(data):
-    header = await get_letter_header(data)
-    body = await get_letter_body(data)
-    photos = await get_letter_photos(data)
-    photo_links = await get_letter_photos_links(data)
+def get_appeal_text(data):
+    violation_data = {
+        'photos': get_photos_links(data),
+        'vehicle_number': get_value(data, 'vehicle_number'),
+        'address': get_value(data, 'violation_address'),
+        'datetime': get_value(data, 'violation_datetime'),
+        'remark': get_value(data, 'caption'),
+        'sender_name': get_sender_full_name(data),
+        'sender_email': get_value(data, 'sender_email'),
+    }
 
-    return header + body + photos + photo_links
+    return AppealText.get(get_value(data, 'letter_lang'), violation_data)
 
 
 async def approve_sending(chat_id, state):
@@ -511,26 +459,6 @@ async def approve_sending(chat_id, state):
                            reply_markup=keyboard,
                            parse_mode='HTML',
                            disable_web_page_preview=True)
-
-
-def get_subject(language):
-    return locales.text(language, 'violation_letter')
-
-
-async def prepare_mail_parameters(state):
-    async with state.proxy() as data:
-        recipient = locales.text(get_value(data, 'letter_lang'),
-                                 'head_' + get_value(data, 'recipient'))
-
-        parameters = {
-            'to': {config.EMAIL_TO[get_value(data, 'recipient')]: recipient},
-            'from': [get_value(data, 'sender_email'),
-                     get_sender_full_name(data)],
-            'subject': get_subject(get_value(data, 'letter_lang')),
-            'html': await compose_letter_body(data),
-            'attachment': get_value(data, 'attachments')}
-
-        return parameters
 
 
 def get_str_current_time():
@@ -586,16 +514,6 @@ async def get_skip_keyboard(language):
     keyboard.add(skip)
 
     return keyboard
-
-
-async def humanize_message(exception, language):
-    invalid_email_msg = '\'message\': "valid \'from\' email address required"'
-    invalid_email_humanized = locales.text(language, 'invalid_email')
-
-    if invalid_email_msg in str(exception):
-        return invalid_email_humanized
-
-    return str(exception)
 
 
 async def ask_for_sender_info(chat_id, data, info_type, next_state):
@@ -1484,7 +1402,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.letter_sending)
-async def send_letter_click(call, state: FSMContext):
+async def send_letter_in_progress(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
 
@@ -1525,9 +1443,9 @@ async def send_letter_click(call, state: FSMContext):
 
     else:
         try:
-            await share_violation(state,
-                                  call.from_user.username,
-                                  call.message.chat.id)
+            await send_violation(state,
+                                 call.from_user.username,
+                                 call.message.chat.id)
         finally:
             async with state.proxy() as data:
                 await delete_prepared_violation(data, call.message.chat.id)
@@ -2204,6 +2122,9 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
     logger.info('Загрузили.')
+    logger.info('Подключаемся к кролику.')
+    await rabbitmq.init(loop=loop)
+    logger.info('Подключились.')
 
 
 async def shutdown(dispatcher: Dispatcher):
