@@ -69,4 +69,5 @@ TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
 
 # RabbitMQ
 RABBIT_ADDRESS = 'amqp://parkun_bot:parkun_bot@127.0.0.1/'
-RABBIT_EXCHANGE = 'parkun'
+RABBIT_EXCHANGE_APPEAL = 'appeal'
+RABBIT_EXCHANGE_SHARING = 'sharing'
