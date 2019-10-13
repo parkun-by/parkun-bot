@@ -32,3 +32,20 @@ class Rabbit:
 
     async def send_sharing(self, body):
         await self._send(config.RABBIT_EXCHANGE_SHARING, body)
+
+    async def get_captcha_url(self) -> str:
+        url = config.RABBIT_ADDRESS + \
+            f'/api/queues/parkun/{config.RABBIT_QUEUE_CAPTCHA_URL}/get'
+
+        data = {
+            'count': 1,
+            'ackmode': 'ack_requeue_true',
+            'encoding': 'auto',
+        }
+
+        async with self._http_session.post(url, json=data) as response:
+            if response.status != 200:
+                raise ErrorWhilePutInQueue(
+                    f'Ошибка при отправке обращения: {response.reason}')
+
+            print(await response.json())
