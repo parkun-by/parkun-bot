@@ -19,6 +19,11 @@
             "name": "appeal_sender",
             "password": "appeal_sender",
             "tags": "administrator"
+        },
+        {
+            "name": "appeal_preparer",
+            "password": "appeal_preparer",
+            "tags": "administrator"
         }
     ],
     "permissions": [
@@ -42,13 +47,20 @@
             "configure": ".*",
             "write": ".*",
             "read": ".*"
+        },
+        {
+            "user": "appeal_preparer",
+            "vhost": "parkun",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
         }
     ],
     "exchanges": [
         {
             "name": "appeal",
             "vhost": "parkun",
-            "type": "fanout",
+            "type": "direct",
             "durable": true,
             "auto_delete": false,
             "internal": false,
@@ -73,7 +85,21 @@
             "arguments": {}
         },
         {
+            "name": "captcha",
+            "vhost": "parkun",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        },
+        {
             "name": "social_networks",
+            "vhost": "parkun",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        },
+        {
+            "name": "url",
             "vhost": "parkun",
             "durable": true,
             "auto_delete": false,
@@ -86,7 +112,23 @@
             "vhost": "parkun",
             "destination": "to_police",
             "destination_type": "queue",
-            "routing_key": "*",
+            "routing_key": "violation",
+            "arguments": {}
+        },
+        {
+            "source": "appeal",
+            "vhost": "parkun",
+            "destination": "captcha",
+            "destination_type": "queue",
+            "routing_key": "captcha_pic",
+            "arguments": {}
+        },
+        {
+            "source": "appeal",
+            "vhost": "parkun",
+            "destination": "url",
+            "destination_type": "queue",
+            "routing_key": "appeal_url",
             "arguments": {}
         },
         {
