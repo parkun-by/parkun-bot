@@ -25,4 +25,5 @@ class Form(StatesGroup):
     feedback_answering = State()
     caption = State()
     email_verifying = State()
-    letter_sending = State()
+    appeal_sending = State()
+    entering_captcha = State()
