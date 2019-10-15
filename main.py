@@ -3,6 +3,7 @@ import io
 import logging
 from datetime import datetime
 from os import path
+from typing import Any
 
 from dateutil import tz
 from aiogram import Bot, types
@@ -22,6 +23,7 @@ from locales import Locales
 from broadcaster import Broadcaster
 from validator import Validator
 from rabbit import Rabbit
+from exceptions import NoCaptchaInQueue
 
 locator = Locator()
 mail_verifier = MailVerifier()
@@ -32,7 +34,7 @@ validator = Validator()
 rabbitmq = Rabbit()
 
 
-def get_value(data, key, placeholder=None):
+def get_value(data: dict, key: str, placeholder: str = None) -> Any:
     try:
         return get_text(data[key], placeholder)
     except KeyError:
@@ -185,14 +187,42 @@ async def compose_appeal(data, chat_id, message_id):
     }
 
 
-async def send_violation(state, username, chat_id, message_id):
+async def entering_captcha(message, state) -> None:
+    try:
+        captcha_data = await rabbitmq.get_captcha_url()
+
+        async with state.proxy() as data:
+            language = await get_ui_lang(data=data)
+            data['captcha_response_queue'] = captcha_data['answer_queue']
+            data['last_appeal_message_id'] = message.message_id
+            data['captcha_url'] = captcha_data['captcha']
+    except NoCaptchaInQueue:
+        await send_appeal(state,
+                          message.chat.username,
+                          message.chat.id,
+                          message.message_id)
+
+        return
+
+    text = locales.text(
+        language,
+        'invite_to_enter_captcha').format(captcha_data['captcha'])
+
+    await bot.send_message(message.chat.id,
+                           text,
+                           parse_mode='HTML')
+
+    await Form.entering_captcha.set()
+
+
+async def send_violation(state, username: str, chat_id: int, message_id: int):
     async with state.proxy() as data:
         appeal = await compose_appeal(data, chat_id, message_id)
         language = await get_ui_lang(data=data)
 
     try:
         await rabbitmq.send_appeal(appeal)
-        text = locales.text(language, 'letter_sent').format(config.CHANNEL)
+        text = locales.text(language, 'appeal_sent')
         logger.info('Обращение отправлено - ' + str(username))
 
         await send_appeal_textfile_to_user(appeal['text'], language, chat_id)
@@ -266,6 +296,9 @@ async def delete_prepared_violation(data, user_id):
     data['violation_location'] = []
     data['violation_datetime'] = ''
     data['caption'] = ''
+    data['captcha_response_queue'] = ''
+    data['last_appeal_message_id'] = 0
+    data['captcha_url'] = ''
 
     # также удалим временные файлы картинок нарушений
     uploader.clear_storage(user_id)
@@ -407,7 +440,7 @@ def get_photos_links(data):
     return text.strip()
 
 
-def get_appeal_text(data):
+def get_appeal_text(data: dict) -> str:
     violation_data = {
         'photos': get_photos_links(data),
         'vehicle_number': get_value(data, 'vehicle_number'),
@@ -662,6 +695,16 @@ async def save_violation_address(address, coordinates, data):
     data['violation_location'] = coordinates
 
 
+async def send_appeal(state, username, chat_id, message_id):
+    try:
+        await send_violation(state, username, chat_id, message_id)
+    finally:
+        async with state.proxy() as data:
+            await delete_prepared_violation(data, chat_id)
+
+        await Form.operational_mode.set()
+
+
 async def ask_for_violation_time(chat_id, language):
     current_time = get_str_current_time()
 
@@ -823,12 +866,14 @@ async def enter_last_name(message, state):
     await Form.sender_last_name.set()
 
 
-async def get_ui_lang(state=None, data=None):
+async def get_ui_lang(state=None, data: dict = None) -> str:
     if data:
         return get_value(data, 'ui_lang')
     elif state:
         async with state.proxy() as my_data:
             return get_value(my_data, 'ui_lang')
+
+    return config.RU
 
 
 async def show_personal_info(message: types.Message, state: FSMContext):
@@ -1371,7 +1416,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.violation_datetime,
                                   Form.violation_location,
                                   Form.sending_approvement,
-                                  Form.letter_sending,
+                                  Form.appeal_sending,
                                   Form.feedback,
                                   Form.feedback_answering,
                                   Form.caption])
@@ -1403,7 +1448,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
-                           state=Form.letter_sending)
+                           state=Form.entering_captcha)
 async def send_letter_in_progress(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
@@ -1416,18 +1461,17 @@ async def send_letter_in_progress(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.sending_approvement)
 async def send_letter_click(call, state: FSMContext):
-    logger.info('Отправляем письмо в ГАИ - ' +
+    logger.info('Нажата кнопка отправки в ГАИ - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await Form.letter_sending.set()
 
     language = await get_ui_lang(state)
 
     if await invalid_credentials(state):
         text = locales.text(language, 'need_personal_info')
 
-        logger.info('Письмо не отправлено, не введены личные данные - ' +
+        logger.info('Обращение не отправлено, не введены личные данные - ' +
                     str(call.from_user.username))
 
         await bot.send_message(call.message.chat.id, text)
@@ -1436,7 +1480,7 @@ async def send_letter_click(call, state: FSMContext):
             await delete_prepared_violation(data, call.message.chat.id)
 
     elif not await verified_email(state):
-        logger.info('Письмо не отправлено, email не подтвержден - ' +
+        logger.info('Обращение не отправлено, email не подтвержден - ' +
                     str(call.from_user.username))
 
         async with state.proxy() as data:
@@ -1444,16 +1488,8 @@ async def send_letter_click(call, state: FSMContext):
             await delete_prepared_violation(data, call.message.chat.id)
 
     else:
-        try:
-            await send_violation(state,
-                                 call.from_user.username,
-                                 call.message.chat.id,
-                                 call.message.message_id)
-        finally:
-            async with state.proxy() as data:
-                await delete_prepared_violation(data, call.message.chat.id)
-
-            await Form.operational_mode.set()
+        await entering_captcha(call.message, state)
+        return
 
     await Form.operational_mode.set()
 
@@ -2049,6 +2085,30 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
 
     await Form.sending_approvement.set()
     await approve_sending(message.chat.id, state)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.entering_captcha)
+async def catch_captcha(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод капчи - ' + str(message.chat.username))
+
+    await Form.appeal_sending.set()
+
+    async with state.proxy() as data:
+        body = {
+            'captcha_text': message.text,
+            'captcha_url': get_value(data, 'captcha_url'),
+            'user_id': message.from_user.id,
+        }
+
+        await rabbitmq.send_captcha_text(
+            body,
+            get_value(data, 'captcha_response_queue'))
+
+        await send_appeal(state,
+                          message.chat.username,
+                          message.chat.id,
+                          get_value(data, 'last_appeal_message_id'))
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.initial)

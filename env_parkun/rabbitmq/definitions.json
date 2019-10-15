@@ -92,6 +92,13 @@
             "arguments": {}
         },
         {
+            "name": "status",
+            "vhost": "parkun",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        },
+        {
             "name": "social_networks",
             "vhost": "parkun",
             "durable": true,
@@ -118,6 +125,14 @@
         {
             "source": "appeal",
             "vhost": "parkun",
+            "destination": "status",
+            "destination_type": "queue",
+            "routing_key": "appeal_status",
+            "arguments": {}
+        },
+        {
+            "source": "appeal",
+            "vhost": "parkun",
             "destination": "captcha",
             "destination_type": "queue",
             "routing_key": "captcha_pic",
@@ -129,7 +144,9 @@
             "destination": "url",
             "destination_type": "queue",
             "routing_key": "appeal_url",
-            "arguments": {}
+            "arguments": {
+                "x-message-ttl": 43200000
+            }
         },
         {
             "source": "sharing",
