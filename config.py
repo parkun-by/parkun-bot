@@ -70,8 +70,19 @@ TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
 # RabbitMQ
 RABBIT_LOGIN = 'parkun_bot'
 RABBIT_PASSWORD = 'parkun_bot'
-RABBIT_ADDRESS = f'http://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@localhost:15672'
+RABBIT_HTTP_ADDRESS = f'http://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@localhost:15672'
+RABBIT_AMQP_ADDRESS = f'amqp://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@localhost:5672'
 RABBIT_EXCHANGE_APPEAL = 'appeal'
 RABBIT_EXCHANGE_SHARING = 'sharing'
 RABBIT_QUEUE_CAPTCHA_URL = 'captcha'
 RABBIT_ROUTING_VIOLATION = 'violation'
+RABBIT_QUEUE_STATUS = 'status'
+
+# appeal status codes
+STATUS_CAPCHA = 'captcha'
+STATUS_APPEAL = 'appeal'
+
+# status codes
+OK = 'ok'
+FAIL = 'fail'
+WRONG_INPUT = 'wrong_input'

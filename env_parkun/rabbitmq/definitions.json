@@ -1,7 +1,7 @@
 {
     "vhosts": [
         {
-            "name": "parkun"
+            "name": "/"
         }
     ],
     "users": [
@@ -29,28 +29,28 @@
     "permissions": [
         {
             "user": "admin",
-            "vhost": "parkun",
+            "vhost": "/",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
         },
         {
             "user": "parkun_bot",
-            "vhost": "parkun",
+            "vhost": "/",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
         },
         {
             "user": "appeal_sender",
-            "vhost": "parkun",
+            "vhost": "/",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
         },
         {
             "user": "appeal_preparer",
-            "vhost": "parkun",
+            "vhost": "/",
             "configure": ".*",
             "write": ".*",
             "read": ".*"
@@ -59,7 +59,7 @@
     "exchanges": [
         {
             "name": "appeal",
-            "vhost": "parkun",
+            "vhost": "/",
             "type": "direct",
             "durable": true,
             "auto_delete": false,
@@ -68,7 +68,7 @@
         },
         {
             "name": "sharing",
-            "vhost": "parkun",
+            "vhost": "/",
             "type": "fanout",
             "durable": true,
             "auto_delete": false,
@@ -79,35 +79,35 @@
     "queues": [
         {
             "name": "to_police",
-            "vhost": "parkun",
+            "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
             "name": "captcha",
-            "vhost": "parkun",
+            "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
             "name": "status",
-            "vhost": "parkun",
+            "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
             "name": "social_networks",
-            "vhost": "parkun",
+            "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
             "name": "url",
-            "vhost": "parkun",
+            "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
@@ -116,7 +116,7 @@
     "bindings": [
         {
             "source": "appeal",
-            "vhost": "parkun",
+            "vhost": "/",
             "destination": "to_police",
             "destination_type": "queue",
             "routing_key": "violation",
@@ -124,7 +124,7 @@
         },
         {
             "source": "appeal",
-            "vhost": "parkun",
+            "vhost": "/",
             "destination": "status",
             "destination_type": "queue",
             "routing_key": "appeal_status",
@@ -132,7 +132,7 @@
         },
         {
             "source": "appeal",
-            "vhost": "parkun",
+            "vhost": "/",
             "destination": "captcha",
             "destination_type": "queue",
             "routing_key": "captcha_pic",
@@ -140,7 +140,7 @@
         },
         {
             "source": "appeal",
-            "vhost": "parkun",
+            "vhost": "/",
             "destination": "url",
             "destination_type": "queue",
             "routing_key": "appeal_url",
@@ -150,7 +150,7 @@
         },
         {
             "source": "sharing",
-            "vhost": "parkun",
+            "vhost": "/",
             "destination": "social_networks",
             "destination_type": "queue",
             "routing_key": "*",
