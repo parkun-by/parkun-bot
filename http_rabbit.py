@@ -15,8 +15,8 @@ class Rabbit:
                     exchange_name: str,
                     routing_key: str,
                     body: dict) -> None:
-        url = config.RABBIT_ADDRESS + \
-            f'/api/exchanges/parkun/{exchange_name}/publish'
+        url = config.RABBIT_HTTP_ADDRESS + \
+            f'/api/exchanges/%2F/{exchange_name}/publish'
 
         data = {
             'properties': {},
@@ -46,8 +46,8 @@ class Rabbit:
                          body)
 
     async def get_captcha_url(self) -> dict:
-        url = config.RABBIT_ADDRESS + \
-            f'/api/queues/parkun/{config.RABBIT_QUEUE_CAPTCHA_URL}/get'
+        url = config.RABBIT_HTTP_ADDRESS + \
+            f'/api/queues/%2F/{config.RABBIT_QUEUE_CAPTCHA_URL}/get'
 
         data = {
             'count': 1,

@@ -1,6 +1,7 @@
 import asyncio
 import io
 import logging
+import json
 from datetime import datetime
 from os import path
 from typing import Any
@@ -22,7 +23,8 @@ from uploader import Uploader
 from locales import Locales
 from broadcaster import Broadcaster
 from validator import Validator
-from rabbit import Rabbit
+from http_rabbit import Rabbit as HTTPRabbit
+from amqp_rabbit import Rabbit as AMQPRabbit
 from exceptions import NoCaptchaInQueue
 
 locator = Locator()
@@ -31,7 +33,8 @@ uploader = Uploader()
 semaphore = asyncio.Semaphore()
 locales = Locales()
 validator = Validator()
-rabbitmq = Rabbit()
+http_rabbit = HTTPRabbit()
+amqp_rabbit = AMQPRabbit()
 
 
 def get_value(data: dict, key: str, placeholder: str = None) -> Any:
@@ -187,9 +190,55 @@ async def compose_appeal(data, chat_id, message_id):
     }
 
 
+async def fill_captcha_again(user_id):
+    state = dp.current_state(chat=user_id, user=user_id)
+
+    async with state.proxy() as data:
+        # сохраним состояние, чтобы к нему вернуться
+        current_state = await state.get_state()
+        data['saved_state'] = current_state
+
+        language = await get_ui_lang(data=data)
+
+        text = locales.text(language, 'appeal_preparing_failed')
+        await bot.send_message(user_id, text)
+
+        try:
+            captcha_data = await http_rabbit.get_captcha_url()
+            data['captcha_response_queue'] = captcha_data['answer_queue']
+            data['captcha_url'] = captcha_data['captcha']
+        except NoCaptchaInQueue:
+            return
+
+    text = locales.text(
+        language,
+        'invite_to_enter_captcha').format(captcha_data['captcha'])
+
+    await bot.send_message(user_id, text, parse_mode='HTML')
+    await state.set_state(Form.entering_captcha_again)
+
+
+async def process_captcha_status(status: dict) -> None:
+    if status['status'] != config.OK:
+        await fill_captcha_again(status['user_id'])
+
+
+async def process_appeal_status(status: dict) -> None:
+    pass
+
+
+async def status_received(status: str) -> None:
+    data = json.loads(status)
+
+    if data['type'] == config.STATUS_CAPCHA:
+        await process_captcha_status(data)
+    elif data['type'] == config.STATUS_APPEAL:
+        await process_appeal_status(data)
+
+
 async def entering_captcha(message, state) -> None:
     try:
-        captcha_data = await rabbitmq.get_captcha_url()
+        captcha_data = await http_rabbit.get_captcha_url()
 
         async with state.proxy() as data:
             language = await get_ui_lang(data=data)
@@ -221,7 +270,7 @@ async def send_violation(state, username: str, chat_id: int, message_id: int):
         language = await get_ui_lang(data=data)
 
     try:
-        await rabbitmq.send_appeal(appeal)
+        await http_rabbit.send_appeal(appeal)
         text = locales.text(language, 'appeal_sent')
         logger.info('Обращение отправлено - ' + str(username))
 
@@ -2101,7 +2150,7 @@ async def catch_captcha(message: types.Message, state: FSMContext):
             'user_id': message.from_user.id,
         }
 
-        await rabbitmq.send_captcha_text(
+        await http_rabbit.send_captcha_text(
             body,
             get_value(data, 'captcha_response_queue'))
 
@@ -2109,6 +2158,35 @@ async def catch_captcha(message: types.Message, state: FSMContext):
                           message.chat.username,
                           message.chat.id,
                           get_value(data, 'last_appeal_message_id'))
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.entering_captcha_again)
+async def catch_captcha(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем повторный ввод капчи - ' +
+                str(message.chat.username))
+
+    async with state.proxy() as data:
+        body = {
+            'captcha_text': message.text,
+            'captcha_url': get_value(data, 'captcha_url'),
+            'user_id': message.from_user.id,
+        }
+
+        await http_rabbit.send_captcha_text(
+            body,
+            get_value(data, 'captcha_response_queue'))
+
+        if 'saved_state' in data:
+            if get_value(data, 'saved_state') is not None:
+                saved_state = get_value(data, 'saved_state')
+                await state.set_state(saved_state)
+                data['saved_state'] = None
+        else:
+            language = await get_ui_lang(data=data)
+            text = locales.text(language, 'operation_mode')
+            await bot.send_message(message.chat.id, text)
+            Form.operational_mode.set()
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.initial)
@@ -2165,7 +2243,9 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_house,
                            Form.sender_block,
                            Form.sender_flat,
-                           Form.sender_zipcode])
+                           Form.sender_zipcode,
+                           Form.entering_captcha_again,
+                           Form.entering_captcha])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
                 str(message.from_user.username))
@@ -2181,6 +2261,9 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
     logger.info('Загрузили.')
+    logger.info('Подключаемся к очереди статусов обращений.')
+    asyncio.ensure_future(amqp_rabbit.connect(loop, status_received))
+    logger.info('Подключились.')
 
 
 async def shutdown(dispatcher: Dispatcher):
