@@ -173,6 +173,7 @@ async def send_violation_to_channel(data):
 
 async def compose_appeal(data, chat_id, message_id):
     return {
+        'type': config.APPEAL,
         'text': get_appeal_text(data),
         'police_department':
             config.DEPARTMENT_NAMES[get_value(data, 'recipient')],
@@ -185,12 +186,21 @@ async def compose_appeal(data, chat_id, message_id):
         'sender_block': get_value(data, 'sender_block'),
         'sender_flat': get_value(data, 'sender_flat'),
         'sender_zipcode': get_value(data, 'sender_zipcode'),
-        'sender_id': chat_id,
+        'user_id': chat_id,
         'appeal_id': message_id,
+        'captcha_url': get_value(data, 'captcha_url'),
+        'captcha_text': get_value(data, 'captcha_text'),
     }
 
 
-async def fill_captcha_again(user_id):
+async def send_success_sending(user_id):
+    state = dp.current_state(chat=user_id, user=user_id)
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'successful_sending')
+    await bot.send_message(user_id, text, parse_mode='HTML')
+
+
+async def fill_captcha_again(user_id: int) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
@@ -205,7 +215,7 @@ async def fill_captcha_again(user_id):
 
         try:
             captcha_data = await http_rabbit.get_captcha_url()
-            data['captcha_response_queue'] = captcha_data['answer_queue']
+            data['appeal_response_queue'] = captcha_data['answer_queue']
             data['captcha_url'] = captcha_data['captcha']
         except NoCaptchaInQueue:
             return
@@ -218,22 +228,13 @@ async def fill_captcha_again(user_id):
     await state.set_state(Form.entering_captcha_again)
 
 
-async def process_captcha_status(status: dict) -> None:
-    if status['status'] != config.OK:
-        await fill_captcha_again(status['user_id'])
-
-
-async def process_appeal_status(status: dict) -> None:
-    pass
-
-
 async def status_received(status: str) -> None:
     data = json.loads(status)
 
-    if data['type'] == config.STATUS_CAPCHA:
-        await process_captcha_status(data)
-    elif data['type'] == config.STATUS_APPEAL:
-        await process_appeal_status(data)
+    if data['status'] == config.CAPTCHA:
+        await fill_captcha_again(data['user_id'])
+    elif data['status'] == config.OK:
+        await send_success_sending(data['user_id'])
 
 
 async def entering_captcha(message, state) -> None:
@@ -242,7 +243,7 @@ async def entering_captcha(message, state) -> None:
 
         async with state.proxy() as data:
             language = await get_ui_lang(data=data)
-            data['captcha_response_queue'] = captcha_data['answer_queue']
+            data['appeal_response_queue'] = captcha_data['answer_queue']
             data['last_appeal_message_id'] = message.message_id
             data['captcha_url'] = captcha_data['captcha']
     except NoCaptchaInQueue:
@@ -267,10 +268,11 @@ async def entering_captcha(message, state) -> None:
 async def send_violation(state, username: str, chat_id: int, message_id: int):
     async with state.proxy() as data:
         appeal = await compose_appeal(data, chat_id, message_id)
+        respond_queue = get_value(data, 'appeal_response_queue')
         language = await get_ui_lang(data=data)
 
     try:
-        await http_rabbit.send_appeal(appeal)
+        await http_rabbit.send_appeal(appeal, respond_queue)
         text = locales.text(language, 'appeal_sent')
         logger.info('Обращение отправлено - ' + str(username))
 
@@ -345,9 +347,10 @@ async def delete_prepared_violation(data, user_id):
     data['violation_location'] = []
     data['violation_datetime'] = ''
     data['caption'] = ''
-    data['captcha_response_queue'] = ''
+    data['appeal_response_queue'] = ''
     data['last_appeal_message_id'] = 0
     data['captcha_url'] = ''
+    data['captcha_text'] = ''
 
     # также удалим временные файлы картинок нарушений
     uploader.clear_storage(user_id)
@@ -935,7 +938,6 @@ async def show_personal_info(message: types.Message, state: FSMContext):
         full_name = get_sender_full_name(data) or empty_input
         email = get_value(data, 'sender_email', empty_input)
         address = get_sender_address(data) or empty_input
-        zipcode = get_value(data, 'sender_zipcode', empty_input)
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
             locales.text(language, 'sender_name') + f' <b>{full_name}</b>' +\
@@ -1985,6 +1987,10 @@ async def catch_sender_flat(message: types.Message, state: FSMContext):
 async def catch_sender_zipcode(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод индекса - ' +
                 str(message.from_user.username))
+    language = await get_ui_lang(state)
+
+    if not await check_validity(validator.zipcode, message, language):
+        return
 
     async with state.proxy() as data:
         data['sender_zipcode'] = message.text
@@ -2144,20 +2150,12 @@ async def catch_captcha(message: types.Message, state: FSMContext):
     await Form.appeal_sending.set()
 
     async with state.proxy() as data:
-        body = {
-            'captcha_text': message.text,
-            'captcha_url': get_value(data, 'captcha_url'),
-            'user_id': message.from_user.id,
-        }
+        data['captcha_text'] = message.text
 
-        await http_rabbit.send_captcha_text(
-            body,
-            get_value(data, 'captcha_response_queue'))
-
-        await send_appeal(state,
-                          message.chat.username,
-                          message.chat.id,
-                          get_value(data, 'last_appeal_message_id'))
+    await send_appeal(state,
+                      message.chat.username,
+                      message.chat.id,
+                      get_value(data, 'last_appeal_message_id'))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2168,6 +2166,7 @@ async def catch_captcha(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         body = {
+            'type': config.CAPTCHA,
             'captcha_text': message.text,
             'captcha_url': get_value(data, 'captcha_url'),
             'user_id': message.from_user.id,
@@ -2175,10 +2174,11 @@ async def catch_captcha(message: types.Message, state: FSMContext):
 
         await http_rabbit.send_captcha_text(
             body,
-            get_value(data, 'captcha_response_queue'))
+            get_value(data, 'appeal_response_queue'))
 
         if 'saved_state' in data:
-            if get_value(data, 'saved_state') is not None:
+            if get_value(data, 'saved_state') not in \
+                                        [None, Form.entering_captcha_again]:
                 saved_state = get_value(data, 'saved_state')
                 await state.set_state(saved_state)
                 data['saved_state'] = None

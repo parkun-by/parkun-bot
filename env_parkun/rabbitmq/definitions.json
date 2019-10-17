@@ -78,13 +78,6 @@
     ],
     "queues": [
         {
-            "name": "to_police",
-            "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "arguments": {}
-        },
-        {
             "name": "captcha",
             "vhost": "/",
             "durable": true,
@@ -104,24 +97,9 @@
             "durable": true,
             "auto_delete": false,
             "arguments": {}
-        },
-        {
-            "name": "url",
-            "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "arguments": {}
         }
     ],
     "bindings": [
-        {
-            "source": "appeal",
-            "vhost": "/",
-            "destination": "to_police",
-            "destination_type": "queue",
-            "routing_key": "violation",
-            "arguments": {}
-        },
         {
             "source": "appeal",
             "vhost": "/",
@@ -137,16 +115,6 @@
             "destination_type": "queue",
             "routing_key": "captcha_pic",
             "arguments": {}
-        },
-        {
-            "source": "appeal",
-            "vhost": "/",
-            "destination": "url",
-            "destination_type": "queue",
-            "routing_key": "appeal_url",
-            "arguments": {
-                "x-message-ttl": 43200000
-            }
         },
         {
             "source": "sharing",

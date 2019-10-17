@@ -30,9 +30,9 @@ class Rabbit:
                 raise ErrorWhilePutInQueue(
                     f'Ошибка при отправке обращения: {response.reason}')
 
-    async def send_appeal(self, body: dict) -> None:
+    async def send_appeal(self, body: dict, routing_key: str) -> None:
         await self._send(config.RABBIT_EXCHANGE_APPEAL,
-                         config.RABBIT_ROUTING_VIOLATION,
+                         routing_key,
                          body)
 
     async def send_sharing(self, body: dict) -> None:
