@@ -78,9 +78,9 @@ RABBIT_QUEUE_CAPTCHA_URL = 'captcha'
 RABBIT_ROUTING_VIOLATION = 'violation'
 RABBIT_QUEUE_STATUS = 'status'
 
-# appeal status codes
-STATUS_CAPCHA = 'captcha'
-STATUS_APPEAL = 'appeal'
+# appeal sending types
+CAPTCHA = 'captcha'
+APPEAL = 'appeal'
 
 # status codes
 OK = 'ok'
