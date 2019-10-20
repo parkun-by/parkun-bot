@@ -74,13 +74,17 @@ RABBIT_HTTP_ADDRESS = f'http://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@localhost:15672'
 RABBIT_AMQP_ADDRESS = f'amqp://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@localhost:5672'
 RABBIT_EXCHANGE_APPEAL = 'appeal'
 RABBIT_EXCHANGE_SHARING = 'sharing'
-RABBIT_QUEUE_CAPTCHA_URL = 'captcha'
+RABBIT_QUEUE_TO_BOT = 'to_bot'
 RABBIT_ROUTING_VIOLATION = 'violation'
 RABBIT_QUEUE_STATUS = 'status'
 
-# appeal sending types
-CAPTCHA = 'captcha'
+# preparer messages types
+CAPTCHA_TEXT = 'captcha_text'
+CAPTCHA_URL = 'captcha_url'
+CAPTCHA_FAIL = 'captcha_fail'
+GET_CAPTCHA = 'get_captcha'
 APPEAL = 'appeal'
+CAPTCHA_OK = 'captcha_ok'
 
 # status codes
 OK = 'ok'

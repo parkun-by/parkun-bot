@@ -4,3 +4,7 @@ class ErrorWhilePutInQueue(Exception):
 
 class NoCaptchaInQueue(Exception):
     pass
+
+
+class NoFreePreparerInQueue(Exception):
+    pass

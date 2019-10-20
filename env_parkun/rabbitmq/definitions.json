@@ -78,7 +78,7 @@
     ],
     "queues": [
         {
-            "name": "captcha",
+            "name": "to_bot",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
@@ -111,9 +111,9 @@
         {
             "source": "appeal",
             "vhost": "/",
-            "destination": "captcha",
+            "destination": "to_bot",
             "destination_type": "queue",
-            "routing_key": "captcha_pic",
+            "routing_key": "to_bot",
             "arguments": {}
         },
         {
