@@ -106,6 +106,24 @@ def get_text(raw_text, placeholder):
     return raw_text
 
 
+def save_captcha_data(data: dict, captcha_url: str, appeal_id: int) -> None:
+    # сохраним состояние, чтобы к нему вернуться
+    data['captcha_data'].append((captcha_url, appeal_id))
+
+
+def pop_captcha_data(data: dict) -> (str, int):
+    return data['captcha_data'].pop()
+
+
+def save_state(data: dict, state) -> None:
+    # сохраним состояние, чтобы к нему вернуться
+    data['saved_states'].append(state)
+
+
+def pop_state(data: dict) -> FSMContext:
+    return data['saved_states'].pop()
+
+
 async def invite_to_fill_credentials(chat_id, state):
     language = await get_ui_lang(state)
     text = locales.text(language, 'first_steps')
@@ -171,7 +189,9 @@ async def send_violation_to_channel(data):
                                          caption)
 
 
-async def compose_appeal(data, chat_id, message_id):
+async def compose_appeal(data: dict,
+                         chat_id: int,
+                         message_id: int) -> dict:
     return {
         'type': config.APPEAL,
         'text': get_appeal_text(data),
@@ -188,105 +208,108 @@ async def compose_appeal(data, chat_id, message_id):
         'sender_zipcode': get_value(data, 'sender_zipcode'),
         'user_id': chat_id,
         'appeal_id': message_id,
-        'captcha_url': get_value(data, 'captcha_url'),
-        'captcha_text': get_value(data, 'captcha_text'),
     }
 
 
-async def send_success_sending(user_id):
+async def send_success_sending(user_id: int, appeal_id: int) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
     text = locales.text(language, 'successful_sending')
-    await bot.send_message(user_id, text, parse_mode='HTML')
+    await bot.send_message(user_id,
+                           text,
+                           parse_mode='HTML',
+                           reply_to_message_id=appeal_id)
+
+    async with state.proxy() as data:
+        delete_appeal_from_user_queue(data, appeal_id)
 
 
-async def fill_captcha_again(user_id: int) -> None:
+async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
-        # сохраним состояние, чтобы к нему вернуться
-        current_state = await state.get_state()
-        data['saved_state'] = current_state
-
+        save_state(data, await state.get_state())
+        save_captcha_data(data, captcha_url, appeal_id)
         language = await get_ui_lang(data=data)
 
-        text = locales.text(language, 'appeal_preparing_failed')
-        await bot.send_message(user_id, text)
+    text = locales.text(language,
+                        'invite_to_enter_captcha').format(captcha_url)
 
-        try:
-            captcha_data = await http_rabbit.get_captcha_url()
-            data['appeal_response_queue'] = captcha_data['answer_queue']
-            data['captcha_url'] = captcha_data['captcha']
-        except NoCaptchaInQueue:
-            return
+    await bot.send_message(user_id,
+                           text,
+                           parse_mode='HTML',
+                           reply_to_message_id=appeal_id)
 
-    text = locales.text(
-        language,
-        'invite_to_enter_captcha').format(captcha_data['captcha'])
+    await state.set_state(Form.entering_captcha)
 
-    await bot.send_message(user_id, text, parse_mode='HTML')
-    await state.set_state(Form.entering_captcha_again)
+
+async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
+    state = dp.current_state(chat=user_id, user=user_id)
+
+    async with state.proxy() as data:
+        appeal = get_appeal_from_user_queue(data, appeal_id)
+        await http_rabbit.send_appeal(appeal, user_id, answer_queue)
 
 
 async def status_received(status: str) -> None:
     data = json.loads(status)
 
-    if data['status'] == config.CAPTCHA:
-        await fill_captcha_again(data['user_id'])
-    elif data['status'] == config.OK:
-        await send_success_sending(data['user_id'])
+    if data['type'] == config.OK:
+        await send_success_sending(data['user_id'], data['appeal_id'])
+    elif data['type'] == config.CAPTCHA_URL:
+        await fill_captcha(data['user_id'], data['appeal_id'], data['captcha'])
+    elif data['type'] == config.CAPTCHA_OK:
+        await send_appeal(data['user_id'],
+                          data['answer_queue'],
+                          data['appeal_id'])
 
 
-async def entering_captcha(message, state) -> None:
-    try:
-        captcha_data = await http_rabbit.get_captcha_url()
+async def entering_captcha(message, appeal_id: int, state) -> None:
+    preparer_queue = await http_rabbit.get_preparer()
 
-        async with state.proxy() as data:
-            language = await get_ui_lang(data=data)
-            data['appeal_response_queue'] = captcha_data['answer_queue']
-            data['last_appeal_message_id'] = message.message_id
-            data['captcha_url'] = captcha_data['captcha']
-    except NoCaptchaInQueue:
-        await send_appeal(state,
-                          message.chat.username,
-                          message.chat.id,
-                          message.message_id)
-
+    if not preparer_queue:
+        await bot.send_message(
+            message.chat.id,
+            'Нет свободных обработчиков, попробуйте нажать кнопку позже.',
+            parse_mode='HTML')
         return
 
-    text = locales.text(
-        language,
-        'invite_to_enter_captcha').format(captcha_data['captcha'])
+    await http_rabbit.ask_for_captcha_url(message.chat.id,
+                                          appeal_id,
+                                          preparer_queue)
 
-    await bot.send_message(message.chat.id,
-                           text,
-                           parse_mode='HTML')
-
-    await Form.entering_captcha.set()
-
-
-async def send_violation(state, username: str, chat_id: int, message_id: int):
     async with state.proxy() as data:
-        appeal = await compose_appeal(data, chat_id, message_id)
-        respond_queue = get_value(data, 'appeal_response_queue')
+        data['appeal_response_queue'] = preparer_queue
+        language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'appeal_sent')
+    logger.info('Обращение отправлено - ' + str(message.chat.username))
+    await bot.send_message(message.chat.id, text)
+    await Form.operational_mode.set()
+
+
+async def send_captcha_text(state: FSMContext,
+                            chat_id: int,
+                            captcha_text: str,
+                            appeal_id: int) -> None:
+    async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
     try:
-        await http_rabbit.send_appeal(appeal, respond_queue)
-        text = locales.text(language, 'appeal_sent')
-        logger.info('Обращение отправлено - ' + str(username))
-
-        await send_appeal_textfile_to_user(appeal['text'], language, chat_id)
+        await http_rabbit.send_captcha_text(
+            captcha_text,
+            chat_id,
+            appeal_id,
+            get_value(data, 'appeal_response_queue'))
 
     except Exception as exc:
         text = locales.text(language, 'sending_failed') + '\n' + str(exc)
         logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
+        await bot.send_message(chat_id, text)
 
-    await bot.send_message(chat_id, text)
-
-    async with state.proxy() as data:
-        await send_violation_to_channel(data)
-        await broadcaster.share(data)
+    # async with state.proxy() as data:
+    #     await send_violation_to_channel(data)
+    #     await broadcaster.share(data)
 
 
 def ensure_attachments_availability(data):
@@ -348,9 +371,6 @@ async def delete_prepared_violation(data, user_id):
     data['violation_datetime'] = ''
     data['caption'] = ''
     data['appeal_response_queue'] = ''
-    data['last_appeal_message_id'] = 0
-    data['captcha_url'] = ''
-    data['captcha_text'] = ''
 
     # также удалим временные файлы картинок нарушений
     uploader.clear_storage(user_id)
@@ -367,8 +387,10 @@ def get_default_value(key):
         'letter_lang': config.RU,
         'ui_lang': config.BY,
         'recipient': config.MINSK,
-        'saved_state': None,
+        'saved_states': [],
+        'captcha_data': [],
         'attachments': [],
+        'appeals': {},
         'photo_id': [],
         'photo_files_paths': [],
         'photos_amount': 0,
@@ -399,8 +421,10 @@ def set_default_sender_info(data):
     set_default(data, 'ui_lang')
     set_default(data, 'recipient')
     set_default(data, 'previous_violation_address')
-    set_default(data, 'saved_state')
+    set_default(data, 'saved_states')
+    set_default(data, 'captcha_data')
     set_default(data, 'attachments')
+    set_default(data, 'appeals')
     set_default(data, 'photo_id')
     set_default(data, 'photo_files_paths')
     set_default(data, 'photos_amount')
@@ -436,6 +460,23 @@ def get_sender_address(data):
         flat = f'кв.{flat}'
 
     return f'{zipcode}, {city}, {street}, {house}, {block}, {flat}'.strip()
+
+
+def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
+    appeals = get_value(data, 'appeals')
+    appeals[appeal_id] = appeal
+    data['appeals'] = appeals
+
+
+def get_appeal_from_user_queue(data: dict, appeal_id: int) -> dict:
+    appeals = get_value(data, 'appeals')
+    return appeals[str(appeal_id)]
+
+
+def delete_appeal_from_user_queue(data: dict, appeal_id: int) -> None:
+    appeals = get_value(data, 'appeals')
+    appeals.pop(str(appeal_id))
+    data['appeals'] = appeals
 
 
 async def compose_summary(data):
@@ -745,16 +786,6 @@ async def print_violation_address_info(region, address, chat_id, language):
 async def save_violation_address(address, coordinates, data):
     data['violation_address'] = address
     data['violation_location'] = coordinates
-
-
-async def send_appeal(state, username, chat_id, message_id):
-    try:
-        await send_violation(state, username, chat_id, message_id)
-    finally:
-        async with state.proxy() as data:
-            await delete_prepared_violation(data, chat_id)
-
-        await Form.operational_mode.set()
 
 
 async def ask_for_violation_time(chat_id, language):
@@ -1412,10 +1443,7 @@ async def add_caption_click(call, state: FSMContext):
     async with state.proxy() as data:
         # зададим сразу пустое примечание
         set_default(data, 'caption')
-
-        # сохраним состояние, чтобы к нему вернуться
-        current_state = await state.get_state()
-        data['saved_state'] = current_state
+        save_state(data, await state.get_state())
 
         language = await get_ui_lang(data=data)
 
@@ -1438,11 +1466,7 @@ async def answer_feedback_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        # сохраняем текущее состояние
-        current_state = await state.get_state()
-
-        if current_state != Form.feedback_answering.state:
-            data['saved_state'] = current_state
+        save_state(data, await state.get_state())
 
         # сохраняем адресата
         data['feedback_post'] = call.message.text
@@ -1467,10 +1491,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.violation_datetime,
                                   Form.violation_location,
                                   Form.sending_approvement,
-                                  Form.appeal_sending,
-                                  Form.feedback,
-                                  Form.feedback_answering,
-                                  Form.caption])
+                                  Form.appeal_sending])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.username))
@@ -1479,19 +1500,33 @@ async def cancel_violation_input(call, state: FSMContext):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-
-        if 'saved_state' in data:
-            if get_value(data, 'saved_state') is not None:
-                saved_state = get_value(data, 'saved_state')
-                await state.set_state(saved_state)
-                data['saved_state'] = None
-
-                text = locales.text(language, 'continue_work')
-                await bot.send_message(call.message.chat.id, text)
-                return
-
         await delete_prepared_violation(data, call.message.chat.id)
+
+    text = locales.text(language, 'operation_mode')
+    await bot.send_message(call.message.chat.id, text)
+    await Form.operational_mode.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/cancel',
+                           state=[Form.feedback,
+                                  Form.feedback_answering,
+                                  Form.caption])
+async def cancel_input(call, state: FSMContext):
+    logger.info('Отмена, возврат в предыдущий режим - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        previous_state = pop_state(data)
         data['feedback_post'] = ''
+
+        if previous_state:
+            await state.set_state(previous_state)
+            text = locales.text(language, 'continue_work')
+            await bot.send_message(call.message.chat.id, text)
+            return
 
     text = locales.text(language, 'operation_mode')
     await bot.send_message(call.message.chat.id, text)
@@ -1539,7 +1574,15 @@ async def send_letter_click(call, state: FSMContext):
             await delete_prepared_violation(data, call.message.chat.id)
 
     else:
-        await entering_captcha(call.message, state)
+        async with state.proxy() as data:
+            appeal = await compose_appeal(data,
+                                          call.message.chat.id,
+                                          call.message.message_id)
+
+            add_appeal_to_user_queue(data, appeal, call.message.message_id)
+            await delete_prepared_violation(data, call.message.chat.id)
+
+        await entering_captcha(call.message, call.message.message_id, state)
         return
 
     await Form.operational_mode.set()
@@ -1710,7 +1753,7 @@ async def write_feedback(message: types.Message, state: FSMContext):
         current_state = await state.get_state()
 
         if current_state != Form.feedback.state:
-            data['saved_state'] = current_state
+            save_state(data, current_state)
 
         language = await get_ui_lang(data=data)
         text = locales.text(language, 'input_feedback')
@@ -1751,9 +1794,8 @@ async def catch_feedback(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, text)
 
     async with state.proxy() as data:
-        saved_state = get_value(data, 'saved_state')
+        saved_state = pop_state(data)
         await state.set_state(saved_state)
-        data['saved_state'] = None
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -1771,9 +1813,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
                                message.text,
                                reply_to_message_id=feedback_message_id)
 
-        await state.set_state(get_value(data, 'saved_state'))
-        data['saved_state'] = None
-
+        await state.set_state(pop_state(data))
         language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'continue_work')
@@ -2073,7 +2113,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        data['saved_state'] = None
+        pop_state(data)
         data['caption'] = message.text.strip()
 
     await Form.sending_approvement.set()
@@ -2150,43 +2190,18 @@ async def catch_captcha(message: types.Message, state: FSMContext):
     await Form.appeal_sending.set()
 
     async with state.proxy() as data:
-        data['captcha_text'] = message.text
+        captcha_url, appeal_id = pop_captcha_data(data)
 
-    await send_appeal(state,
-                      message.chat.username,
-                      message.chat.id,
-                      get_value(data, 'last_appeal_message_id'))
+        await send_captcha_text(state,
+                                message.chat.id,
+                                message.text,
+                                appeal_id)
 
+        await state.set_state(pop_state(data))
+        language = await get_ui_lang(data=data)
 
-@dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.entering_captcha_again)
-async def catch_captcha(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем повторный ввод капчи - ' +
-                str(message.chat.username))
-
-    async with state.proxy() as data:
-        body = {
-            'type': config.CAPTCHA,
-            'captcha_text': message.text,
-            'captcha_url': get_value(data, 'captcha_url'),
-            'user_id': message.from_user.id,
-        }
-
-        await http_rabbit.send_captcha_text(
-            body,
-            get_value(data, 'appeal_response_queue'))
-
-        if 'saved_state' in data:
-            if get_value(data, 'saved_state') not in \
-                                        [None, Form.entering_captcha_again]:
-                saved_state = get_value(data, 'saved_state')
-                await state.set_state(saved_state)
-                data['saved_state'] = None
-        else:
-            language = await get_ui_lang(data=data)
-            text = locales.text(language, 'operation_mode')
-            await bot.send_message(message.chat.id, text)
-            Form.operational_mode.set()
+    text = locales.text(language, 'continue_work')
+    await bot.send_message(message.chat.id, text)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.initial)
@@ -2244,7 +2259,6 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_block,
                            Form.sender_flat,
                            Form.sender_zipcode,
-                           Form.entering_captcha_again,
                            Form.entering_captcha])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
