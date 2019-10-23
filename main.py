@@ -107,7 +107,7 @@ def get_text(raw_text, placeholder):
 
 
 def save_captcha_data(data: dict, captcha_url: str, appeal_id: int) -> None:
-    # сохраним состояние, чтобы к нему вернуться
+    get_value(data, 'captcha_data')
     data['captcha_data'].append((captcha_url, appeal_id))
 
 
@@ -116,7 +116,7 @@ def pop_captcha_data(data: dict) -> (str, int):
 
 
 def save_state(data: dict, state) -> None:
-    # сохраним состояние, чтобы к нему вернуться
+    get_value(data, 'saved_states')
     data['saved_states'].append(state)
 
 
