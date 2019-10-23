@@ -45,6 +45,20 @@ class Rabbit:
                          routing_key,
                          body)
 
+    async def send_cancel(self,
+                          appeal_id: int,
+                          user_id: int,
+                          routing_key: str) -> None:
+        body = {
+            'type': config.CANCEL,
+            'appeal_id': appeal_id,
+            'user_id': user_id,
+        }
+
+        await self._send(config.RABBIT_EXCHANGE_APPEAL,
+                         routing_key,
+                         body)
+
     async def send_sharing(self, body: dict) -> None:
         await self._send(config.RABBIT_EXCHANGE_SHARING,
                          config.RABBIT_ROUTING_VIOLATION,
