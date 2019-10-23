@@ -220,7 +220,7 @@ async def compose_appeal(data: dict,
 
 
 async def send_success_sending(user_id: int, appeal_id: int) -> None:
-    logger.error(f'Успешно отправлено - {str(user_id)}')
+    logger.info(f'Успешно отправлено - {str(user_id)}')
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
     text = locales.text(language, 'successful_sending')
@@ -250,7 +250,7 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
 
 
 async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
-    logger.error(f'Приглашаем заполнить капчу - {user_id}')
+    logger.info(f'Приглашаем заполнить капчу - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
@@ -279,7 +279,7 @@ async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
 
 
 async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
-    logger.error(f'Шлем обращение - {user_id}')
+    logger.info(f'Шлем обращение - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
@@ -289,7 +289,7 @@ async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
 
 async def status_received(status: str) -> None:
     data = json.loads(status)
-    logger.error(f'Прилетел статус - {str(data["user_id"])}: {data["type"]}')
+    logger.info(f'Прилетел статус - {str(data["user_id"])}: {data["type"]}')
 
     if data['type'] == config.OK:
         await send_success_sending(data['user_id'], data['appeal_id'])
@@ -303,13 +303,24 @@ async def status_received(status: str) -> None:
 
 async def entering_captcha(message, appeal_id: int, state) -> None:
     preparer_queue = await http_rabbit.get_preparer()
+    language = await get_ui_lang(state)
 
     if not preparer_queue:
         logger.error(f'Куда-то делись воркеры - {message.chat.id}')
 
+        keyboard = types.InlineKeyboardMarkup()
+
+        approve_sending_button = types.InlineKeyboardButton(
+            text=locales.text(language, 'approve_sending_button'),
+            callback_data='/approve_sending')
+
+        keyboard.add(approve_sending_button)
+
         await bot.send_message(
             message.chat.id,
-            'Нет свободных обработчиков, попробуйте нажать кнопку позже.',
+            locales.text(language, 'no_free_workers'),
+            reply_markup=keyboard,
+            reply_to_message_id=appeal_id,
             parse_mode='HTML')
         return
 
@@ -319,7 +330,6 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
 
     async with state.proxy() as data:
         data['appeal_response_queue'] = preparer_queue
-        language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'appeal_sent')
 
@@ -334,7 +344,7 @@ async def send_captcha_text(state: FSMContext,
                             chat_id: int,
                             captcha_text: str,
                             appeal_id: int) -> None:
-    logger.error(f'Посылаем текст капчи - {chat_id}')
+    logger.info(f'Посылаем текст капчи - {chat_id}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -594,7 +604,9 @@ async def approve_sending(chat_id, state):
 
     async with state.proxy() as data:
         text = await compose_summary(data)
-        await send_photos_group_with_caption(data, chat_id)
+
+        await send_photos_group_with_caption(get_value(data, 'photo_id'),
+                                             chat_id)
 
         if get_value(data, 'caption'):
             caption_button_text = locales.text(language,

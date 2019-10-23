@@ -116,7 +116,7 @@ class Rabbit:
 
             return data
 
-    async def get_preparer(self) -> str:
+    async def get_preparer(self) -> str or None:
         url = config.RABBIT_HTTP_ADDRESS + \
             f'/api/queues/%2F/{config.RABBIT_QUEUE_TO_BOT}/get'
 
@@ -134,6 +134,6 @@ class Rabbit:
             try:
                 data = json.loads((await response.json())[0]['payload'])
             except IndexError:
-                raise NoFreePreparerInQueue()
+                return None
 
             return data['answer_queue']
