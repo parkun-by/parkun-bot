@@ -1,8 +1,17 @@
 import aio_pika
 import config
+import asyncio
 
 
 class Rabbit:
+    async def start(self, loop, callback):
+        try:
+            await self.connect(loop, callback)
+        except:
+            print('Fail. Trying reconnect Rabbit.')
+            await asyncio.sleep(2)
+            await self.start(loop, callback)
+
     async def connect(self, loop, callback):
         self.connection = await aio_pika.connect_robust(
             config.RABBIT_AMQP_ADDRESS,
