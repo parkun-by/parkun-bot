@@ -41,20 +41,22 @@ class Twitter:
 
         return list(zip(tweets_text, tweets_photos))
 
-    async def post(self, data):
-        language = self.get_param(data, 'ui_lang')
-        file_paths = self.get_param(data, 'photo_files_paths')
-        coordinates = self.get_param(data, 'violation_location')
-
+    async def post(self,
+                   language: str,
+                   file_paths: list,
+                   coordinates: list,
+                   date_time: str,
+                   plate: str,
+                   address: str) -> None:
         if not coordinates:
             coordinates = [None, None]
 
         caption = self.locales.text(language, 'violation_datetime') +\
-            ' {}'.format(self.get_param(data, 'violation_datetime')) + '\n' +\
+            ' {}'.format(date_time) + '\n' +\
             self.locales.text(language, 'violation_location') +\
-            ' {}'.format(self.get_param(data, 'violation_address')) + '\n' +\
+            ' {}'.format(address) + '\n' +\
             self.locales.text(language, 'violation_plate') + \
-            ' {}'.format(self.get_param(data, 'vehicle_number'))
+            ' {}'.format(plate)
 
         tweet_queue = self._get_tweet_queue(file_paths, caption)
         reply_to = None
@@ -63,10 +65,10 @@ class Twitter:
             media_ids = []
 
             for file_path in tweet[1]:
-                    uploaded = await self.client.upload_media(file_path,
-                                                              chunk_size=2**18,
-                                                              chunked=True)
-                    media_ids.append(uploaded.media_id)
+                uploaded = await self.client.upload_media(file_path,
+                                                          chunk_size=2**18,
+                                                          chunked=True)
+                media_ids.append(uploaded.media_id)
 
             tweet = await self.client.api.statuses.update.post(
                 status=tweet[0],

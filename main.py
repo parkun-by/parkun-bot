@@ -173,18 +173,20 @@ async def send_appeal_textfile_to_user(appeal_text, language, chat_id):
     await bot.send_document(chat_id, file)
 
 
-async def send_violation_to_channel(data):
-    language = await get_ui_lang(data=data)
-
+async def send_violation_to_channel(language: str,
+                                    date_time: str,
+                                    location: str,
+                                    plate: str,
+                                    photos_id: list) -> None:
     caption = locales.text(language, 'violation_datetime') +\
-        ' {}'.format(get_value(data, 'violation_datetime')) + '\n' +\
+        ' {}'.format(date_time) + '\n' +\
         locales.text(language, 'violation_location') +\
-        ' {}'.format(get_value(data, 'violation_address')) + '\n' +\
+        ' {}'.format(location) + '\n' +\
         locales.text(language, 'violation_plate') + \
-        ' {}'.format(get_value(data, 'vehicle_number'))
+        ' {}'.format(plate)
 
     # в канал
-    await send_photos_group_with_caption(data,
+    await send_photos_group_with_caption(photos_id,
                                          config.CHANNEL,
                                          caption)
 
@@ -208,6 +210,12 @@ async def compose_appeal(data: dict,
         'sender_zipcode': get_value(data, 'sender_zipcode'),
         'user_id': chat_id,
         'appeal_id': message_id,
+        'violation_datetime': get_value(data, 'violation_datetime'),
+        'violation_address': get_value(data, 'violation_address'),
+        'violation_coordinates': get_value(data, 'violation_location'),
+        'violation_plate': get_value(data, 'vehicle_number'),
+        'violation_photos': get_value(data, 'photo_id'),
+        'photo_files_paths': get_value(data, 'photo_files_paths'),
     }
 
 
@@ -222,6 +230,22 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                            reply_to_message_id=appeal_id)
 
     async with state.proxy() as data:
+        appeal = get_appeal_from_user_queue(data, appeal_id)
+        await send_appeal_textfile_to_user(appeal['text'], language, user_id)
+
+        await send_violation_to_channel(language,
+                                        appeal['violation_datetime'],
+                                        appeal['violation_address'],
+                                        appeal['violation_plate'],
+                                        appeal['violation_photos'])
+
+        await broadcaster.share(language,
+                                appeal['photo_files_paths'],
+                                appeal['violation_coordinates'],
+                                appeal['violation_datetime'],
+                                appeal['violation_plate'],
+                                appeal['violation_address'])
+
         delete_appeal_from_user_queue(data, appeal_id)
 
 
@@ -326,10 +350,6 @@ async def send_captcha_text(state: FSMContext,
         text = locales.text(language, 'sending_failed') + '\n' + str(exc)
         logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
         await bot.send_message(chat_id, text)
-
-    # async with state.proxy() as data:
-    #     await send_violation_to_channel(data)
-    #     await broadcaster.share(data)
 
 
 def ensure_attachments_availability(data):
@@ -837,9 +857,9 @@ async def ask_for_violation_time(chat_id, language):
     await Form.violation_datetime.set()
 
 
-async def send_photos_group_with_caption(data, chat_id, caption=''):
-    photos_id = get_value(data, 'photo_id')
-
+async def send_photos_group_with_caption(photos_id: list,
+                                         chat_name: str,
+                                         caption=''):
     photos = []
 
     for count, photo_id in enumerate(photos_id):
@@ -852,7 +872,7 @@ async def send_photos_group_with_caption(data, chat_id, caption=''):
         photo = PhotoItem('photo', photo_id, text)
         photos.append(photo)
 
-    await bot.send_media_group(chat_id=chat_id, media=photos)
+    await bot.send_media_group(chat_id=chat_name, media=photos)
 
 
 def prepare_registration_number(number: str):
