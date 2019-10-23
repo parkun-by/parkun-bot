@@ -2317,7 +2317,7 @@ async def startup(dispatcher: Dispatcher):
     await locator.download_boundaries()
     logger.info('Загрузили.')
     logger.info('Подключаемся к очереди статусов обращений.')
-    asyncio.ensure_future(amqp_rabbit.connect(loop, status_received))
+    asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
 
 
