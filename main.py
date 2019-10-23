@@ -212,6 +212,7 @@ async def compose_appeal(data: dict,
 
 
 async def send_success_sending(user_id: int, appeal_id: int) -> None:
+    logger.error(f'Успешно отправлено - {str(user_id)}')
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
     text = locales.text(language, 'successful_sending')
@@ -225,6 +226,7 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
 
 
 async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
+    logger.error(f'Приглашаем заполнить капчу - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
@@ -244,6 +246,7 @@ async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
 
 
 async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
+    logger.error(f'Шлем обращение - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
@@ -253,6 +256,7 @@ async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
 
 async def status_received(status: str) -> None:
     data = json.loads(status)
+    logger.error(f'Прилетел статус - {str(data["user_id"])}: {data["type"]}')
 
     if data['type'] == config.OK:
         await send_success_sending(data['user_id'], data['appeal_id'])
@@ -268,6 +272,8 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
     preparer_queue = await http_rabbit.get_preparer()
 
     if not preparer_queue:
+        logger.error(f'Куда-то делись воркеры - {message.chat.id}')
+
         await bot.send_message(
             message.chat.id,
             'Нет свободных обработчиков, попробуйте нажать кнопку позже.',
@@ -283,7 +289,10 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
         language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'appeal_sent')
-    logger.info('Обращение отправлено - ' + str(message.chat.username))
+
+    logger.info(f'Обращение поставлено в очередь - \
+                {str(message.chat.username)}')
+
     await bot.send_message(message.chat.id, text)
     await Form.operational_mode.set()
 
@@ -292,6 +301,8 @@ async def send_captcha_text(state: FSMContext,
                             chat_id: int,
                             captcha_text: str,
                             appeal_id: int) -> None:
+    logger.error(f'Посылаем текст капчи - {chat_id}')
+
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
