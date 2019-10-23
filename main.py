@@ -237,9 +237,18 @@ async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
     text = locales.text(language,
                         'invite_to_enter_captcha').format(captcha_url)
 
+    keyboard = types.InlineKeyboardMarkup()
+
+    cancel_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(cancel_button)
+
     await bot.send_message(user_id,
                            text,
                            parse_mode='HTML',
+                           reply_markup=keyboard,
                            reply_to_message_id=appeal_id)
 
     await state.set_state(Form.entering_captcha)
@@ -290,8 +299,8 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
 
     text = locales.text(language, 'appeal_sent')
 
-    logger.info(f'Обращение поставлено в очередь - \
-                {str(message.chat.username)}')
+    logger.info(f'Обращение поставлено в очередь - ' +
+                f'{str(message.chat.username)}')
 
     await bot.send_message(message.chat.id, text)
     await Form.operational_mode.set()
@@ -1542,6 +1551,27 @@ async def cancel_input(call, state: FSMContext):
     text = locales.text(language, 'operation_mode')
     await bot.send_message(call.message.chat.id, text)
     await Form.operational_mode.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/cancel',
+                           state=[Form.entering_captcha])
+async def cancel_captcha_input(call, state: FSMContext):
+    logger.info('Отмена, возврат в предыдущий режим - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        captcha_url, appeal_id = pop_captcha_data(data)
+
+        await http_rabbit.send_cancel(
+            appeal_id,
+            call.message.chat.id,
+            get_value(data, 'appeal_response_queue'))
+
+        delete_appeal_from_user_queue(data, appeal_id)
+
+    await cancel_input(call, state)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',

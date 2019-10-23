@@ -84,6 +84,7 @@ CAPTCHA_URL = 'captcha_url'
 CAPTCHA_FAIL = 'captcha_fail'
 GET_CAPTCHA = 'get_captcha'
 APPEAL = 'appeal'
+CANCEL = 'cancel'
 CAPTCHA_OK = 'captcha_ok'
 
 # status codes
