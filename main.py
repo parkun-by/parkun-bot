@@ -25,7 +25,7 @@ from broadcaster import Broadcaster
 from validator import Validator
 from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
-from exceptions import NoCaptchaInQueue
+from timer import Timer
 
 locator = Locator()
 mail_verifier = MailVerifier()
@@ -35,6 +35,33 @@ locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
+
+
+async def cancel_sending(appeal_params: dict) -> None:
+    user_id = get_value(appeal_params, 'user_id', None)
+
+    appeal_response_queue = get_value(appeal_params,
+                                      'appeal_response_queue',
+                                      '')
+
+    logger.info(f'Время вышло - {user_id}')
+    state = dp.current_state(chat=user_id, user=user_id)
+    appeal_id = get_value(appeal_params, 'appeal_id', None)
+
+    await state.set_state(Form.sending_approvement)
+    await http_rabbit.send_cancel(appeal_id, user_id, appeal_response_queue)
+    language = await get_ui_lang(state)
+
+    text = get_value(appeal_params,
+                     'times_up_message',
+                     locales.text(language, 'times_up'))
+
+    keyboard = get_value(appeal_params, 'keyboard', None)
+
+    await bot.send_message(user_id,
+                           text,
+                           reply_markup=keyboard,
+                           reply_to_message_id=appeal_id)
 
 
 def get_value(data: dict, key: str, placeholder: str = None) -> Any:
@@ -49,6 +76,7 @@ def get_value(data: dict, key: str, placeholder: str = None) -> Any:
         return data[key]
 
 
+stop_timer = Timer(cancel_sending)
 broadcaster = Broadcaster(get_value, locales)
 
 
@@ -96,6 +124,18 @@ REQUIRED_CREDENTIALS = [
     'sender_city',
     'sender_zipcode',
     'sender_house',
+]
+
+VIOLATION_INFO_KEYS = [
+    'violation_attachments',
+    'violation_photo_ids',
+    'violation_photo_files_paths',
+    'violation_photos_amount',
+    'violation_vehicle_number',
+    'violation_address',
+    'violation_location',
+    'violation_datetime',
+    'violation_caption',
 ]
 
 
@@ -194,11 +234,13 @@ async def send_violation_to_channel(language: str,
 async def compose_appeal(data: dict,
                          chat_id: int,
                          message_id: int) -> dict:
-    return {
+    appeal = {
         'type': config.APPEAL,
         'text': get_appeal_text(data),
+
         'police_department':
             config.DEPARTMENT_NAMES[get_value(data, 'recipient')],
+
         'sender_first_name': get_value(data, 'sender_first_name'),
         'sender_last_name': get_value(data, 'sender_last_name'),
         'sender_patronymic': get_value(data, 'sender_patronymic'),
@@ -210,13 +252,12 @@ async def compose_appeal(data: dict,
         'sender_zipcode': get_value(data, 'sender_zipcode'),
         'user_id': chat_id,
         'appeal_id': message_id,
-        'violation_datetime': get_value(data, 'violation_datetime'),
-        'violation_address': get_value(data, 'violation_address'),
-        'violation_coordinates': get_value(data, 'violation_location'),
-        'violation_plate': get_value(data, 'vehicle_number'),
-        'violation_photos': get_value(data, 'photo_id'),
-        'photo_files_paths': get_value(data, 'photo_files_paths'),
     }
+
+    for key in VIOLATION_INFO_KEYS:
+        appeal[key] = get_value(data, key)
+
+    return appeal
 
 
 async def send_success_sending(user_id: int, appeal_id: int) -> None:
@@ -236,27 +277,57 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
         await send_violation_to_channel(language,
                                         appeal['violation_datetime'],
                                         appeal['violation_address'],
-                                        appeal['violation_plate'],
-                                        appeal['violation_photos'])
+                                        appeal['violation_vehicle_number'],
+                                        appeal['violation_photo_ids'])
 
         await broadcaster.share(language,
-                                appeal['photo_files_paths'],
-                                appeal['violation_coordinates'],
+                                appeal['violation_photo_files_paths'],
+                                appeal['violation_location'],
                                 appeal['violation_datetime'],
-                                appeal['violation_plate'],
+                                appeal['violation_vehicle_number'],
                                 appeal['violation_address'])
 
         delete_appeal_from_user_queue(data, appeal_id)
 
 
-async def fill_captcha(user_id: int, appeal_id: int, captcha_url: str) -> None:
+def add_stop_task_timer(language: str,
+                        user_id: int,
+                        appeal_id: int,
+                        appeal_response_queue: str) -> None:
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    approve_sending_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'approve_sending_button'),
+        callback_data='/repeat_sending')
+
+    cancel_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(approve_sending_button, cancel_button)
+
+    stop_timer.add_task({
+        'user_id': user_id,
+        'appeal_id': appeal_id,
+        'keyboard': keyboard,
+        'appeal_response_queue': appeal_response_queue,
+    }, 1)
+
+
+async def fill_captcha(user_id: int,
+                       appeal_id: int,
+                       captcha_url: str,
+                       answer_queue: str) -> None:
     logger.info(f'Приглашаем заполнить капчу - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
-        save_state(data, await state.get_state())
+        previous_state = await state.get_state()
+        save_state(data, previous_state)
         save_captcha_data(data, captcha_url, appeal_id)
         language = await get_ui_lang(data=data)
+        add_stop_task_timer(language, user_id, appeal_id, answer_queue)
+        data['appeal_response_queue'] = answer_queue
 
     text = locales.text(language,
                         'invite_to_enter_captcha').format(captcha_url)
@@ -294,7 +365,10 @@ async def status_received(status: str) -> None:
     if data['type'] == config.OK:
         await send_success_sending(data['user_id'], data['appeal_id'])
     elif data['type'] == config.CAPTCHA_URL:
-        await fill_captcha(data['user_id'], data['appeal_id'], data['captcha'])
+        await fill_captcha(data['user_id'],
+                           data['appeal_id'],
+                           data['captcha'],
+                           data['answer_queue'])
     elif data['type'] == config.CAPTCHA_OK:
         await send_appeal(data['user_id'],
                           data['answer_queue'],
@@ -322,14 +396,12 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
             reply_markup=keyboard,
             reply_to_message_id=appeal_id,
             parse_mode='HTML')
+
         return
 
     await http_rabbit.ask_for_captcha_url(message.chat.id,
                                           appeal_id,
                                           preparer_queue)
-
-    async with state.proxy() as data:
-        data['appeal_response_queue'] = preparer_queue
 
     text = locales.text(language, 'appeal_sent')
 
@@ -363,14 +435,14 @@ async def send_captcha_text(state: FSMContext,
 
 
 def ensure_attachments_availability(data):
-    if (('attachments' not in data) or
-            ('photo_id' not in data) or
-            ('photo_files_paths' not in data) or
-            ('photos_amount' not in data)):
-        data['attachments'] = []
-        data['photo_id'] = []
-        data['photo_files_paths'] = []
-        data['photos_amount'] = 0
+    if (('violation_attachments' not in data) or
+            ('violation_photo_ids' not in data) or
+            ('violation_photo_files_paths' not in data) or
+            ('violation_photos_amount' not in data)):
+        data['violation_attachments'] = []
+        data['violation_photo_ids'] = []
+        data['violation_photo_files_paths'] = []
+        data['violation_photos_amount'] = 0
 
 
 async def violation_storage_full(state):
@@ -381,8 +453,8 @@ async def violation_storage_full(state):
     async with semaphore, state.proxy() as data:
         ensure_attachments_availability(data)
 
-        if data['photos_amount'] < config.MAX_VIOLATION_PHOTOS:
-            data['photos_amount'] += 1
+        if data['violation_photos_amount'] < config.MAX_VIOLATION_PHOTOS:
+            data['violation_photos_amount'] += 1
             return False
         else:
             return True
@@ -401,33 +473,27 @@ async def add_photo_to_attachments(photo, state, user_id):
     async with semaphore, state.proxy() as data:
         ensure_attachments_availability(data)
 
-        data['attachments'].append(image_url)
-        data['photo_id'].append(photo['file_id'])
-        data['photo_files_paths'].append(image_path)
+        data['violation_attachments'].append(image_url)
+        data['violation_photo_ids'].append(photo['file_id'])
+        data['violation_photo_files_paths'].append(image_path)
 
 
-async def delete_prepared_violation(data, user_id):
+def delete_prepared_violation(data: dict, user_id: int) -> None:
     # в этом месте сохраним адрес нарушения для использования в
     # следующем обращении
     data['previous_violation_address'] = get_value(data, 'violation_address')
 
-    data['attachments'] = []
-    data['photo_id'] = []
-    data['photo_files_paths'] = []
-    data['photos_amount'] = 0
-    data['vehicle_number'] = ''
-    data['violation_address'] = ''
-    data['violation_location'] = []
-    data['violation_datetime'] = ''
-    data['caption'] = ''
+    for key in VIOLATION_INFO_KEYS:
+        set_default(data, key, force=True)
+
     data['appeal_response_queue'] = ''
 
     # также удалим временные файлы картинок нарушений
     uploader.clear_storage(user_id)
 
 
-def set_default(data, key):
-    if key not in data:
+def set_default(data: dict, key: str, force=False) -> None:
+    if (key not in data) or force:
         data[key] = get_default_value(key)
 
 
@@ -439,11 +505,11 @@ def get_default_value(key):
         'recipient': config.MINSK,
         'saved_states': [],
         'captcha_data': [],
-        'attachments': [],
+        'violation_attachments': [],
         'appeals': {},
-        'photo_id': [],
-        'photo_files_paths': [],
-        'photos_amount': 0,
+        'violation_photo_ids': [],
+        'violation_photo_files_paths': [],
+        'violation_photos_amount': 0,
         'banned_users': {},
         'violation_location': [],
     }
@@ -473,12 +539,12 @@ def set_default_sender_info(data):
     set_default(data, 'previous_violation_address')
     set_default(data, 'saved_states')
     set_default(data, 'captcha_data')
-    set_default(data, 'attachments')
     set_default(data, 'appeals')
-    set_default(data, 'photo_id')
-    set_default(data, 'photo_files_paths')
-    set_default(data, 'photos_amount')
-    set_default(data, 'vehicle_number')
+    set_default(data, 'violation_attachments')
+    set_default(data, 'violation_photo_ids')
+    set_default(data, 'violation_photo_files_paths')
+    set_default(data, 'violation_photos_amount')
+    set_default(data, 'violation_vehicle_number')
     set_default(data, 'violation_address')
     set_default(data, 'violation_location')
     set_default(data, 'violation_datetime')
@@ -520,7 +586,8 @@ def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
 
 def get_appeal_from_user_queue(data: dict, appeal_id: int) -> dict:
     appeals = get_value(data, 'appeals')
-    return appeals[str(appeal_id)]
+    appeal = get_value(appeals, str(appeal_id), None)
+    return appeal
 
 
 def delete_appeal_from_user_queue(data: dict, appeal_id: int) -> None:
@@ -551,11 +618,11 @@ async def compose_summary(data):
         '\n' +\
         locales.text(language, 'violator') + '\n' +\
         locales.text(language, 'violation_plate') +\
-        ' <b>{}</b>'.format(get_value(data, 'vehicle_number')) + '\n' +\
+        f' <b>{get_value(data, "violation_vehicle_number")}</b>' + '\n' +\
         locales.text(language, 'violation_location') +\
-        ' <b>{}</b>'.format(get_value(data, 'violation_address')) + '\n' +\
+        f' <b>{get_value(data, "violation_address")}</b>' + '\n' +\
         locales.text(language, 'violation_datetime') +\
-        ' <b>{}</b>'.format(get_value(data, 'violation_datetime')) + '\n' +\
+        f' <b>{get_value(data, "violation_datetime")}</b>' + '\n' +\
         '\n' +\
         locales.text(language, 'channel_warning').format(config.CHANNEL,
                                                          config.TWI_URL)
@@ -576,7 +643,7 @@ async def check_validity(pattern, message, language):
 def get_photos_links(data):
     text = ''
 
-    for photo_url in get_value(data, 'attachments'):
+    for photo_url in get_value(data, 'violation_attachments'):
         text += f'''{photo_url}
 '''
 
@@ -586,10 +653,10 @@ def get_photos_links(data):
 def get_appeal_text(data: dict) -> str:
     violation_data = {
         'photos': get_photos_links(data),
-        'vehicle_number': get_value(data, 'vehicle_number'),
+        'vehicle_number': get_value(data, 'violation_vehicle_number'),
         'address': get_value(data, 'violation_address'),
         'datetime': get_value(data, 'violation_datetime'),
-        'remark': get_value(data, 'caption'),
+        'remark': get_value(data, 'violation_caption'),
         'sender_name': get_sender_full_name(data),
         'sender_email': get_value(data, 'sender_email'),
     }
@@ -605,10 +672,11 @@ async def approve_sending(chat_id, state):
     async with state.proxy() as data:
         text = await compose_summary(data)
 
-        await send_photos_group_with_caption(get_value(data, 'photo_id'),
-                                             chat_id)
+        await send_photos_group_with_caption(
+            get_value(data, 'violation_photo_ids'),
+            chat_id)
 
-        if get_value(data, 'caption'):
+        if get_value(data, 'violation_caption'):
             caption_button_text = locales.text(language,
                                                'change_caption_button')
 
@@ -1466,7 +1534,7 @@ async def enter_violation_info_click(call, state: FSMContext):
         language = await get_ui_lang(data=data)
 
         # зададим сразу пустое примечание
-        set_default(data, 'caption')
+        set_default(data, 'violation_caption')
 
     text = locales.text(language, 'input_plate') + '\n' +\
         '\n' +\
@@ -1494,7 +1562,7 @@ async def add_caption_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         # зададим сразу пустое примечание
-        set_default(data, 'caption')
+        set_default(data, 'violation_caption')
         save_state(data, await state.get_state())
 
         language = await get_ui_lang(data=data)
@@ -1552,7 +1620,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-        await delete_prepared_violation(data, call.message.chat.id)
+        delete_prepared_violation(data, call.message.chat.id)
 
     text = locales.text(language, 'operation_mode')
     await bot.send_message(call.message.chat.id, text)
@@ -1601,6 +1669,7 @@ async def cancel_captcha_input(call, state: FSMContext):
             call.message.chat.id,
             get_value(data, 'appeal_response_queue'))
 
+        stop_timer.delete_task(call.message.chat.id, appeal_id)
         delete_appeal_from_user_queue(data, appeal_id)
 
     await cancel_input(call, state)
@@ -1636,7 +1705,7 @@ async def send_letter_click(call, state: FSMContext):
         await bot.send_message(call.message.chat.id, text)
 
         async with state.proxy() as data:
-            await delete_prepared_violation(data, call.message.chat.id)
+            delete_prepared_violation(data, call.message.chat.id)
 
     elif not await verified_email(state):
         logger.info('Обращение не отправлено, email не подтвержден - ' +
@@ -1644,21 +1713,34 @@ async def send_letter_click(call, state: FSMContext):
 
         async with state.proxy() as data:
             await invite_to_confirm_email(data, call.message.chat.id)
-            await delete_prepared_violation(data, call.message.chat.id)
+            delete_prepared_violation(data, call.message.chat.id)
 
     else:
+        appeal_id = call.message.message_id
+
         async with state.proxy() as data:
             appeal = await compose_appeal(data,
                                           call.message.chat.id,
-                                          call.message.message_id)
+                                          appeal_id)
 
-            add_appeal_to_user_queue(data, appeal, call.message.message_id)
-            await delete_prepared_violation(data, call.message.chat.id)
+            add_appeal_to_user_queue(data, appeal, appeal_id)
+            delete_prepared_violation(data, call.message.chat.id)
 
-        await entering_captcha(call.message, call.message.message_id, state)
+        await entering_captcha(call.message, appeal_id, state)
         return
 
     await Form.operational_mode.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/repeat_sending',
+                           state=Form.sending_approvement)
+async def send_letter_again_click(call, state: FSMContext):
+    logger.info('Нажата кнопка повторной отправки в ГАИ - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    appeal_id = call.message.reply_to_message.message_id
+    await entering_captcha(call.message, appeal_id, state)
 
 
 @dp.callback_query_handler(state='*')
@@ -2175,7 +2257,8 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        data['vehicle_number'] = prepare_registration_number(message.text)
+        data['violation_vehicle_number'] = prepare_registration_number(
+            message.text)
         await ask_for_violation_address(message.chat.id, data)
 
 
@@ -2187,7 +2270,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         pop_state(data)
-        data['caption'] = message.text.strip()
+        data['violation_caption'] = message.text.strip()
 
     await Form.sending_approvement.set()
     await approve_sending(message.chat.id, state)
@@ -2271,6 +2354,7 @@ async def catch_captcha(message: types.Message, state: FSMContext):
                                 appeal_id)
 
         await state.set_state(pop_state(data))
+        stop_timer.delete_task(message.chat.id, appeal_id)
         language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'continue_work')
@@ -2351,6 +2435,9 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
+    logger.info('Запускаем таймер отмены.')
+    asyncio.ensure_future(stop_timer.start())
+    logger.info('Запустили.')
 
 
 async def shutdown(dispatcher: Dispatcher):
