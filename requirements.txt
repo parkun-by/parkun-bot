@@ -6,4 +6,3 @@ disposable-email-domains==0.0.54
 peony-twitter==1.1.5
 python-dateutil==2.8.0
 requests==2.22.0
-Sendinblue==2.0.5.1
