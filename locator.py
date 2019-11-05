@@ -156,10 +156,10 @@ class Locator:
 
     async def get_coordinates(self, address):
         params = (
+            ('apikey', config.YANDEX_MAPS_API_KEY),
             ('geocode', address),
             ('kind', 'house'),
             ('format', 'json'),
-            ('key', config.YANDEX_MAPS_API_KEY),
         )
 
         async with self._http_session.get(config.BASE_YANDEX_MAPS_URL,
