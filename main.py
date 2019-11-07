@@ -280,6 +280,8 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                                         appeal['violation_vehicle_number'],
                                         appeal['violation_photo_ids'])
 
+        logger.info(f'Отправили в канал - {str(user_id)}')
+
         await broadcaster.share(language,
                                 appeal['violation_photo_files_paths'],
                                 appeal['violation_location'],
@@ -287,6 +289,7 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                                 appeal['violation_vehicle_number'],
                                 appeal['violation_address'])
 
+        logger.info(f'Отправили в остальное - {str(user_id)}')
         delete_appeal_from_user_queue(data, appeal_id)
 
 
