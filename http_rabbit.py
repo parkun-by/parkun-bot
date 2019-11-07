@@ -39,6 +39,8 @@ class Rabbit:
             'appeal': appeal,
             'appeal_id': appeal['appeal_id'],
             'user_id': user_id,
+            'sender_email': appeal['sender_email'],
+            'sender_email_password': appeal['sender_email_password'],
         }
 
         await self._send(config.RABBIT_EXCHANGE_APPEAL,
@@ -68,12 +70,14 @@ class Rabbit:
                                 captcha_text: str,
                                 user_id: int,
                                 appeal_id: int,
+                                appeal_email: str or None,
                                 routing_key: str) -> None:
         body = {
             'type': config.CAPTCHA_TEXT,
             'captcha_text': captcha_text,
             'user_id': user_id,
             'appeal_id': appeal_id,
+            'sender_email': appeal_email,
         }
 
         await self._send(config.RABBIT_EXCHANGE_APPEAL,
@@ -83,11 +87,13 @@ class Rabbit:
     async def ask_for_captcha_url(self,
                                   user_id: int,
                                   appeal_id: int,
-                                  routing_key: str) -> None:
+                                  routing_key: str,
+                                  email: str = None) -> None:
         body = {
             'type': config.GET_CAPTCHA,
             'appeal_id': appeal_id,
             'user_id': user_id,
+            'sender_email': email,
         }
 
         await self._send(config.RABBIT_EXCHANGE_APPEAL,
