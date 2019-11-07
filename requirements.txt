@@ -1,5 +1,6 @@
 aiogram==2.4
 aiohttp==3.6.1
+aioimaplib==0.7.15
 aio-pika==6.1.3
 aioredis==1.3.0
 disposable-email-domains==0.0.54

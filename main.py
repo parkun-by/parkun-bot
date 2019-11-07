@@ -26,6 +26,17 @@ from validator import Validator
 from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
 from timer import Timer
+from imap_email import Email
+
+
+loop = asyncio.get_event_loop()
+bot = Bot(token=config.API_TOKEN, loop=loop)
+
+storage = RedisStorage2(host=config.REDIS_HOST,
+                        port=config.REDIS_PORT)
+
+dp = Dispatcher(bot, storage=storage)
+
 
 locator = Locator()
 mail_verifier = MailVerifier()
@@ -105,14 +116,6 @@ def setup_logging():
 
     return my_logger
 
-
-loop = asyncio.get_event_loop()
-bot = Bot(token=config.API_TOKEN, loop=loop)
-
-storage = RedisStorage2(host=config.REDIS_HOST,
-                        port=config.REDIS_PORT)
-
-dp = Dispatcher(bot, storage=storage)
 
 logger = setup_logging()
 
@@ -250,6 +253,8 @@ async def compose_appeal(data: dict,
         'sender_block': get_value(data, 'sender_block'),
         'sender_flat': get_value(data, 'sender_flat'),
         'sender_zipcode': get_value(data, 'sender_zipcode'),
+        'sender_email': get_value(data, 'sender_email'),
+        'sender_email_password': get_value(data, 'sender_email_password'),
         'user_id': chat_id,
         'appeal_id': message_id,
     }
@@ -378,9 +383,17 @@ async def status_received(status: str) -> None:
                           data['appeal_id'])
 
 
+def get_appeal_email(data) -> str or None:
+    if get_value(data, 'sender_email_password', None):
+        return get_value(data, 'sender_email', None)
+
+
 async def entering_captcha(message, appeal_id: int, state) -> None:
     preparer_queue = await http_rabbit.get_preparer()
-    language = await get_ui_lang(state)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        email = get_appeal_email(data)
 
     if not preparer_queue:
         logger.error(f'Куда-то делись воркеры - {message.chat.id}')
@@ -404,7 +417,8 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
 
     await http_rabbit.ask_for_captcha_url(message.chat.id,
                                           appeal_id,
-                                          preparer_queue)
+                                          preparer_queue,
+                                          email)
 
     text = locales.text(language, 'appeal_sent')
 
@@ -423,12 +437,14 @@ async def send_captcha_text(state: FSMContext,
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
+        appeal_email = get_appeal_email(data)
 
     try:
         await http_rabbit.send_captcha_text(
             captcha_text,
             chat_id,
             appeal_id,
+            appeal_email,
             get_value(data, 'appeal_response_queue'))
 
     except Exception as exc:
@@ -827,7 +843,10 @@ async def show_private_info_summary(chat_id, state):
             await invite_to_confirm_email(data, chat_id)
     else:
         text = locales.text(language, 'ready_to_report')
-        await bot.send_message(chat_id, text, parse_mode='HTML')
+        await bot.send_message(chat_id,
+                               text,
+                               parse_mode='HTML',
+                               disable_web_page_preview=True)
 
     await Form.operational_mode.set()
 
@@ -864,8 +883,32 @@ async def ask_for_violation_address(chat_id, data):
     await Form.violation_location.set()
 
 
-async def send_language_info(chat_id, data):
+async def send_language_info(chat_id: int, data: dict) -> None:
     text, keyboard = await get_language_text_and_keyboard(data)
+
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
+
+async def send_appeal_email_info(chat_id: int, data: dict) -> None:
+    language = await get_ui_lang(data=data)
+    email = get_value(data, 'sender_email')
+    text = locales.text(language, 'email_password').format(email)
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    personal_info_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'personal_info'),
+        callback_data='/personal_info')
+
+    enter_password_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'enter_password'),
+        callback_data='/enter_password')
+
+    keyboard.add(personal_info_button, enter_password_button)
 
     await bot.send_message(chat_id,
                            text,
@@ -996,6 +1039,7 @@ async def show_settings(message, state):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
+        email = get_value(data, 'sender_email')
 
     text = locales.text(language, 'select_section')
 
@@ -1006,11 +1050,20 @@ async def show_settings(message, state):
         text=locales.text(language, 'personal_info'),
         callback_data='/personal_info')
 
+    appeal_email_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'appeal_email'),
+        callback_data='/appeal_email')
+
     language_settings_button = types.InlineKeyboardButton(
         text=locales.text(language, 'language_settings'),
         callback_data='/language_settings')
 
-    keyboard.add(personal_info_button, language_settings_button)
+    if email:
+        keyboard.add(personal_info_button,
+                     appeal_email_button,
+                     language_settings_button)
+    else:
+        keyboard.add(personal_info_button, language_settings_button)
 
     await bot.send_message(message.chat.id,
                            text,
@@ -1159,6 +1212,24 @@ async def user_banned(*args):
     return False, ''
 
 
+async def invite_to_enter_email_password(user_id: int,
+                                         state: FSMContext,
+                                         extra_message: str = '') -> None:
+    async with state.proxy() as data:
+        current_state = await state.get_state()
+
+        if current_state != Form.email_password.state:
+            save_state(data, current_state)
+
+        language = await get_ui_lang(data=data)
+
+    await Form.email_password.set()
+
+    text = f'{extra_message} {locales.text(language, "invite_email_password")}'
+    keyboard = await get_cancel_keyboard(data)
+    await bot.send_message(user_id, text, reply_markup=keyboard)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/settings',
                            state='*')
 async def settings_click(call, state: FSMContext):
@@ -1179,6 +1250,16 @@ async def personal_info_click(call, state: FSMContext):
     await show_personal_info(call.message, state)
 
 
+@dp.callback_query_handler(lambda call: call.data == '/enter_password',
+                           state='*')
+async def personal_info_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ввода email пароля - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    await invite_to_enter_email_password(call.message.chat.id, state)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/language_settings',
                            state='*')
 async def language_settings_click(call, state: FSMContext):
@@ -1189,6 +1270,18 @@ async def language_settings_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         await send_language_info(call.message.chat.id, data)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/appeal_email',
+                           state='*')
+async def language_settings_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пороля емаила - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        await send_appeal_email_info(call.message.chat.id, data)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_personal_info',
@@ -1633,7 +1726,8 @@ async def cancel_violation_input(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
                            state=[Form.feedback,
                                   Form.feedback_answering,
-                                  Form.caption])
+                                  Form.caption,
+                                  Form.email_password])
 async def cancel_input(call, state: FSMContext):
     logger.info('Отмена, возврат в предыдущий режим - ' +
                 str(call.from_user.username))
@@ -2280,6 +2374,32 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.email_password)
+async def catch_email_password(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод пароля email - ' +
+                str(message.from_user.username))
+    password = message.text.strip()
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        email = get_value(data, 'sender_email')
+
+        if not await Email(loop).check_connection(email, password):
+            text = locales.text(
+                language,
+                'invalid_email_password').format(email, password)
+
+            await invite_to_enter_email_password(message.chat.id, state, text)
+            return
+
+        await state.set_state(pop_state(data))
+        data['sender_email_password'] = password
+
+    text = locales.text(language, 'email_password_saved')
+    await bot.send_message(message.chat.id, text)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.violation_location)
 async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
@@ -2419,7 +2539,8 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_block,
                            Form.sender_flat,
                            Form.sender_zipcode,
-                           Form.entering_captcha])
+                           Form.entering_captcha,
+                           Form.email_password])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
                 str(message.from_user.username))

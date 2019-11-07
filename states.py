@@ -28,3 +28,4 @@ class Form(StatesGroup):
     appeal_sending = State()
     entering_captcha = State()
     entering_captcha_again = State()
+    email_password = State()
