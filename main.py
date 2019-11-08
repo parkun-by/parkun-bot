@@ -253,7 +253,7 @@ async def compose_appeal(data: dict,
         'sender_block': get_value(data, 'sender_block'),
         'sender_flat': get_value(data, 'sender_flat'),
         'sender_zipcode': get_value(data, 'sender_zipcode'),
-        'sender_email': get_value(data, 'sender_email'),
+        'sender_email': get_appeal_email(data),
         'sender_email_password': get_value(data, 'sender_email_password'),
         'user_id': chat_id,
         'appeal_id': message_id,
@@ -898,7 +898,7 @@ async def send_appeal_email_info(chat_id: int, data: dict) -> None:
     text = locales.text(language, 'email_password').format(email)
 
     # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard = types.InlineKeyboardMarkup(row_width=3)
 
     personal_info_button = types.InlineKeyboardButton(
         text=locales.text(language, 'personal_info'),
@@ -908,7 +908,13 @@ async def send_appeal_email_info(chat_id: int, data: dict) -> None:
         text=locales.text(language, 'enter_password'),
         callback_data='/enter_password')
 
-    keyboard.add(personal_info_button, enter_password_button)
+    delete_password_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'delete_email_password'),
+        callback_data='/delete_password')
+
+    keyboard.add(personal_info_button,
+                 enter_password_button,
+                 delete_password_button)
 
     await bot.send_message(chat_id,
                            text,
@@ -1258,6 +1264,22 @@ async def personal_info_click(call, state: FSMContext):
 
     await bot.answer_callback_query(call.id)
     await invite_to_enter_email_password(call.message.chat.id, state)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/delete_password',
+                           state='*')
+async def personal_info_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки удаления email пароля - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        data['sender_email_password'] = ''
+        language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'email_password_deleted')
+    await bot.send_message(call.message.chat.id, text)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/language_settings',
@@ -2177,6 +2199,7 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_email'] = message.text
+        data['sender_email_password'] = ''
         data['verified'] = False
         await ask_for_sender_info(message.chat.id,
                                   data,
