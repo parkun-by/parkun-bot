@@ -7,8 +7,8 @@ class Rabbit:
     async def start(self, loop, callback):
         try:
             await self.connect(loop, callback)
-        except:
-            print('Fail. Trying reconnect Rabbit.')
+        except Exception as exc:
+            print(f'Fail. Trying reconnect Rabbit. {exc}')
             await asyncio.sleep(2)
             await self.start(loop, callback)
 

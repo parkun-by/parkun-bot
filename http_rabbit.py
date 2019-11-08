@@ -121,25 +121,3 @@ class Rabbit:
                 raise NoCaptchaInQueue()
 
             return data
-
-    async def get_preparer(self) -> str or None:
-        url = config.RABBIT_HTTP_ADDRESS + \
-            f'/api/queues/%2F/{config.RABBIT_QUEUE_TO_BOT}/get'
-
-        data = {
-            'count': 1,
-            'ackmode': 'ack_requeue_false',
-            'encoding': 'auto',
-        }
-
-        async with self._http_session.post(url, json=data) as response:
-            if response.status != 200:
-                raise ErrorWhilePutInQueue(
-                    f'Ошибка при выборе обработчика: {response.reason}')
-
-            try:
-                data = json.loads((await response.json())[0]['payload'])
-            except IndexError:
-                return None
-
-            return data['answer_queue']
