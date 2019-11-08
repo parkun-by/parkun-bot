@@ -27,6 +27,7 @@ from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
 from timer import Timer
 from imap_email import Email
+from worker_pool import WorkerPool
 
 
 loop = asyncio.get_event_loop()
@@ -46,6 +47,7 @@ locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
+worker_pool = WorkerPool()
 
 
 async def cancel_sending(appeal_params: dict) -> None:
@@ -368,9 +370,12 @@ async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
 
 async def status_received(status: str) -> None:
     data = json.loads(status)
-    logger.info(f'Прилетел статус - {str(data["user_id"])}: {data["type"]}')
+    user_id = str(get_value(data, 'user_id', 'undefined'))
+    queue_id = str(get_value(data, 'answer_queue', 'undefined'))
+    logger.info(f'Прилетел статус: {user_id} - {queue_id} - {data["type"]}')
 
     if data['type'] == config.OK:
+        worker_pool.add_worker(data['answer_queue'])
         await send_success_sending(data['user_id'], data['appeal_id'])
     elif data['type'] == config.CAPTCHA_URL:
         await fill_captcha(data['user_id'],
@@ -381,6 +386,8 @@ async def status_received(status: str) -> None:
         await send_appeal(data['user_id'],
                           data['answer_queue'],
                           data['appeal_id'])
+    elif data['type'] == config.FREE_WORKER:
+        worker_pool.add_worker(data['answer_queue'])
 
 
 def get_appeal_email(data) -> str or None:
@@ -389,7 +396,7 @@ def get_appeal_email(data) -> str or None:
 
 
 async def entering_captcha(message, appeal_id: int, state) -> None:
-    preparer_queue = await http_rabbit.get_preparer()
+    preparer_queue = worker_pool.pop_worker()
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
