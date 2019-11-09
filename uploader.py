@@ -14,23 +14,27 @@ class Uploader:
         self._http_session.close()
         shutil.rmtree(self.tempdir, ignore_errors=True)
 
-    def _get_user_dir(self, user_id):
-        dir_path = os.path.join(self.tempdir, str(user_id))
+    def _get_user_dir(self, user_id: int, appeal_id: int) -> str:
+        dir_path = os.path.join(self.tempdir, str(user_id), str(appeal_id))
 
         try:
-            os.mkdir(dir_path)
+            os.makedirs(dir_path)
             return dir_path
         except FileExistsError:
             return dir_path
 
-    def clear_storage(self, user_id):
-        shutil.rmtree(self._get_user_dir(user_id), ignore_errors=True)
+    def clear_storage(self, user_id: int, appeal_id: int) -> None:
+        shutil.rmtree(self._get_user_dir(user_id, appeal_id),
+                      ignore_errors=True)
 
-    def get_file_list(self, user_id):
-        return os.listdir(self._get_user_dir(user_id))
+    def get_file_list(self, user_id: int, appeal_id: int) -> list:
+        return os.listdir(self._get_user_dir(user_id, appeal_id))
 
-    async def get_permanent_url(self, url, user_id):
-        filename = os.path.join(self._get_user_dir(user_id),
+    async def get_permanent_url(self,
+                                url: str,
+                                user_id: int,
+                                appeal_id: int) -> (str, str):
+        filename = os.path.join(self._get_user_dir(user_id, appeal_id),
                                 url.split('/')[-1])
 
         async with self._http_session.get(url) as resp:

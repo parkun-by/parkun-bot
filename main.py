@@ -297,7 +297,7 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                                 appeal['violation_address'])
 
         logger.info(f'Отправили в остальное - {str(user_id)}')
-        delete_appeal_from_user_queue(data, appeal_id)
+        delete_appeal_from_user_queue(data, user_id, appeal_id)
 
 
 def add_stop_task_timer(language: str,
@@ -486,25 +486,37 @@ async def violation_storage_full(state):
             return True
 
 
-async def add_photo_to_attachments(photo, state, user_id):
-    file = await bot.get_file(photo['file_id'])
+async def add_photo_to_attachments(photo: dict,
+                                   state: FSMContext,
+                                   user_id: int) -> None:
+    async with semaphore, state.proxy() as data:
+        ensure_attachments_availability(data)
+        data['violation_photo_ids'].append(photo['file_id'])
 
-    image_url, image_path = await uploader.get_permanent_url(
-        config.URL_BASE + file.file_path, user_id)
 
+async def prepare_photos(data: dict, user_id: int, appeal_id: int) -> None:
     # потанцевально узкое место, все потоки всех пользователей будут ждать
     # пока кто-то один аппендит, если я правильно понимаю
     # нужно сделать каждому пользователю свой личный семафорчик, но я пока
     # что не знаю как
-    async with semaphore, state.proxy() as data:
-        ensure_attachments_availability(data)
+    async with semaphore:
+        for file_id in data['violation_photo_ids']:
+            file = await bot.get_file(file_id)
 
-        data['violation_attachments'].append(image_url)
-        data['violation_photo_ids'].append(photo['file_id'])
-        data['violation_photo_files_paths'].append(image_path)
+            image_url, image_path = await uploader.get_permanent_url(
+                config.URL_BASE + file.file_path, user_id, appeal_id)
+
+            # это скорее всего не нужно, и так уже было сделано когда
+            # добавлялась фотка
+            ensure_attachments_availability(data)
+
+            data['violation_attachments'].append(image_url)
+            data['violation_photo_files_paths'].append(image_path)
+
+    logger.info('Вгрузили фоточки - ' + str(user_id))
 
 
-def delete_prepared_violation(data: dict, user_id: int) -> None:
+def delete_prepared_violation(data: dict) -> None:
     # в этом месте сохраним адрес нарушения для использования в
     # следующем обращении
     data['previous_violation_address'] = get_value(data, 'violation_address')
@@ -513,9 +525,6 @@ def delete_prepared_violation(data: dict, user_id: int) -> None:
         set_default(data, key, force=True)
 
     data['appeal_response_queue'] = ''
-
-    # также удалим временные файлы картинок нарушений
-    uploader.clear_storage(user_id)
 
 
 def set_default(data: dict, key: str, force=False) -> None:
@@ -616,10 +625,15 @@ def get_appeal_from_user_queue(data: dict, appeal_id: int) -> dict:
     return appeal
 
 
-def delete_appeal_from_user_queue(data: dict, appeal_id: int) -> None:
+def delete_appeal_from_user_queue(data: dict,
+                                  user_id: int,
+                                  appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
     appeals.pop(str(appeal_id))
     data['appeals'] = appeals
+
+    # также удалим временные файлы картинок нарушений
+    uploader.clear_storage(user_id, appeal_id)
 
 
 async def compose_summary(data):
@@ -690,7 +704,7 @@ def get_appeal_text(data: dict) -> str:
     return AppealText.get(get_value(data, 'letter_lang'), violation_data)
 
 
-async def approve_sending(chat_id, state):
+async def approve_sending(chat_id: int, state: FSMContext) -> int:
     language = await get_ui_lang(state)
 
     caption_button_text = locales.text(language, 'add_caption_button')
@@ -728,11 +742,13 @@ async def approve_sending(chat_id, state):
     keyboard.add(enter_violation_info_button, add_caption_button)
     keyboard.add(approve_sending_button, cancel_button)
 
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML',
-                           disable_web_page_preview=True)
+    message = await bot.send_message(chat_id,
+                                     text,
+                                     reply_markup=keyboard,
+                                     parse_mode='HTML',
+                                     disable_web_page_preview=True)
+
+    return message.message_id
 
 
 def get_str_current_time():
@@ -1735,8 +1751,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.vehicle_number,
                                   Form.violation_datetime,
                                   Form.violation_location,
-                                  Form.sending_approvement,
-                                  Form.appeal_sending])
+                                  Form.sending_approvement])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.username))
@@ -1745,7 +1760,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-        delete_prepared_violation(data, call.message.chat.id)
+        delete_prepared_violation(data)
 
     text = locales.text(language, 'operation_mode')
     await bot.send_message(call.message.chat.id, text)
@@ -1796,7 +1811,7 @@ async def cancel_captcha_input(call, state: FSMContext):
             get_value(data, 'appeal_response_queue'))
 
         stop_timer.delete_task(call.message.chat.id, appeal_id)
-        delete_appeal_from_user_queue(data, appeal_id)
+        delete_appeal_from_user_queue(data, call.message.chat.id, appeal_id)
 
     await cancel_input(call, state)
 
@@ -1831,7 +1846,7 @@ async def send_letter_click(call, state: FSMContext):
         await bot.send_message(call.message.chat.id, text)
 
         async with state.proxy() as data:
-            delete_prepared_violation(data, call.message.chat.id)
+            delete_prepared_violation(data)
 
     elif not await verified_email(state):
         logger.info('Обращение не отправлено, email не подтвержден - ' +
@@ -1839,7 +1854,7 @@ async def send_letter_click(call, state: FSMContext):
 
         async with state.proxy() as data:
             await invite_to_confirm_email(data, call.message.chat.id)
-            delete_prepared_violation(data, call.message.chat.id)
+            delete_prepared_violation(data)
 
     else:
         appeal_id = call.message.message_id
@@ -1850,7 +1865,7 @@ async def send_letter_click(call, state: FSMContext):
                                           appeal_id)
 
             add_appeal_to_user_queue(data, appeal, appeal_id)
-            delete_prepared_violation(data, call.message.chat.id)
+            delete_prepared_violation(data)
 
         await entering_captcha(call.message, appeal_id, state)
         return
@@ -2484,11 +2499,15 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод даты и времени нарушения - ' +
                 str(message.chat.username))
 
+    await Form.sending_approvement.set()
+
     async with state.proxy() as data:
         data['violation_datetime'] = message.text
 
-    await Form.sending_approvement.set()
-    await approve_sending(message.chat.id, state)
+    appeal_id = await approve_sending(message.chat.id, state)
+
+    async with state.proxy() as data:
+        await prepare_photos(data, message.chat.id, appeal_id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2496,7 +2515,7 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
 async def catch_captcha(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод капчи - ' + str(message.chat.username))
 
-    await Form.appeal_sending.set()
+    await Form.operational_mode.set()
 
     async with state.proxy() as data:
         captcha_url, appeal_id = pop_captcha_data(data)
@@ -2578,6 +2597,15 @@ async def reject_non_text_input(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
     text = locales.text(language, 'text_only')
 
+    await bot.send_message(message.chat.id, text)
+
+
+@dp.message_handler(content_types=types.ContentTypes.ANY,
+                    state=[Form.sending_approvement])
+async def ask_for_button_press(message: types.Message, state: FSMContext):
+    logger.info('Нужно нажать на кнопку - ' + str(message.from_user.username))
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'buttons_only')
     await bot.send_message(message.chat.id, text)
 
 
