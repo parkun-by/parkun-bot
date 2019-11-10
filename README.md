@@ -6,11 +6,15 @@
 
 Бот развернут по адресу <http://t.me/parkun_by_bot>.
 
-Одобряются issue, pull requests и прочие привнесения.
+Одобряются issue, pull requests и прочие привнесения. [Инструкция для разработчиков.](./docs/russian/developers_guide.md)
 
 Спасибо за внимание.
 
 Changelog:
+
+2.0
+
+    - Посылка обращений в ГАИ возвращена. [Подробности.](./docs/russian/parkun_2_announcement.md)
 
 1.12.0
 
