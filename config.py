@@ -41,7 +41,7 @@ DEPARTMENT_NAMES = {
 # redis
 REDIS_HOST = 'localhost'
 REDIS_PORT = '16379'
-REDIS_PASSWORD = ''
+REDIS_PASSWORD = 'redis'
 
 # bot owner's telegram id to receive feedback
 ADMIN_ID = 00000000

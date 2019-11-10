@@ -16,11 +16,6 @@
             "tags": "administrator"
         },
         {
-            "name": "appeal_sender",
-            "password": "appeal_sender",
-            "tags": "administrator"
-        },
-        {
             "name": "appeal_preparer",
             "password": "appeal_preparer",
             "tags": "administrator"
@@ -36,13 +31,6 @@
         },
         {
             "user": "parkun_bot",
-            "vhost": "/",
-            "configure": ".*",
-            "write": ".*",
-            "read": ".*"
-        },
-        {
-            "user": "appeal_sender",
             "vhost": "/",
             "configure": ".*",
             "write": ".*",

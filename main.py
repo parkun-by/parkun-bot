@@ -34,7 +34,8 @@ loop = asyncio.get_event_loop()
 bot = Bot(token=config.API_TOKEN, loop=loop)
 
 storage = RedisStorage2(host=config.REDIS_HOST,
-                        port=config.REDIS_PORT)
+                        port=config.REDIS_PORT,
+                        password=config.REDIS_PASSWORD)
 
 dp = Dispatcher(bot, storage=storage)
 
