@@ -2610,6 +2610,13 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, text)
 
 
+@dp.message_handler(content_types=types.ContentTypes.ANY,
+                    state=None)
+async def ask_for_button_press(message: types.Message, state: FSMContext):
+    logger.info('Нет стейта - ' + str(message.from_user.username))
+    await cmd_start(message, state)
+
+
 async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
     logger.info('Загружаем границы регионов.')
