@@ -2456,7 +2456,7 @@ async def catch_email_password(message: types.Message, state: FSMContext):
         await state.set_state(pop_state(data))
         data['sender_email_password'] = password
 
-    text = locales.text(language, 'email_password_saved')
+    text = locales.text(language, 'email_password_saved').format(email)
     await bot.send_message(message.chat.id, text)
 
 
