@@ -2274,8 +2274,8 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
         data['sender_street'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_house',
-                                  Form.sender_house)
+                                  'sender_block',
+                                  Form.sender_block)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2285,11 +2285,21 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        if not await check_validity(validator.building, message, language):
+            await ask_for_sender_info(message.chat.id,
+                                      data,
+                                      'sender_house',
+                                      Form.sender_house)
+            return
+
+    async with state.proxy() as data:
         data['sender_house'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_block',
-                                  Form.sender_block)
+                                  'sender_flat',
+                                  Form.sender_flat)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2302,8 +2312,8 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
         data['sender_block'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_flat',
-                                  Form.sender_flat)
+                                  'sender_house',
+                                  Form.sender_house)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
