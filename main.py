@@ -3,7 +3,6 @@ import io
 import logging
 import json
 from datetime import datetime
-from os import path
 from typing import Any
 
 from dateutil import tz
@@ -11,6 +10,7 @@ from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.utils import executor
+from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
 from disposable_email_domains import blocklist
 
 import config
@@ -72,10 +72,15 @@ async def cancel_sending(appeal_params: dict) -> None:
 
     keyboard = get_value(appeal_params, 'keyboard', None)
 
-    await bot.send_message(user_id,
-                           text,
-                           reply_markup=keyboard,
-                           reply_to_message_id=appeal_id)
+    try:
+        await bot.send_message(user_id,
+                               text,
+                               reply_markup=keyboard,
+                               reply_to_message_id=appeal_id)
+    except AiogramBadRequest:
+        await bot.send_message(user_id,
+                               text,
+                               reply_markup=keyboard)
 
 
 def get_value(data: dict, key: str, placeholder: str = None) -> Any:
