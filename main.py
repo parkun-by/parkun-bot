@@ -621,7 +621,7 @@ def get_sender_address(data):
 
 def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
-    appeals[appeal_id] = appeal
+    appeals[str(appeal_id)] = appeal
     data['appeals'] = appeals
 
 
