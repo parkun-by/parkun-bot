@@ -47,7 +47,6 @@ semaphore = asyncio.Semaphore()
 locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
-amqp_rabbit = AMQPRabbit()
 worker_pool = WorkerPool()
 
 
@@ -126,6 +125,7 @@ def setup_logging():
 
 
 logger = setup_logging()
+amqp_rabbit = AMQPRabbit(logger)
 
 REQUIRED_CREDENTIALS = [
     'sender_first_name',

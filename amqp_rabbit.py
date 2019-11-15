@@ -4,11 +4,15 @@ import asyncio
 
 
 class Rabbit:
+    def __init__(self, logger):
+        self.logger = logger
+
     async def start(self, loop, callback):
         try:
             await self.connect(loop, callback)
         except Exception as exc:
-            print(f'Fail. Trying reconnect Rabbit. {exc}')
+            self.logger.info(f'Fail. Trying reconnect Rabbit. {exc}')
+            self.logger.exception(exc)
             await asyncio.sleep(2)
             await self.start(loop, callback)
 
