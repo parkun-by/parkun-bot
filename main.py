@@ -630,6 +630,7 @@ def get_sender_address(data):
 
 def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
+    delete_old_appeals(appeals)
     appeals[str(appeal_id)] = appeal
     data['appeals'] = appeals
 
@@ -649,6 +650,21 @@ def delete_appeal_from_user_queue(data: dict,
 
     # также удалим временные файлы картинок нарушений
     uploader.clear_storage(user_id, appeal_id)
+
+
+def delete_old_appeals(appeals: dict, limit: int = 5) -> dict:
+    keys = list(appeals.keys())
+    keys.sort(reverse=True)
+    keys_amount = len(keys)
+    logger.info(f'Длина хранилища обращений - {keys_amount}')
+
+    if keys_amount > limit:
+        keys_to_delete = keys[5:]
+
+        for key in keys_to_delete:
+            appeals.pop(key)
+
+    return appeals
 
 
 async def compose_summary(data):
