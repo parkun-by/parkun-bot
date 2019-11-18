@@ -382,16 +382,25 @@ async def status_received(status: str) -> None:
 
     if data['type'] == config.OK:
         worker_pool.add_worker(data['answer_queue'])
-        await send_success_sending(data['user_id'], data['appeal_id'])
+
+        asyncio.run_coroutine_threadsafe(
+            send_success_sending(data['user_id'], data['appeal_id']),
+            loop)
     elif data['type'] == config.CAPTCHA_URL:
-        await fill_captcha(data['user_id'],
-                           data['appeal_id'],
-                           data['captcha'],
-                           data['answer_queue'])
+        asyncio.run_coroutine_threadsafe(
+            fill_captcha(data['user_id'],
+                         data['appeal_id'],
+                         data['captcha'],
+                         data['answer_queue']),
+            loop
+        )
     elif data['type'] == config.CAPTCHA_OK:
-        await send_appeal(data['user_id'],
-                          data['answer_queue'],
-                          data['appeal_id'])
+        asyncio.run_coroutine_threadsafe(
+            send_appeal(data['user_id'],
+                        data['answer_queue'],
+                        data['appeal_id']),
+            loop
+        )
     elif data['type'] == config.FREE_WORKER:
         worker_pool.add_worker(data['answer_queue'])
 
