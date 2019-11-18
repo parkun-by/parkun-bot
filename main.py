@@ -94,7 +94,7 @@ def get_value(data: dict, key: str, placeholder: str = None) -> Any:
         return data[key]
 
 
-stop_timer = Timer(cancel_sending)
+stop_timer = Timer(cancel_sending, loop)
 broadcaster = Broadcaster(get_value, locales)
 
 

@@ -4,9 +4,10 @@ from typing import Awaitable
 
 
 class Timer:
-    def __init__(self, stop_callback):
+    def __init__(self, stop_callback, loop):
         self.tasks_to_stop = {}
         self.stop_callback = stop_callback
+        self.loop = loop
 
     async def start(self):
         while True:
@@ -18,8 +19,10 @@ class Timer:
 
         for task in self.tasks_to_stop:
             if datetime.utcnow() >= self.tasks_to_stop[task]['stop_time']:
-                await self.stop_callback(
-                    self.tasks_to_stop[task]['description'])
+                asyncio.run_coroutine_threadsafe(
+                    self.stop_callback(
+                        self.tasks_to_stop[task]['description']),
+                    self.loop)
 
                 delete_list.append(task)
 
