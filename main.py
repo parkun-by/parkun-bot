@@ -1891,6 +1891,7 @@ async def send_letter_click(call, state: FSMContext):
         appeal_id = call.message.message_id
 
         async with state.proxy() as data:
+            await prepare_photos(data, call.message.chat.id, appeal_id)
             appeal = await compose_appeal(data,
                                           call.message.chat.id,
                                           appeal_id)
@@ -2547,8 +2548,8 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
 
     appeal_id = await approve_sending(message.chat.id, state)
 
-    async with state.proxy() as data:
-        await prepare_photos(data, message.chat.id, appeal_id)
+    # async with state.proxy() as data:
+    #     await prepare_photos(data, message.chat.id, appeal_id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
