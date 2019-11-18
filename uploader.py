@@ -1,21 +1,24 @@
 import aiohttp
 import requests
-import tempfile
 import os
 import shutil
+
+from os.path import expanduser
 
 
 class Uploader:
     def __init__(self):
         self._http_session = aiohttp.ClientSession()
-        self.tempdir = tempfile.mkdtemp('_parkun')
+        home = expanduser("~")
+        self.files_dir = os.path.join(home, 'temp_files_parkun')
+        os.makedirs(self.files_dir)
 
     def __del__(self):
         self._http_session.close()
-        shutil.rmtree(self.tempdir, ignore_errors=True)
+        shutil.rmtree(self.files_dir, ignore_errors=True)
 
     def _get_user_dir(self, user_id: int, appeal_id: int) -> str:
-        dir_path = os.path.join(self.tempdir, str(user_id), str(appeal_id))
+        dir_path = os.path.join(self.files_dir, str(user_id), str(appeal_id))
 
         try:
             os.makedirs(dir_path)
