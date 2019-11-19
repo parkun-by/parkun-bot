@@ -17,7 +17,7 @@ class Timer:
     async def _check_for_overdue(self):
         delete_list = []
 
-        for task in self.tasks_to_stop:
+        for task in list(self.tasks_to_stop.keys()):
             if datetime.utcnow() >= self.tasks_to_stop[task]['stop_time']:
                 asyncio.run_coroutine_threadsafe(
                     self.stop_callback(
