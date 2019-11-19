@@ -3,15 +3,16 @@ import requests
 import os
 import shutil
 
-from os.path import expanduser
-
 
 class Uploader:
     def __init__(self):
         self._http_session = aiohttp.ClientSession()
-        home = expanduser("~")
-        self.files_dir = os.path.join(home, 'temp_files_parkun')
-        os.makedirs(self.files_dir)
+        self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
+
+        try:
+            os.makedirs(self.files_dir)
+        except FileExistsError:
+            pass
 
     def __del__(self):
         self._http_session.close()
