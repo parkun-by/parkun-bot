@@ -631,8 +631,11 @@ def get_sender_address(data):
 def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
     delete_old_appeals(appeals)
-    appeals[str(appeal_id)] = appeal
-    data['appeals'] = appeals
+
+    if str(appeal_id) not in appeals:
+        logger.info(f'Такого обращения еще нет в хранилище - {appeal_id}')
+        appeals[str(appeal_id)] = appeal
+        data['appeals'] = appeals
 
 
 def get_appeal_from_user_queue(data: dict, appeal_id: int) -> dict:
@@ -1888,18 +1891,24 @@ async def send_letter_click(call, state: FSMContext):
             delete_prepared_violation(data)
 
     else:
-        appeal_id = call.message.message_id
+        if call.message.reply_to_message:
+            logger.info(f'Это реплай - {str(call.from_user.username)}')
+            message = call.message.reply_to_message
+            appeal_id = message.message_id
+        else:
+            message = call.message
+            appeal_id = message.message_id
 
-        async with state.proxy() as data:
-            await prepare_photos(data, call.message.chat.id, appeal_id)
-            appeal = await compose_appeal(data,
-                                          call.message.chat.id,
-                                          appeal_id)
+            async with state.proxy() as data:
+                await prepare_photos(data, call.message.chat.id, appeal_id)
+                appeal = await compose_appeal(data,
+                                              call.message.chat.id,
+                                              appeal_id)
 
-            add_appeal_to_user_queue(data, appeal, appeal_id)
-            delete_prepared_violation(data)
+                add_appeal_to_user_queue(data, appeal, appeal_id)
+                delete_prepared_violation(data)
 
-        await entering_captcha(call.message, appeal_id, state)
+        await entering_captcha(message, appeal_id, state)
         return
 
     await Form.operational_mode.set()
