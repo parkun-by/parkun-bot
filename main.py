@@ -1560,8 +1560,8 @@ async def skip_city_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_house',
-                                  Form.sender_house)
+                                  'sender_block',
+                                  Form.sender_block)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_house)
@@ -1574,8 +1574,8 @@ async def skip_house_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_block',
-                                  Form.sender_block)
+                                  'sender_flat',
+                                  Form.sender_flat)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_block)
@@ -1588,8 +1588,8 @@ async def skip_block_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_flat',
-                                  Form.sender_flat)
+                                  'sender_house',
+                                  Form.sender_house)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
                            state=Form.sender_flat)
