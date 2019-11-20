@@ -12,7 +12,7 @@ services:
   redis:
     container_name: parkun_redis
     image: redis:alpine3.10
-    command: redis-server --requirepass 'redis'
+    command: redis-server --requirepass 'redis' --appendonly yes
     ports:
       - 16379:6379
     volumes:
