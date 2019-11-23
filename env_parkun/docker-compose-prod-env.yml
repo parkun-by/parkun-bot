@@ -1,12 +1,12 @@
-version: '3'
+version: '3.5'
 
 volumes:
-  redis-data:
   wiremock-data:
   rabbit-data:
 
 networks:
-  parkun:
+  proxynet:
+    name: parkun
 
 services:
   redis:
@@ -16,25 +16,14 @@ services:
     ports:
       - 16379:6379
     volumes:
-      - redis-data:/data
+      - /home/parkun/redis_data:/data
     networks:
-      - parkun
-
-  wiremock:
-    container_name: parkun_wiremock
-    image: rodolpheche/wiremock:2.25.0-alpine
-    networks:
-      - parkun
-    ports:
-      - 18080:8080
-    volumes:
-      - wiremock-data:/home/wiremock
-      - ./wiremock/mappings:/home/wiremock/mappings
+      - proxynet
 
   rabbit:
     container_name: parkun_rabbit
     networks:
-      - parkun
+      - proxynet
     ports:
       - 5672:5672
       - 15672:15672
@@ -48,4 +37,3 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-

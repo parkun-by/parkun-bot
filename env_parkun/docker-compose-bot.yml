@@ -1,0 +1,16 @@
+version: '3.5'
+
+networks:
+  proxynet:
+    name: parkun
+
+services:
+  bot:
+    container_name: parkun_bot
+    networks:
+      - proxynet
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    volumes:
+      - /tmp/temp_files_parkun:/tmp/temp_files_parkun
