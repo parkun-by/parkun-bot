@@ -7,11 +7,14 @@ from peony import PeonyClient
 
 class Twitter:
     def __init__(self, getter, locales):
-        self.client = PeonyClient(
-            consumer_key=config.CONSUMER_KEY,
-            consumer_secret=config.CONSUMER_SECRET,
-            access_token=config.ACCESS_TOKEN,
-            access_token_secret=config.ACCESS_TOKEN_SECRET)
+        if config.ACCESS_TOKEN == 'access_token':
+            self.client = None
+        else:
+            self.client = PeonyClient(
+                consumer_key=config.CONSUMER_KEY,
+                consumer_secret=config.CONSUMER_SECRET,
+                access_token=config.ACCESS_TOKEN,
+                access_token_secret=config.ACCESS_TOKEN_SECRET)
 
         self.get_param = getter
         self.locales = locales
@@ -48,6 +51,9 @@ class Twitter:
                    date_time: str,
                    plate: str,
                    address: str) -> None:
+        if not self.client:
+            return
+
         if not coordinates:
             coordinates = [None, None]
 
