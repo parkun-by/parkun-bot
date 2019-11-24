@@ -1,9 +1,14 @@
+SHELL:=/bin/bash
+
 py_env:
-	rm -rf env/
-	python -m venv env; \
-	source env/bin/activate
-	pip install --upgrade pip
-	pip install -r requirements.txt
+	rm -rf .venv/
+	python3 -m venv .venv; \
+	( \
+		source .venv/bin/activate \
+		pip install --upgrade pip; \
+		pip install --upgrade wheel; \
+		pip install -r requirements.txt; \
+	)
 
 start_dev_env:
 	docker-compose -f env_parkun/docker-compose-dev-env.yml up -d --build
