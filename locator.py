@@ -132,7 +132,7 @@ class Locator:
             ('geocode', coordinates),
             ('kind', 'house'),
             ('format', 'json'),
-            ('key', config.YANDEX_MAPS_API_KEY),
+            ('apikey', config.YANDEX_MAPS_API_KEY),
             ('lang', lang)
         )
 
