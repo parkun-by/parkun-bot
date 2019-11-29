@@ -1,3 +1,4 @@
+from typing import Optional
 import aiohttp
 import config
 import json
@@ -70,7 +71,7 @@ class Rabbit:
                                 captcha_text: str,
                                 user_id: int,
                                 appeal_id: int,
-                                appeal_email: str or None,
+                                appeal_email: Optional[str],
                                 routing_key: str) -> None:
         body = {
             'type': config.CAPTCHA_TEXT,

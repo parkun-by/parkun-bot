@@ -3,6 +3,8 @@ import requests
 import os
 import shutil
 
+from typing import Tuple
+
 
 class Uploader:
     def __init__(self):
@@ -37,7 +39,7 @@ class Uploader:
     async def get_permanent_url(self,
                                 url: str,
                                 user_id: int,
-                                appeal_id: int) -> (str, str):
+                                appeal_id: int) -> Tuple[str, str]:
         filename = os.path.join(self._get_user_dir(user_id, appeal_id),
                                 url.split('/')[-1])
 

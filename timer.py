@@ -9,7 +9,7 @@ class Timer:
         self.stop_callback = stop_callback
         self.loop = loop
 
-    async def start(self):
+    async def start(self) -> Awaitable[None]:
         while True:
             await self._check_for_overdue()
             await asyncio.sleep(60)

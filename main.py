@@ -3,7 +3,7 @@ import io
 import logging
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Tuple, Union
 
 from dateutil import tz
 from aiogram import Bot, types
@@ -162,7 +162,7 @@ def save_captcha_data(data: dict, captcha_url: str, appeal_id: int) -> None:
     data['captcha_data'].append((captcha_url, appeal_id))
 
 
-def pop_captcha_data(data: dict) -> (str, int):
+def pop_captcha_data(data: dict) -> Tuple[str, int]:
     return data['captcha_data'].pop()
 
 
@@ -405,7 +405,7 @@ async def status_received(status: str) -> None:
         worker_pool.add_worker(data['answer_queue'])
 
 
-def get_appeal_email(data) -> str or None:
+def get_appeal_email(data) -> Optional[str]:
     if get_value(data, 'sender_email_password', None):
         return get_value(data, 'sender_email', None)
 
@@ -1047,7 +1047,7 @@ async def ask_for_violation_time(chat_id, language):
 
 
 async def send_photos_group_with_caption(photos_id: list,
-                                         chat_name: str,
+                                         chat_name: Union[str, int],
                                          caption=''):
     photos = []
 

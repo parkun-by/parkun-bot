@@ -1,3 +1,6 @@
+from typing import Optional
+
+
 class WorkerPool:
     def __init__(self, logger):
         self.queue = set()
@@ -14,7 +17,7 @@ class WorkerPool:
         except KeyError:
             pass
 
-    def pop_worker(self) -> str or None:
+    def pop_worker(self) -> Optional[str]:
         try:
             worker = self.queue.pop()
             self.logger.info(f'Новое состояние воркеров - {str(self.queue)}')
