@@ -9,6 +9,7 @@ from dateutil import tz
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
+from aiogram.dispatcher.filters.state import State
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
 from disposable_email_domains import blocklist
@@ -575,6 +576,7 @@ def set_default_sender_info(data):
     set_default(data, 'sender_last_name')
     set_default(data, 'sender_patronymic')
     set_default(data, 'sender_email')
+    set_default(data, 'sender_phone')
     set_default(data, 'sender_city')
     set_default(data, 'sender_street')
     set_default(data, 'sender_house')
@@ -685,6 +687,8 @@ async def compose_summary(data):
         ' <b>{}</b>'.format(get_sender_full_name(data)) + '\n' +\
         locales.text(language, 'sender_email') +\
         ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
+        locales.text(language, 'sender_phone') +\
+        ' <b>{}</b>'.format(get_value(data, 'sender_phone')) + '\n' +\
         locales.text(language, 'sender_address') +\
         ' <b>{}</b>'.format(get_sender_address(data)) + '\n' +\
         locales.text(language, 'sender_zipcode') +\
@@ -733,6 +737,7 @@ def get_appeal_text(data: dict) -> str:
         'remark': get_value(data, 'violation_caption'),
         'sender_name': get_sender_full_name(data),
         'sender_email': get_value(data, 'sender_email'),
+        'sender_phone': get_value(data, 'sender_phone'),
     }
 
     return AppealText.get(get_value(data, 'letter_lang'), violation_data)
@@ -840,14 +845,22 @@ async def get_skip_keyboard(language):
     return keyboard
 
 
-async def ask_for_sender_info(chat_id, data, info_type, next_state):
+async def ask_for_sender_info(chat_id: int,
+                              data: dict,
+                              info_type: str,
+                              next_state: State,
+                              remark: str = '') -> None:
     language = await get_ui_lang(data=data)
+
+    if remark:
+        remark = remark + '\n'
 
     current_value = get_value(data,
                               info_type,
                               locales.text(language, 'empty_input'))
 
     text = locales.text(language, f'input_{info_type}') + '\n' +\
+        remark +\
         '\n' +\
         locales.text(language, 'current_value') + f'<b>{current_value}</b>' +\
         '\n' +\
@@ -861,24 +874,6 @@ async def ask_for_sender_info(chat_id, data, info_type, next_state):
                            parse_mode='HTML')
 
     await next_state.set()
-
-
-async def ask_for_user_email(chat_id, language, current_email):
-    text = locales.text(language, 'input_email') + '\n' +\
-        locales.text(language, 'nonexistent_email_warning') + '\n' +\
-        '\n' +\
-        locales.text(language, 'current_value') + f'<b>{current_email}</b>' +\
-        '\n' +\
-        locales.text(language, 'email_example')
-
-    keyboard = await get_skip_keyboard(language)
-
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.sender_email.set()
 
 
 async def show_private_info_summary(chat_id, state):
@@ -1207,12 +1202,15 @@ async def show_personal_info(message: types.Message, state: FSMContext):
 
         full_name = get_sender_full_name(data) or empty_input
         email = get_value(data, 'sender_email', empty_input)
+        phone = get_value(data, 'sender_phone', empty_input)
         address = get_sender_address(data) or empty_input
 
         text = locales.text(language, 'personal_data') + '\n' + '\n' +\
             locales.text(language, 'sender_name') + f' <b>{full_name}</b>' +\
             '\n' +\
             locales.text(language, 'sender_email') + f' <b>{email}</b>' +\
+            '\n' +\
+            locales.text(language, 'sender_phone') + f' <b>{phone}</b>' +\
             '\n' +\
             locales.text(language, 'sender_address') + f' <b>{address}</b>'
 
@@ -1449,12 +1447,12 @@ async def skip_last_name_click(call, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        current_user_email = get_value(
-            data, 'sender_email', locales.text(language, 'empty_input'))
-
-    await ask_for_user_email(call.message.chat.id,
-                             language,
-                             current_user_email)
+        await ask_for_sender_info(
+            call.message.chat.id,
+            data,
+            'sender_email',
+            Form.sender_email,
+            locales.text(language, 'nonexistent_email_warning'))
 
 
 @dp.callback_query_handler(lambda call: call.data == '/use_previous',
@@ -1527,6 +1525,21 @@ async def change_language_click(call, state: FSMContext):
                            state=Form.sender_email)
 async def skip_email_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пропуска ввода email - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        await ask_for_sender_info(call.message.chat.id,
+                                  data,
+                                  'sender_phone',
+                                  Form.sender_phone)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/skip',
+                           state=Form.sender_phone)
+async def skip_phone_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки пропуска ввода телефона - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -2227,12 +2240,13 @@ async def catch_sender_last_name(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_last_name'] = message.text
-        current_user_email = get_value(
-            data, 'sender_email', locales.text(language, 'empty_input'))
 
-    await ask_for_user_email(message.chat.id,
-                             language,
-                             current_user_email)
+        await ask_for_sender_info(
+            message.chat.id,
+            data,
+            'sender_email',
+            Form.sender_email,
+            locales.text(language, 'nonexistent_email_warning'))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2252,9 +2266,13 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
             text = locales.text(language, 'no_temporary_email')
             await bot.send_message(message.chat.id, text)
 
-            await ask_for_user_email(message.chat.id,
-                                     language,
-                                     current_user_email)
+            async with state.proxy() as data:
+                await ask_for_sender_info(
+                    message.chat.id,
+                    data,
+                    'sender_email',
+                    Form.sender_email,
+                    locales.text(language, 'nonexistent_email_warning'))
 
             return
     except IndexError:
@@ -2264,6 +2282,19 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         data['sender_email'] = message.text
         data['sender_email_password'] = ''
         data['verified'] = False
+        await ask_for_sender_info(message.chat.id,
+                                  data,
+                                  'sender_phone',
+                                  Form.sender_phone)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.sender_phone)
+async def catch_sender_city(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод телефона - ' + str(message.chat.id))
+
+    async with state.proxy() as data:
+        data['sender_phone'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
                                   'sender_city',
@@ -2633,6 +2664,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_last_name,
                            Form.sender_patronymic,
                            Form.sender_email,
+                           Form.sender_phone,
                            Form.sender_city,
                            Form.sender_street,
                            Form.sender_house,

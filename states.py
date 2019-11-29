@@ -8,6 +8,7 @@ class Form(StatesGroup):
     sender_last_name = State()
     sender_patronymic = State()
     sender_email = State()
+    sender_phone = State()
     sender_city = State()
     sender_street = State()
     sender_house = State()

@@ -3,21 +3,28 @@ import config
 
 class AppealText:
     @staticmethod
-    def _optional(text):
+    def _optional(text: str) -> str:
         if text:
             return f'\n{text}\n'
         else:
             return ''
 
     @staticmethod
-    def get(language, violation_data):
+    def get(language: str, violation_data: dict) -> str:
         if language == config.BY:
             return AppealText.belarusian(violation_data)
         else:
             return AppealText.russian(violation_data)
 
     @staticmethod
-    def belarusian(violation_data):
+    def _get_phone(name: str, phone: str) -> str:
+        if phone:
+            return f'\n{name}: {phone}'
+        else:
+            return ''
+
+    @staticmethod
+    def belarusian(violation_data: dict) -> str:
         return f'''Прашу вас прыняць меры ў дачыненні да ўладальніка транспартнага сродку, які здзейсніў парушэнне правілаў прыпынку і стаянкі.
 
 Прашу прыцягнуць да адказнасці ў адпаведнасці з Кодэксам Рэспублікі Беларусь аб адміністрацыйных правапарушэннях, артыкул 18.22 «Парушэнне правілаў прыпынку і стаянкі транспартнага сродку, а таксама іншых правілаў дарожнага руху», і азнаёміць мяне з прынятымі мерамі.
@@ -43,12 +50,12 @@ class AppealText:
 
 На падставе арт. 7 і ч. 5 арт. 25 Закона «Аб зваротах грамадзян і юрыдычных асоб» прашу накіраваць адказ на сапраўдны зварот на адрас маёй электроннай пошты {violation_data['sender_email']}, у якім пазначыць звесткі аб прынятых мерах у адпаведнасці з кампетэнцыяй органаў унутраных спраў і патрабаваннямі названых нарматыўных прававых актаў.
 
-З павагай, {violation_data['sender_name']}.
+З павагай, {violation_data['sender_name']}.{AppealText._get_phone('Тэлефон', violation_data['sender_phone'])}
 
 Дзякуй за вашу службу!'''
 
     @staticmethod
-    def russian(violation_data):
+    def russian(violation_data: dict) -> str:
         return f'''Прошу вас принять меры в отношении владельца транспортного средства, совершившего нарушение правил остановки и стоянки.
 
 Прошу привлечь к ответственности в соответствии с Кодексом Республики Беларусь об Административных Правонарушениях, Статья 18.22 «Нарушение правил остановки и стоянки транспортного средства, а также иных правил дорожного движения» и ознакомить меня с принятыми мерами.
@@ -74,6 +81,6 @@ Cсылки на фотографии:
 
 На основании ст. 7 и ч. 5 ст. 25 Закона «Об обращениях граждан и юридических лиц» прошу направить ответ на настоящее обращение на адрес моей электронной почты {violation_data['sender_email']}, в котором указать сведения о принятых мерах в соответствии с компетенцией органов внутренних дел и требованиями указанных нормативных правовых актов.
 
-С уважением, {violation_data['sender_name']}.
+С уважением, {violation_data['sender_name']}.{AppealText._get_phone('Телефон', violation_data['sender_phone'])}
 
 Спасибо за вашу службу!'''
