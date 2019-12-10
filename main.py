@@ -4,6 +4,8 @@ import logging
 import json
 from datetime import datetime
 from typing import Any, Optional, Tuple, Union
+from aiogram.dispatcher.storage import FSMContextProxy
+from aiogram.types.photo_size import PhotoSize
 
 from dateutil import tz
 from aiogram import Bot, types
@@ -82,7 +84,9 @@ async def cancel_sending(appeal_params: dict) -> None:
                                reply_markup=keyboard)
 
 
-def get_value(data: dict, key: str, placeholder: str = None) -> Any:
+def get_value(data: Union[FSMContextProxy, dict],
+              key: str,
+              placeholder: str = None) -> Any:
     try:
         return get_text(data[key], placeholder)
     except KeyError:
@@ -158,21 +162,23 @@ def get_text(raw_text, placeholder):
     return raw_text
 
 
-def save_captcha_data(data: dict, captcha_url: str, appeal_id: int) -> None:
+def save_captcha_data(data: FSMContextProxy,
+                      captcha_url: str,
+                      appeal_id: int) -> None:
     get_value(data, 'captcha_data')
     data['captcha_data'].append((captcha_url, appeal_id))
 
 
-def pop_captcha_data(data: dict) -> Tuple[str, int]:
+def pop_captcha_data(data: FSMContextProxy) -> Tuple[str, int]:
     return data['captcha_data'].pop()
 
 
-def save_state(data: dict, state) -> None:
+def save_state(data: FSMContextProxy, state) -> None:
     get_value(data, 'saved_states')
     data['saved_states'].append(state)
 
 
-def pop_state(data: dict) -> FSMContext:
+def pop_state(data: FSMContextProxy) -> FSMContext:
     return data['saved_states'].pop()
 
 
@@ -243,7 +249,7 @@ async def send_violation_to_channel(language: str,
                                          caption)
 
 
-async def compose_appeal(data: dict,
+async def compose_appeal(data: FSMContextProxy,
                          chat_id: int,
                          message_id: int) -> dict:
     appeal = {
@@ -502,7 +508,7 @@ async def violation_storage_full(state):
             return True
 
 
-async def add_photo_to_attachments(photo: dict,
+async def add_photo_to_attachments(photo: PhotoSize,
                                    state: FSMContext,
                                    user_id: int) -> None:
     async with semaphore, state.proxy() as data:
@@ -510,7 +516,9 @@ async def add_photo_to_attachments(photo: dict,
         data['violation_photo_ids'].append(photo['file_id'])
 
 
-async def prepare_photos(data: dict, user_id: int, appeal_id: int) -> None:
+async def prepare_photos(data: FSMContextProxy,
+                         user_id: int,
+                         appeal_id: int) -> None:
     # потанцевально узкое место, все потоки всех пользователей будут ждать
     # пока кто-то один аппендит, если я правильно понимаю
     # нужно сделать каждому пользователю свой личный семафорчик, но я пока
@@ -532,7 +540,7 @@ async def prepare_photos(data: dict, user_id: int, appeal_id: int) -> None:
     logger.info('Вгрузили фоточки - ' + str(user_id))
 
 
-def delete_prepared_violation(data: dict) -> None:
+def delete_prepared_violation(data: FSMContextProxy) -> None:
     # в этом месте сохраним адрес нарушения для использования в
     # следующем обращении
     data['previous_violation_address'] = get_value(data, 'violation_address')
@@ -543,7 +551,9 @@ def delete_prepared_violation(data: dict) -> None:
     data['appeal_response_queue'] = ''
 
 
-def set_default(data: dict, key: str, force=False) -> None:
+def set_default(data: Union[FSMContextProxy, dict],
+                key: str,
+                force=False) -> None:
     if (key not in data) or force:
         data[key] = get_default_value(key)
 
@@ -630,7 +640,9 @@ def get_sender_address(data):
     return f'{zipcode}, {city}, {street}, {house}, {block}, {flat}'.strip()
 
 
-def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
+def add_appeal_to_user_queue(data: FSMContextProxy,
+                             appeal: dict,
+                             appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
     delete_old_appeals(appeals)
 
@@ -640,13 +652,13 @@ def add_appeal_to_user_queue(data: dict, appeal: dict, appeal_id: int) -> None:
         data['appeals'] = appeals
 
 
-def get_appeal_from_user_queue(data: dict, appeal_id: int) -> dict:
+def get_appeal_from_user_queue(data: FSMContextProxy, appeal_id: int) -> dict:
     appeals = get_value(data, 'appeals')
     appeal = get_value(appeals, str(appeal_id), None)
     return appeal
 
 
-def delete_appeal_from_user_queue(data: dict,
+def delete_appeal_from_user_queue(data: FSMContextProxy,
                                   user_id: int,
                                   appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
@@ -728,7 +740,7 @@ def get_photos_links(data):
     return text.strip()
 
 
-def get_appeal_text(data: dict) -> str:
+def get_appeal_text(data: FSMContextProxy) -> str:
     violation_data = {
         'photos': get_photos_links(data),
         'vehicle_number': get_value(data, 'violation_vehicle_number'),
@@ -846,7 +858,7 @@ async def get_skip_keyboard(language):
 
 
 async def ask_for_sender_info(chat_id: int,
-                              data: dict,
+                              data: FSMContextProxy,
                               info_type: str,
                               next_state: State,
                               remark: str = '') -> None:
@@ -935,7 +947,7 @@ async def ask_for_violation_address(chat_id, data):
     await Form.violation_location.set()
 
 
-async def send_language_info(chat_id: int, data: dict) -> None:
+async def send_language_info(chat_id: int, data: FSMContextProxy) -> None:
     text, keyboard = await get_language_text_and_keyboard(data)
 
     await bot.send_message(chat_id,
@@ -944,7 +956,7 @@ async def send_language_info(chat_id: int, data: dict) -> None:
                            parse_mode='HTML')
 
 
-async def send_appeal_email_info(chat_id: int, data: dict) -> None:
+async def send_appeal_email_info(chat_id: int, data: FSMContextProxy) -> None:
     language = await get_ui_lang(data=data)
     email = get_value(data, 'sender_email')
     text = locales.text(language, 'email_password').format(email)
@@ -1183,7 +1195,8 @@ async def enter_last_name(message, state):
     await Form.sender_last_name.set()
 
 
-async def get_ui_lang(state=None, data: dict = None) -> str:
+async def get_ui_lang(state=None,
+                      data: Optional[FSMContextProxy] = None) -> str:
     if data:
         return get_value(data, 'ui_lang')
     elif state:
