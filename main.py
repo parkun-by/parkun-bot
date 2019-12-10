@@ -410,6 +410,8 @@ async def status_received(status: str) -> None:
         )
     elif data['type'] == config.FREE_WORKER:
         worker_pool.add_worker(data['answer_queue'])
+    elif data['type'] == config.BUSY_WORKER:
+        worker_pool.delete_worker(data['answer_queue'])
 
 
 def get_appeal_email(data) -> Optional[str]:

@@ -86,6 +86,7 @@ APPEAL = 'appeal'
 CANCEL = 'cancel'
 CAPTCHA_OK = 'captcha_ok'
 FREE_WORKER = 'free_worker'
+BUSY_WORKER = 'busy_worker'
 
 # status codes
 OK = 'ok'
