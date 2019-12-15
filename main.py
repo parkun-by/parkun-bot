@@ -1076,13 +1076,13 @@ async def send_photos_group_with_caption(photos_id: list,
 def prepare_registration_number(number: str):
     """заменяем в номере все символы на киррилические"""
 
-    kyrillic = 'ABCEHKMOPTXYІ'
+    kyrillic = 'АВСЕНКМОРТХУІ'
     latin = 'ABCEHKMOPTXYI'
 
     up_number = number.upper().strip()
 
-    for num, symbol in enumerate(latin):
-        up_number = up_number.replace(symbol, kyrillic[num])
+    for num, symbol in enumerate(kyrillic):
+        up_number = up_number.replace(symbol, latin[num])
 
     return up_number
 
