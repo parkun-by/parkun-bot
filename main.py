@@ -13,7 +13,8 @@ from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.dispatcher.filters.state import State
 from aiogram.utils import executor
-from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
+from aiogram.utils.exceptions import BadRequest as AiogramBadRequest, \
+                                     MessageNotModified
 from disposable_email_domains import blocklist
 
 import config
@@ -1504,11 +1505,14 @@ async def change_language_click(call, state: FSMContext):
 
         text, keyboard = await get_language_text_and_keyboard(data)
 
-    await bot.edit_message_text(text,
-                                call.message.chat.id,
-                                call.message.message_id,
-                                reply_markup=keyboard,
-                                parse_mode='HTML')
+    try:
+        await bot.edit_message_text(text,
+                                    call.message.chat.id,
+                                    call.message.message_id,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML')
+    except MessageNotModified:
+        pass
 
 
 @dp.callback_query_handler(lambda call: call.data == '/change_letter_language',
@@ -1529,11 +1533,14 @@ async def change_language_click(call, state: FSMContext):
 
         text, keyboard = await get_language_text_and_keyboard(data)
 
-    await bot.edit_message_text(text,
-                                call.message.chat.id,
-                                call.message.message_id,
-                                reply_markup=keyboard,
-                                parse_mode='HTML')
+    try:
+        await bot.edit_message_text(text,
+                                    call.message.chat.id,
+                                    call.message.message_id,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML')
+    except MessageNotModified:
+        pass
 
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
