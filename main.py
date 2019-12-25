@@ -144,6 +144,7 @@ REQUIRED_CREDENTIALS = [
 ]
 
 VIOLATION_INFO_KEYS = [
+    'appeal_id',
     'violation_attachments',
     'violation_photo_ids',
     'violation_photo_files_paths',
@@ -605,6 +606,7 @@ def set_default_sender_info(data):
     set_default(data, 'saved_states')
     set_default(data, 'captcha_data')
     set_default(data, 'appeals')
+    set_default(data, 'appeal_id')
     set_default(data, 'violation_attachments')
     set_default(data, 'violation_photo_ids')
     set_default(data, 'violation_photo_files_paths')
@@ -664,8 +666,8 @@ def get_appeal_from_user_queue(data: FSMContextProxy, appeal_id: int) -> dict:
 def delete_appeal_from_user_queue(data: FSMContextProxy,
                                   user_id: int,
                                   appeal_id: int) -> None:
-    appeals = get_value(data, 'appeals')
-    appeals.pop(str(appeal_id))
+    appeals: dict = get_value(data, 'appeals')
+    appeals.pop(str(appeal_id), 'default_value')
     data['appeals'] = appeals
 
     # также удалим временные файлы картинок нарушений
@@ -1829,6 +1831,12 @@ async def cancel_violation_input(call, state: FSMContext):
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
+        stop_timer.delete_task(call.message.chat.id, data['appeal_id'])
+
+        delete_appeal_from_user_queue(data,
+                                      call.message.chat.id,
+                                      data['appeal_id'])
+
         delete_prepared_violation(data)
 
     text = locales.text(language, 'operation_mode')
@@ -1942,6 +1950,9 @@ async def send_letter_click(call, state: FSMContext):
 
                 add_appeal_to_user_queue(data, appeal, appeal_id)
                 delete_prepared_violation(data)
+
+        async with state.proxy() as data:
+            data['appeal_id'] = appeal_id
 
         await entering_captcha(message, appeal_id, state)
         return
