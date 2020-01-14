@@ -44,7 +44,7 @@ class Rabbit:
             'sender_email_password': appeal['sender_email_password'],
         }
 
-        await self._send(config.RABBIT_EXCHANGE_APPEAL,
+        await self._send(config.RABBIT_EXCHANGE_MANAGING,
                          routing_key,
                          body)
 
@@ -58,7 +58,7 @@ class Rabbit:
             'user_id': user_id,
         }
 
-        await self._send(config.RABBIT_EXCHANGE_APPEAL,
+        await self._send(config.RABBIT_EXCHANGE_SENDING,
                          routing_key,
                          body)
 
@@ -81,7 +81,7 @@ class Rabbit:
             'sender_email': appeal_email,
         }
 
-        await self._send(config.RABBIT_EXCHANGE_APPEAL,
+        await self._send(config.RABBIT_EXCHANGE_SENDING,
                          routing_key,
                          body)
 
@@ -97,7 +97,7 @@ class Rabbit:
             'sender_email': email,
         }
 
-        await self._send(config.RABBIT_EXCHANGE_APPEAL,
+        await self._send(config.RABBIT_EXCHANGE_SENDING,
                          routing_key,
                          body)
 

@@ -16,8 +16,13 @@
             "tags": "administrator"
         },
         {
-            "name": "appeal_preparer",
-            "password": "appeal_preparer",
+            "name": "appeal_sender",
+            "password": "appeal_sender",
+            "tags": "administrator"
+        },
+        {
+            "name": "appeal_manager",
+            "password": "appeal_manager",
             "tags": "administrator"
         }
     ],
@@ -37,7 +42,14 @@
             "read": ".*"
         },
         {
-            "user": "appeal_preparer",
+            "user": "appeal_sender",
+            "vhost": "/",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        },
+        {
+            "user": "appeal_manager",
             "vhost": "/",
             "configure": ".*",
             "write": ".*",
@@ -46,7 +58,16 @@
     ],
     "exchanges": [
         {
-            "name": "appeal",
+            "name": "managing",
+            "vhost": "/",
+            "type": "direct",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        },
+        {
+            "name": "sending",
             "vhost": "/",
             "type": "direct",
             "durable": true,
@@ -66,14 +87,28 @@
     ],
     "queues": [
         {
-            "name": "status",
+            "name": "sending_status",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
             "arguments": {}
         },
         {
-            "name": "social_networks",
+            "name": "sender_available",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        },
+        {
+            "name": "appeal",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        },
+        {
+            "name": "twitter",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
@@ -82,17 +117,25 @@
     ],
     "bindings": [
         {
-            "source": "appeal",
+            "source": "sending",
             "vhost": "/",
-            "destination": "status",
+            "destination": "sending_status",
             "destination_type": "queue",
-            "routing_key": "appeal_status",
+            "routing_key": "appeal_sending_status",
+            "arguments": {}
+        },
+        {
+            "source": "managing",
+            "vhost": "/",
+            "destination": "appeal",
+            "destination_type": "queue",
+            "routing_key": "appeal_to_queue",
             "arguments": {}
         },
         {
             "source": "sharing",
             "vhost": "/",
-            "destination": "social_networks",
+            "destination": "twitter",
             "destination_type": "queue",
             "routing_key": "*",
             "arguments": {}
