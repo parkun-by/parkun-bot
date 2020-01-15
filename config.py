@@ -81,7 +81,7 @@ RABBIT_EXCHANGE_SHARING = 'sharing'
 RABBIT_ROUTING_VIOLATION = 'violation'
 RABBIT_QUEUE_STATUS = 'sending_status'
 
-# preparer messages types
+# sender messages types
 CAPTCHA_TEXT = 'captcha_text'
 CAPTCHA_URL = 'captcha_url'
 CAPTCHA_FAIL = 'captcha_fail'

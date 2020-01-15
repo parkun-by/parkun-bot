@@ -133,6 +133,14 @@
             "arguments": {}
         },
         {
+            "source": "managing",
+            "vhost": "/",
+            "destination": "sender_available",
+            "destination_type": "queue",
+            "routing_key": "sender_availability",
+            "arguments": {}
+        },
+        {
             "source": "sharing",
             "vhost": "/",
             "destination": "twitter",

@@ -422,13 +422,13 @@ def get_appeal_email(data) -> Optional[str]:
 
 
 async def entering_captcha(message, appeal_id: int, state) -> None:
-    preparer_queue = worker_pool.pop_worker()
+    sender_queue = worker_pool.pop_worker()
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
         email = get_appeal_email(data)
 
-    if not preparer_queue:
+    if not sender_queue:
         logger.error(f'Куда-то делись воркеры - {message.chat.id}')
 
         keyboard = types.InlineKeyboardMarkup()
@@ -450,7 +450,7 @@ async def entering_captcha(message, appeal_id: int, state) -> None:
 
     await http_rabbit.ask_for_captcha_url(message.chat.id,
                                           appeal_id,
-                                          preparer_queue,
+                                          sender_queue,
                                           email)
 
     text = locales.text(language, 'appeal_sent')

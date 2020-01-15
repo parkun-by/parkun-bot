@@ -101,9 +101,9 @@ class Rabbit:
                          routing_key,
                          body)
 
-    async def get_captcha_url(self, preparer_queue: str) -> dict:
+    async def get_captcha_url(self, sender_queue: str) -> dict:
         url = config.RABBIT_HTTP_ADDRESS + \
-            f'/api/queues/%2F/{preparer_queue}/get'
+            f'/api/queues/%2F/{sender_queue}/get'
 
         data = {
             'count': 1,
