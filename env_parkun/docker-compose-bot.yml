@@ -1,9 +1,5 @@
 version: '3.5'
 
-networks:
-  proxynet:
-    name: parkun
-
 services:
   bot:
     container_name: parkun_bot

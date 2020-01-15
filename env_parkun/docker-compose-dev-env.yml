@@ -2,24 +2,11 @@ version: '3.5'
 
 volumes:
   redis-data:
-  wiremock-data:
-  rabbit-data:
-
-networks:
-  proxynet:
-    name: parkun
 
 services:
   redis:
-    container_name: parkun_redis
-    image: redis:alpine3.10
-    command: redis-server --requirepass 'redis' --appendonly yes
-    ports:
-      - 16379:6379
     volumes:
       - redis-data:/data
-    networks:
-      - proxynet
 
   wiremock:
     container_name: parkun_wiremock
@@ -31,21 +18,3 @@ services:
     volumes:
       - wiremock-data:/home/wiremock
       - ./wiremock/mappings:/home/wiremock/mappings
-
-  rabbit:
-    container_name: parkun_rabbit
-    networks:
-      - proxynet
-    ports:
-      - 5672:5672
-      - 15672:15672
-    build:
-      context: ./rabbitmq
-      dockerfile: Dockerfile
-    volumes:
-      - rabbit-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:15672"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
