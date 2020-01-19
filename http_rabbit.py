@@ -33,8 +33,7 @@ class Rabbit:
 
     async def send_appeal(self,
                           appeal: dict,
-                          user_id: int,
-                          routing_key: str) -> None:
+                          user_id: int) -> None:
         body = {
             'type': config.APPEAL,
             'appeal': appeal,
@@ -45,7 +44,7 @@ class Rabbit:
         }
 
         await self._send(config.RABBIT_EXCHANGE_MANAGING,
-                         routing_key,
+                         config.RABBIT_ROUTING_APPEAL_TO_QUEUE,
                          body)
 
     async def send_cancel(self,

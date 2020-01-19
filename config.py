@@ -79,6 +79,7 @@ RABBIT_EXCHANGE_MANAGING = 'managing'
 RABBIT_EXCHANGE_SENDING = 'sending'
 RABBIT_EXCHANGE_SHARING = 'sharing'
 RABBIT_ROUTING_VIOLATION = 'violation'
+RABBIT_ROUTING_APPEAL_TO_QUEUE = 'appeal_to_queue'
 RABBIT_QUEUE_STATUS = 'sending_status'
 
 # sender messages types

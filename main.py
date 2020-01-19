@@ -31,7 +31,6 @@ from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
 from timer import Timer
 from imap_email import Email
-from worker_pool import WorkerPool
 
 
 loop = asyncio.get_event_loop()
@@ -131,7 +130,6 @@ def setup_logging():
 
 logger = setup_logging()
 amqp_rabbit = AMQPRabbit(logger)
-worker_pool = WorkerPool(logger)
 
 REQUIRED_CREDENTIALS = [
     'sender_first_name',
@@ -374,92 +372,69 @@ async def fill_captcha(user_id: int,
     await state.set_state(Form.entering_captcha)
 
 
-async def send_appeal(user_id: int, answer_queue: str, appeal_id: int) -> None:
+async def send_appeal(user_id: int, appeal_id: int) -> None:
     logger.info(f'Шлем обращение - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
         appeal = get_appeal_from_user_queue(data, appeal_id)
-        await http_rabbit.send_appeal(appeal, user_id, answer_queue)
+
+        if not appeal:
+            text = locales.text(language, 'irrelevant_action')
+            await bot.send_message(user_id, text)
+            await delete_current_violation(state, user_id)
+            return
+
+        await http_rabbit.send_appeal(appeal, user_id)
+        text = locales.text(language, 'appeal_sent')
+        logger.info(f'Обращение поставлено в очередь - {str(user_id)}')
+        await bot.send_message(user_id, text)
+        await Form.operational_mode.set()
 
 
 async def status_received(status: str) -> None:
     data = json.loads(status)
-    user_id = str(get_value(data, 'user_id', 'undefined'))
     queue_id = str(get_value(data, 'answer_queue', 'undefined'))
-    logger.info(f'Прилетел статус: {user_id} - {queue_id} - {data["type"]}')
+
+    logger.info(f'Прилетел статус: ' +
+                f'{str(data["user_id"])} - {queue_id} - {data["type"]}')
+
+    user_id = int(data['user_id'])
+    appeal_id = int(data['appeal_id'])
 
     if data['type'] == config.OK:
-        worker_pool.add_worker(data['answer_queue'])
-
         asyncio.run_coroutine_threadsafe(
-            send_success_sending(data['user_id'], data['appeal_id']),
+            send_success_sending(user_id, appeal_id),
             loop)
     elif data['type'] == config.CAPTCHA_URL:
         asyncio.run_coroutine_threadsafe(
-            fill_captcha(data['user_id'],
-                         data['appeal_id'],
+            fill_captcha(user_id,
+                         appeal_id,
                          data['captcha'],
                          data['answer_queue']),
             loop
         )
     elif data['type'] == config.CAPTCHA_OK:
         asyncio.run_coroutine_threadsafe(
-            send_appeal(data['user_id'],
-                        data['answer_queue'],
-                        data['appeal_id']),
+            reply_that_captcha_ok(user_id, appeal_id),
             loop
         )
-    elif data['type'] == config.FREE_WORKER:
-        worker_pool.add_worker(data['answer_queue'])
-    elif data['type'] == config.BUSY_WORKER:
-        worker_pool.delete_worker(data['answer_queue'])
+
+
+async def reply_that_captcha_ok(user_id: int, appeal_id: int) -> None:
+    state = dp.current_state(chat=user_id, user=user_id)
+    language = await get_ui_lang(state)
+    text = text = locales.text(language, 'captcha_ok')
+
+    await bot.send_message(user_id,
+                           text,
+                           reply_to_message_id=appeal_id)
 
 
 def get_appeal_email(data) -> Optional[str]:
     if get_value(data, 'sender_email_password', None):
         return get_value(data, 'sender_email', None)
-
-
-async def entering_captcha(message, appeal_id: int, state) -> None:
-    sender_queue = worker_pool.pop_worker()
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-        email = get_appeal_email(data)
-
-    if not sender_queue:
-        logger.error(f'Куда-то делись воркеры - {message.chat.id}')
-
-        keyboard = types.InlineKeyboardMarkup()
-
-        approve_sending_button = types.InlineKeyboardButton(
-            text=locales.text(language, 'approve_sending_button'),
-            callback_data='/approve_sending')
-
-        keyboard.add(approve_sending_button)
-
-        await bot.send_message(
-            message.chat.id,
-            locales.text(language, 'no_free_workers'),
-            reply_markup=keyboard,
-            reply_to_message_id=appeal_id,
-            parse_mode='HTML')
-
-        return
-
-    await http_rabbit.ask_for_captcha_url(message.chat.id,
-                                          appeal_id,
-                                          sender_queue,
-                                          email)
-
-    text = locales.text(language, 'appeal_sent')
-
-    logger.info(f'Обращение поставлено в очередь - ' +
-                f'{str(message.chat.username)}')
-
-    await bot.send_message(message.chat.id, text)
-    await Form.operational_mode.set()
 
 
 async def send_captcha_text(state: FSMContext,
@@ -860,6 +835,22 @@ async def get_skip_keyboard(language):
     keyboard.add(skip)
 
     return keyboard
+
+
+async def delete_current_violation(state: FSMContext, user_id: int) -> None:
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        stop_timer.delete_task(user_id, data['appeal_id'])
+
+        delete_appeal_from_user_queue(data,
+                                      user_id,
+                                      data['appeal_id'])
+
+        delete_prepared_violation(data)
+
+    text = locales.text(language, 'operation_mode')
+    await bot.send_message(user_id, text)
+    await Form.operational_mode.set()
 
 
 async def ask_for_sender_info(chat_id: int,
@@ -1828,20 +1819,7 @@ async def cancel_violation_input(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-        stop_timer.delete_task(call.message.chat.id, data['appeal_id'])
-
-        delete_appeal_from_user_queue(data,
-                                      call.message.chat.id,
-                                      data['appeal_id'])
-
-        delete_prepared_violation(data)
-
-    text = locales.text(language, 'operation_mode')
-    await bot.send_message(call.message.chat.id, text)
-    await Form.operational_mode.set()
+    await delete_current_violation(state, call.message.chat.id)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
@@ -1938,11 +1916,15 @@ async def send_letter_click(call, state: FSMContext):
             logger.info(f'Это реплай - {str(call.from_user.username)}')
             message = call.message.reply_to_message
             appeal_id = message.message_id
+
+            async with state.proxy() as data:
+                data['appeal_id'] = appeal_id
         else:
             message = call.message
             appeal_id = message.message_id
 
             async with state.proxy() as data:
+                data['appeal_id'] = appeal_id
                 await prepare_photos(data, call.message.chat.id, appeal_id)
                 appeal = await compose_appeal(data,
                                               call.message.chat.id,
@@ -1951,10 +1933,7 @@ async def send_letter_click(call, state: FSMContext):
                 add_appeal_to_user_queue(data, appeal, appeal_id)
                 delete_prepared_violation(data)
 
-        async with state.proxy() as data:
-            data['appeal_id'] = appeal_id
-
-        await entering_captcha(message, appeal_id, state)
+        await send_appeal(call.message.chat.id, appeal_id)
         return
 
     await Form.operational_mode.set()
@@ -1968,7 +1947,7 @@ async def send_letter_again_click(call, state: FSMContext):
 
     await bot.answer_callback_query(call.id)
     appeal_id = call.message.reply_to_message.message_id
-    await entering_captcha(call.message, appeal_id, state)
+    await send_appeal(call.message.chat.id, appeal_id)
 
 
 @dp.callback_query_handler(state='*')
@@ -2619,10 +2598,7 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['violation_datetime'] = message.text
 
-    appeal_id = await approve_sending(message.chat.id, state)
-
-    # async with state.proxy() as data:
-    #     await prepare_photos(data, message.chat.id, appeal_id)
+    await approve_sending(message.chat.id, state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
