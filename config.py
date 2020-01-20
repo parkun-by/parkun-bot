@@ -90,6 +90,7 @@ GET_CAPTCHA = 'get_captcha'
 APPEAL = 'appeal'
 CANCEL = 'cancel'
 CAPTCHA_OK = 'captcha_ok'
+SENDING_CANCELLED = 'sending_cancelled'
 FREE_WORKER = 'free_worker'
 BUSY_WORKER = 'busy_worker'
 

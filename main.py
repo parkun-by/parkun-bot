@@ -29,7 +29,6 @@ from broadcaster import Broadcaster
 from validator import Validator
 from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
-from timer import Timer
 from imap_email import Email
 
 
@@ -52,26 +51,26 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 
 
-async def cancel_sending(appeal_params: dict) -> None:
-    user_id = get_value(appeal_params, 'user_id', None)
-
-    appeal_response_queue = get_value(appeal_params,
-                                      'appeal_response_queue',
-                                      '')
-
+async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
     logger.info(f'Время вышло - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
-    appeal_id = get_value(appeal_params, 'appeal_id', None)
 
     await state.set_state(Form.sending_approvement)
-    await http_rabbit.send_cancel(appeal_id, user_id, appeal_response_queue)
     language = await get_ui_lang(state)
 
-    text = get_value(appeal_params,
-                     'times_up_message',
-                     locales.text(language, 'times_up'))
+    text = locales.text(language, message)
 
-    keyboard = get_value(appeal_params, 'keyboard', None)
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    approve_sending_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'approve_sending_button'),
+        callback_data='/repeat_sending')
+
+    cancel_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(approve_sending_button, cancel_button)
 
     try:
         await bot.send_message(user_id,
@@ -98,7 +97,6 @@ def get_value(data: Union[FSMContextProxy, dict],
         return data[key]
 
 
-stop_timer = Timer(cancel_sending, loop)
 broadcaster = Broadcaster(get_value, locales)
 
 
@@ -313,30 +311,6 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
         delete_appeal_from_user_queue(data, user_id, appeal_id)
 
 
-def add_stop_task_timer(language: str,
-                        user_id: int,
-                        appeal_id: int,
-                        appeal_response_queue: str) -> None:
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    approve_sending_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'approve_sending_button'),
-        callback_data='/repeat_sending')
-
-    cancel_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'cancel_button'),
-        callback_data='/cancel')
-
-    keyboard.add(approve_sending_button, cancel_button)
-
-    stop_timer.add_task({
-        'user_id': user_id,
-        'appeal_id': appeal_id,
-        'keyboard': keyboard,
-        'appeal_response_queue': appeal_response_queue,
-    }, 1)
-
-
 async def fill_captcha(user_id: int,
                        appeal_id: int,
                        captcha_url: str,
@@ -349,7 +323,6 @@ async def fill_captcha(user_id: int,
         save_state(data, previous_state)
         save_captcha_data(data, captcha_url, appeal_id)
         language = await get_ui_lang(data=data)
-        add_stop_task_timer(language, user_id, appeal_id, answer_queue)
         data['appeal_response_queue'] = answer_queue
 
     text = locales.text(language,
@@ -418,6 +391,11 @@ async def status_received(status: str) -> None:
     elif data['type'] == config.CAPTCHA_OK:
         asyncio.run_coroutine_threadsafe(
             reply_that_captcha_ok(user_id, appeal_id),
+            loop
+        )
+    elif data['type'] == config.SENDING_CANCELLED:
+        asyncio.run_coroutine_threadsafe(
+            cancel_sending(user_id, appeal_id, data['message']),
             loop
         )
 
@@ -840,7 +818,6 @@ async def get_skip_keyboard(language):
 async def delete_current_violation(state: FSMContext, user_id: int) -> None:
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-        stop_timer.delete_task(user_id, data['appeal_id'])
 
         delete_appeal_from_user_queue(data,
                                       user_id,
@@ -1865,7 +1842,6 @@ async def cancel_captcha_input(call, state: FSMContext):
             call.message.chat.id,
             get_value(data, 'appeal_response_queue'))
 
-        stop_timer.delete_task(call.message.chat.id, appeal_id)
         delete_appeal_from_user_queue(data, call.message.chat.id, appeal_id)
 
     await cancel_input(call, state)
@@ -1889,6 +1865,7 @@ async def send_letter_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+    await Form.entering_captcha.set()
 
     language = await get_ui_lang(state)
 
@@ -2617,7 +2594,6 @@ async def catch_captcha(message: types.Message, state: FSMContext):
                                 appeal_id)
 
         await state.set_state(pop_state(data))
-        stop_timer.delete_task(message.chat.id, appeal_id)
         language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'continue_work')
@@ -2716,9 +2692,6 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
-    logger.info('Запускаем таймер отмены.')
-    asyncio.ensure_future(stop_timer.start())
-    logger.info('Запустили.')
 
 
 async def shutdown(dispatcher: Dispatcher):
