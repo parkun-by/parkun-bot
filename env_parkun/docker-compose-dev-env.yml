@@ -8,6 +8,10 @@ services:
     volumes:
       - redis-data:/data
 
+  rabbit:
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
+
   wiremock:
     container_name: parkun_wiremock
     image: rodolpheche/wiremock:2.25.0-alpine

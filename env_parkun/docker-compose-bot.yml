@@ -8,5 +8,6 @@ services:
     build:
       context: ../
       dockerfile: Dockerfile
+    restart: always
     volumes:
       - /tmp/temp_files_parkun:/tmp/temp_files_parkun
