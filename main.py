@@ -44,7 +44,6 @@ dp = Dispatcher(bot, storage=storage)
 
 locator = Locator()
 mail_verifier = MailVerifier()
-uploader = Uploader()
 semaphore = asyncio.Semaphore()
 locales = Locales()
 validator = Validator()
@@ -128,6 +127,8 @@ def setup_logging():
 
 logger = setup_logging()
 amqp_rabbit = AMQPRabbit(logger)
+uploader = Uploader(logger)
+
 
 REQUIRED_CREDENTIALS = [
     'sender_first_name',

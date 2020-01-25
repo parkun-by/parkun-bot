@@ -1,3 +1,4 @@
+from logging import Logger
 import aiohttp
 import requests
 import os
@@ -7,9 +8,10 @@ from typing import Tuple
 
 
 class Uploader:
-    def __init__(self):
+    def __init__(self, logger: Logger):
         self._http_session = aiohttp.ClientSession()
         self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
+        self.logger = logger
 
         try:
             os.makedirs(self.files_dir)
@@ -52,7 +54,11 @@ class Uploader:
         with open(filename, 'rb') as file:
             upload_url = 'https://telegra.ph/upload'
             files = {'file': ('file', file, 'image/jpg')}
-            result = requests.post(upload_url, files=files).json()
+            try:
+                result = requests.post(upload_url, files=files).json()
+            except Exception:
+                self.logger.exception('Не залилась на телеграф фотка')
+                result = None
 
         try:
             full_path = 'https://telegra.ph' + result[0]['src']
