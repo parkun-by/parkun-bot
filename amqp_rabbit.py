@@ -15,8 +15,11 @@ class Rabbit:
             self.logger.exception(exc)
             await asyncio.sleep(2)
             await self.start(loop, callback)
+        except ConnectionRefusedError:
+            await asyncio.sleep(2)
+            await self.connect(loop, callback)
 
-    async def connect(self, loop, callback):
+    async def connect(self, loop, callback) -> None:
         self.connection = await aio_pika.connect_robust(
             config.RABBIT_AMQP_ADDRESS,
             loop=loop
