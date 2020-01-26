@@ -673,10 +673,22 @@ async def compose_summary(data):
         locales.text(language, 'violation_datetime') +\
         f' <b>{get_value(data, "violation_datetime")}</b>' + '\n' +\
         '\n' +\
+        get_caption_text(data, language) +\
         locales.text(language, 'channel_warning').format(config.CHANNEL,
                                                          config.TWI_URL)
 
     return text
+
+
+def get_caption_text(data: FSMContextProxy, language: str) -> str:
+    caption = get_value(data, "violation_caption")
+
+    if caption:
+        return locales.text(language, 'caption') +\
+            f' {get_value(data, "violation_caption")}' + '\n' +\
+            '\n'
+    else:
+        return ''
 
 
 async def check_validity(pattern, message, language):
