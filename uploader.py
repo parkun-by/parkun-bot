@@ -1,5 +1,6 @@
 from logging import Logger
 import aiohttp
+import asyncio
 import requests
 import os
 import shutil
@@ -51,14 +52,33 @@ class Uploader:
         with open(filename, 'wb') as file:
             file.write(raw_file)
 
-        with open(filename, 'rb') as file:
-            upload_url = 'https://telegra.ph/upload'
-            files = {'file': ('file', file, 'image/jpg')}
-            try:
-                result = requests.post(upload_url, files=files).json()
-            except Exception:
-                self.logger.exception('Не залилась на телеграф фотка')
+        # костыль, надо переписать красиво
+        uploaded = False
+        tries = 5
+
+        while not uploaded:
+            with open(filename, 'rb') as file:
+                upload_url = 'https://telegra.ph/upload'
+                files = {'file': ('file', file, 'image/jpg')}
                 result = None
+
+                try:
+                    result_raw = requests.post(upload_url, files=files)
+
+                    if result_raw.status_code == 200:
+                        result = result_raw.json()
+                        uploaded = True
+                    else:
+                        result = None
+                except Exception:
+                    self.logger.exception('Не залилась на телеграф фотка')
+                    result = None
+
+                if not uploaded and tries != 0:
+                    await asyncio.sleep(0.5)
+                    tries -= 1
+                else:
+                    uploaded = True
 
         try:
             full_path = 'https://telegra.ph' + result[0]['src']
