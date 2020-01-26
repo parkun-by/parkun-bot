@@ -9,16 +9,21 @@ class Rabbit:
         self.logger = logger
 
     async def start(self, loop, callback):
-        try:
-            await self.connect(loop, callback)
-        except Exception as exc:
-            self.logger.info(f'Fail. Trying reconnect Rabbit. {exc}')
-            self.logger.exception(exc)
-            await asyncio.sleep(2)
-            await self.start(loop, callback)
-        except ConnectionRefusedError:
-            await asyncio.sleep(2)
-            await self.connect(loop, callback)
+        connected = False
+        pause = 1
+
+        while not connected:
+            try:
+                await self.connect(loop, callback)
+                connected = True
+                pause = 1
+            except Exception:
+                self.logger.exception('Fail. Trying reconnect Rabbit.')
+                connected = False
+                await asyncio.sleep(pause)
+
+                if pause < 30:
+                    pause *= 2
 
     async def connect(self, loop, callback) -> None:
         self.connection = await aio_pika.connect_robust(
@@ -36,6 +41,8 @@ class Rabbit:
                 auto_delete=False,
                 durable=True
             )
+
+            self.logger.info("Подключились к раббиту")
 
             while True:
                 async with queue.iterator() as queue_iter:
