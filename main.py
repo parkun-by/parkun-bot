@@ -14,7 +14,7 @@ from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.dispatcher.filters.state import State
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest, \
-                                     MessageNotModified
+    MessageNotModified
 from disposable_email_domains import blocklist
 
 import config
@@ -30,6 +30,7 @@ from validator import Validator
 from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
 from imap_email import Email
+from states_stack import StatesStack
 
 
 loop = asyncio.get_event_loop()
@@ -50,8 +51,20 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 
 
+async def get_ui_lang(state=None,
+                      data: Optional[FSMContextProxy] = None) -> str:
+    if data:
+        return get_value(data, 'ui_lang')
+    elif state:
+        async with state.proxy() as my_data:
+            return get_value(my_data, 'ui_lang')
+
+    return config.RU
+
+
 async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
     logger.info(f'Время вышло - {user_id}')
+    await pop_saved_state(user_id, user_id, silent=True)
     state = dp.current_state(chat=user_id, user=user_id)
 
     await state.set_state(Form.sending_approvement)
@@ -128,6 +141,7 @@ def setup_logging():
 logger = setup_logging()
 amqp_rabbit = AMQPRabbit(logger)
 uploader = Uploader(logger)
+states_stack = StatesStack(logger, dp, get_value, get_ui_lang, locales.text)
 
 
 REQUIRED_CREDENTIALS = [
@@ -159,26 +173,6 @@ def get_text(raw_text, placeholder):
         return placeholder
 
     return raw_text
-
-
-def save_captcha_data(data: FSMContextProxy,
-                      captcha_url: str,
-                      appeal_id: int) -> None:
-    get_value(data, 'captcha_data')
-    data['captcha_data'].append((captcha_url, appeal_id))
-
-
-def pop_captcha_data(data: FSMContextProxy) -> Tuple[str, int]:
-    return data['captcha_data'].pop()
-
-
-def save_state(data: FSMContextProxy, state) -> None:
-    get_value(data, 'saved_states')
-    data['saved_states'].append(state)
-
-
-def pop_state(data: FSMContextProxy) -> FSMContext:
-    return data['saved_states'].pop()
 
 
 async def invite_to_fill_credentials(chat_id, state):
@@ -320,11 +314,16 @@ async def fill_captcha(user_id: int,
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
-        previous_state = await state.get_state()
-        save_state(data, previous_state)
-        save_captcha_data(data, captcha_url, appeal_id)
         language = await get_ui_lang(data=data)
+        data['appeal_id'] = appeal_id
         data['appeal_response_queue'] = answer_queue
+
+    data_to_preserve = {
+        'appeal_id': appeal_id,
+        'appeal_response_queue': answer_queue,
+    }
+
+    await states_stack.add(user_id, data_to_preserve)
 
     text = locales.text(language,
                         'invite_to_enter_captcha').format(captcha_url)
@@ -337,11 +336,14 @@ async def fill_captcha(user_id: int,
 
     keyboard.add(cancel_button)
 
-    await bot.send_message(user_id,
-                           text,
-                           parse_mode='HTML',
-                           reply_markup=keyboard,
-                           reply_to_message_id=appeal_id)
+    message = await bot.send_message(user_id,
+                                     text,
+                                     parse_mode='HTML',
+                                     reply_markup=keyboard,
+                                     reply_to_message_id=appeal_id)
+
+    async with state.proxy() as data:
+        data['message_to_answer'] = message.message_id
 
     await state.set_state(Form.entering_captcha)
 
@@ -522,8 +524,6 @@ def get_default_value(key):
         'letter_lang': config.RU,
         'ui_lang': config.BY,
         'recipient': config.MINSK,
-        'saved_states': [],
-        'captcha_data': [],
         'violation_attachments': [],
         'appeals': {},
         'violation_photo_ids': [],
@@ -531,6 +531,8 @@ def get_default_value(key):
         'violation_photos_amount': 0,
         'banned_users': {},
         'violation_location': [],
+        'message_to_answer': 0,
+        'states_stack': [],
     }
 
     try:
@@ -557,8 +559,6 @@ def set_default_sender_info(data):
     set_default(data, 'ui_lang')
     set_default(data, 'recipient')
     set_default(data, 'previous_violation_address')
-    set_default(data, 'saved_states')
-    set_default(data, 'captcha_data')
     set_default(data, 'appeals')
     set_default(data, 'appeal_id')
     set_default(data, 'violation_attachments')
@@ -569,6 +569,7 @@ def set_default_sender_info(data):
     set_default(data, 'violation_address')
     set_default(data, 'violation_location')
     set_default(data, 'violation_datetime')
+    set_default(data, 'states_stack')
 
 
 def get_sender_full_name(data):
@@ -643,11 +644,37 @@ def delete_old_appeals(appeals: dict, limit: int = 5) -> dict:
     return appeals
 
 
-async def compose_summary(data):
+async def pop_saved_state(user_id: int, from_id: int, silent=False):
+    message_id, message_text = await states_stack.pop(user_id)
+
+    if silent:
+        return
+
+    if message_id:
+        await safe_forward(chat_id=user_id,
+                           from_chat_id=from_id,
+                           message_id=message_id)
+
+    if message_text:
+        await bot.send_message(user_id, message_text)
+
+
+async def safe_forward(chat_id: int,
+                       from_chat_id: int,
+                       message_id: int) -> types.Message:
+    try:
+        await bot.forward_message(chat_id=chat_id,
+                                  from_chat_id=from_chat_id,
+                                  message_id=message_id)
+    except Exception:
+        pass
+
+
+async def compose_summary(data: FSMContextProxy):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, 'check_please').format(
-            locales.text(language, get_value(data, 'recipient'))) + '\n' +\
+        locales.text(language, get_value(data, 'recipient'))) + '\n' +\
         '\n' +\
         locales.text(language, 'letter_lang').format(
             locales.text(language, 'lang' + get_value(data, 'letter_lang'))) +\
@@ -1181,17 +1208,6 @@ async def enter_last_name(message, state):
     await Form.sender_last_name.set()
 
 
-async def get_ui_lang(state=None,
-                      data: Optional[FSMContextProxy] = None) -> str:
-    if data:
-        return get_value(data, 'ui_lang')
-    elif state:
-        async with state.proxy() as my_data:
-            return get_value(my_data, 'ui_lang')
-
-    return config.RU
-
-
 async def show_personal_info(message: types.Message, state: FSMContext):
     logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
 
@@ -1277,11 +1293,10 @@ async def invite_to_enter_email_password(user_id: int,
                                          extra_message: str = '') -> None:
     async with state.proxy() as data:
         current_state = await state.get_state()
-
-        if current_state != Form.email_password.state:
-            save_state(data, current_state)
-
         language = await get_ui_lang(data=data)
+
+    if current_state != Form.email_password.state:
+        await states_stack.add(user_id)
 
     await Form.email_password.set()
 
@@ -1756,10 +1771,9 @@ async def add_caption_click(call, state: FSMContext):
     async with state.proxy() as data:
         # зададим сразу пустое примечание
         set_default(data, 'violation_caption')
-        save_state(data, await state.get_state())
-
         language = await get_ui_lang(data=data)
 
+    await states_stack.add(call.message.chat.id)
     text = locales.text(language, 'input_caption')
 
     # настроим клавиатуру
@@ -1777,9 +1791,9 @@ async def answer_feedback_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+    await states_stack.add(call.message.chat.id)
 
     async with state.proxy() as data:
-        save_state(data, await state.get_state())
 
         # сохраняем адресата
         data['feedback_post'] = call.message.text
@@ -1822,21 +1836,7 @@ async def cancel_input(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-        previous_state = pop_state(data)
-        data['feedback_post'] = ''
-
-        if previous_state:
-            await state.set_state(previous_state)
-            text = locales.text(language, 'continue_work')
-            await bot.send_message(call.message.chat.id, text)
-            return
-
-    text = locales.text(language, 'operation_mode')
-    await bot.send_message(call.message.chat.id, text)
-    await Form.operational_mode.set()
+    await pop_saved_state(call.message.chat.id, call.message.from_user.id)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
@@ -1848,14 +1848,16 @@ async def cancel_captcha_input(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        captcha_url, appeal_id = pop_captcha_data(data)
+        data['message_to_answer'] = 0
 
         await http_rabbit.send_cancel(
-            appeal_id,
+            data['appeal_id'],
             call.message.chat.id,
             get_value(data, 'appeal_response_queue'))
 
-        delete_appeal_from_user_queue(data, call.message.chat.id, appeal_id)
+        delete_appeal_from_user_queue(data,
+                                      call.message.chat.id,
+                                      data['appeal_id'])
 
     await cancel_input(call, state)
 
@@ -1906,6 +1908,8 @@ async def send_letter_click(call, state: FSMContext):
             logger.info(f'Это реплай - {str(call.from_user.username)}')
             message = call.message.reply_to_message
             appeal_id = message.message_id
+
+        # TODO eсли рабочий режим, то сообщений об отмене отправки не выводить
 
             async with state.proxy() as data:
                 data['appeal_id'] = appeal_id
@@ -2103,14 +2107,13 @@ async def write_feedback(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         current_state = await state.get_state()
-
-        if current_state != Form.feedback.state:
-            save_state(data, current_state)
-
         language = await get_ui_lang(data=data)
         text = locales.text(language, 'input_feedback')
-
         keyboard = await get_cancel_keyboard(data)
+        data_to_save = {'feedback_post': get_value(data, 'feedback_post')}
+
+    if current_state != Form.feedback.state:
+        await states_stack.add(message.chat.id, data_to_save)
 
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.feedback.set()
@@ -2144,10 +2147,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
 
     text = locales.text(language, 'thanks_for_feedback')
     await bot.send_message(message.chat.id, text)
-
-    async with state.proxy() as data:
-        saved_state = pop_state(data)
-        await state.set_state(saved_state)
+    await pop_saved_state(message.chat.id, message.from_user.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2165,11 +2165,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
                                message.text,
                                reply_to_message_id=feedback_message_id)
 
-        await state.set_state(pop_state(data))
-        language = await get_ui_lang(data=data)
-
-    text = locales.text(language, 'continue_work')
-    await bot.send_message(message.chat.id, text)
+    await pop_saved_state(message.chat.id, message.from_user.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2441,7 +2437,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
     # Проверим есть ли место под еще одно фото нарушения
     if await violation_storage_full(state):
         text = locales.text(language, 'violation_storage_full') +\
-               str(config.MAX_VIOLATION_PHOTOS)
+            str(config.MAX_VIOLATION_PHOTOS)
     else:
         # Добавляем фотку наилучшего качества(последнюю в массиве) в список
         # прикрепления в письме
@@ -2495,9 +2491,9 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        pop_state(data)
         data['violation_caption'] = message.text.strip()
 
+    await pop_saved_state(message.chat.id, message.from_user.id)
     await Form.sending_approvement.set()
     await approve_sending(message.chat.id, state)
 
@@ -2521,11 +2517,11 @@ async def catch_email_password(message: types.Message, state: FSMContext):
             await invite_to_enter_email_password(message.chat.id, state, text)
             return
 
-        await state.set_state(pop_state(data))
         data['sender_email_password'] = password
 
     text = locales.text(language, 'email_password_saved').format(email)
     await bot.send_message(message.chat.id, text)
+    await pop_saved_state(message.chat.id, message.from_user.id)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2599,18 +2595,12 @@ async def catch_captcha(message: types.Message, state: FSMContext):
     await Form.operational_mode.set()
 
     async with state.proxy() as data:
-        captcha_url, appeal_id = pop_captcha_data(data)
-
         await send_captcha_text(state,
                                 message.chat.id,
                                 message.text,
-                                appeal_id)
+                                data['appeal_id'])
 
-        await state.set_state(pop_state(data))
-        language = await get_ui_lang(data=data)
-
-    text = locales.text(language, 'continue_work')
-    await bot.send_message(message.chat.id, text)
+    await pop_saved_state(message.chat.id, message.from_user.id)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.initial)
