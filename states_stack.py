@@ -31,7 +31,7 @@ class StatesStack:
             state_to_save = {
                 'state': current_state,
                 'data': data_to_save,
-                'message_id': data['message_to_answer'],
+                'message_id': self.get_value(data, 'message_to_answer'),
                 'message_text': recover_message
             }
 
