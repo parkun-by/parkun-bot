@@ -1,10 +1,11 @@
+from logging import Logger
 import aio_pika
 import config
 import asyncio
 
 
 class Rabbit:
-    def __init__(self, logger):
+    def __init__(self, logger: Logger):
         self.logger = logger
 
     async def start(self, loop, callback):
