@@ -91,28 +91,36 @@
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
-            "arguments": {}
+            "arguments": {
+                "x-queue-mode": "lazy"
+            }
         },
         {
             "name": "sender_available",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
-            "arguments": {}
+            "arguments": {
+                "x-queue-mode": "lazy"
+            }
         },
         {
             "name": "appeal",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
-            "arguments": {}
+            "arguments": {
+                "x-queue-mode": "lazy"
+            }
         },
         {
             "name": "twitter",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
-            "arguments": {}
+            "arguments": {
+                "x-queue-mode": "lazy"
+            }
         }
     ],
     "bindings": [
