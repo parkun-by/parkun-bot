@@ -38,8 +38,7 @@ class Rabbit:
             # Declaring queue
             queue = await channel.declare_queue(
                 config.RABBIT_QUEUE_STATUS,
-                auto_delete=False,
-                durable=True
+                passive=True
             )
 
             self.logger.info("Подключились к раббиту")
