@@ -9,6 +9,9 @@ MAX_VIOLATION_PHOTOS = 10
 BY = '_by'
 RU = '_ru'
 
+PREVIOUS_ADDRESS_PREFIX = '/saved_'
+PREVIOUS_ADDRESS_REGEX = r'\/saved_\d+'
+
 # regionalization
 MINSK = 'minsk'
 BREST_REGION = 'brest_region'

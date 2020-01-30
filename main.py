@@ -3,7 +3,7 @@ import io
 import logging
 import json
 from datetime import datetime
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union, List
 from aiogram.dispatcher.storage import FSMContextProxy
 from aiogram.types.photo_size import PhotoSize
 
@@ -502,14 +502,28 @@ async def prepare_photos(data: FSMContextProxy,
 
 
 def delete_prepared_violation(data: FSMContextProxy) -> None:
-    # в этом месте сохраним адрес нарушения для использования в
-    # следующем обращении
-    data['previous_violation_address'] = get_value(data, 'violation_address')
-
     for key in VIOLATION_INFO_KEYS:
         set_default(data, key, force=True)
 
     data['appeal_response_queue'] = ''
+
+
+def save_entered_address(data: FSMContextProxy, address: str):
+    addresses = get_value(data, 'previous_violation_addresses')
+
+    if address not in addresses:
+        addresses.reverse()
+        addresses.append(address)
+        addresses.reverse()
+    else:  # move element to first position
+        addresses.insert(0, addresses.pop(addresses.index(address)))
+
+    limit = 5
+
+    while len(addresses) > limit:
+        addresses.pop()
+
+    data['previous_violation_addresses'] = addresses
 
 
 def set_default(data: Union[FSMContextProxy, dict],
@@ -534,44 +548,14 @@ def get_default_value(key):
         'violation_location': [],
         'message_to_answer': 0,
         'states_stack': [],
-        'violation_date': datetime_parser.get_current_datetime()
+        'violation_date': datetime_parser.get_current_datetime(),
+        'previous_violation_addresses': [],
     }
 
     try:
         return default_values[key]
     except KeyError:
         return ''
-
-
-def set_default_sender_info(data):
-    set_default(data, 'sender_first_name')
-    set_default(data, 'sender_last_name')
-    set_default(data, 'sender_patronymic')
-    set_default(data, 'sender_email')
-    set_default(data, 'sender_phone')
-    set_default(data, 'sender_city')
-    set_default(data, 'sender_street')
-    set_default(data, 'sender_house')
-    set_default(data, 'sender_block')
-    set_default(data, 'sender_flat')
-    set_default(data, 'sender_zipcode')
-    set_default(data, 'verified')
-    set_default(data, 'secret_code')
-    set_default(data, 'letter_lang')
-    set_default(data, 'ui_lang')
-    set_default(data, 'recipient')
-    set_default(data, 'previous_violation_address')
-    set_default(data, 'appeals')
-    set_default(data, 'appeal_id')
-    set_default(data, 'violation_attachments')
-    set_default(data, 'violation_photo_ids')
-    set_default(data, 'violation_photo_files_paths')
-    set_default(data, 'violation_photos_amount')
-    set_default(data, 'violation_vehicle_number')
-    set_default(data, 'violation_address')
-    set_default(data, 'violation_location')
-    set_default(data, 'violation_datetime')
-    set_default(data, 'states_stack')
 
 
 def get_sender_full_name(data):
@@ -942,17 +926,12 @@ async def ask_for_violation_address(chat_id, data):
     # настроим клавиатуру
     keyboard = await get_cancel_keyboard(data)
 
-    if 'previous_violation_address' in data:
-        if get_value(data, 'previous_violation_address') != '':
-            text += locales.text(language, 'previous_violation_address') +\
-                ' <b>{}</b>'.format(get_value(data,
-                                              'previous_violation_address'))
-
-            use_previous_button = types.InlineKeyboardButton(
-                text=locales.text(language, 'use_previous_button'),
-                callback_data='/use_previous')
-
-            keyboard.add(use_previous_button)
+    if get_value(data, 'previous_violation_addresses'):
+        text += locales.text(language, 'previous_violation_addresses') + \
+            '\n' + \
+            '\n' + \
+            get_saved_addresses_list(
+                get_value(data, 'previous_violation_addresses'))
 
     await bot.send_message(chat_id,
                            text,
@@ -960,6 +939,17 @@ async def ask_for_violation_address(chat_id, data):
                            parse_mode='HTML')
 
     await Form.violation_location.set()
+
+
+def get_saved_addresses_list(addresses: list) -> str:
+    addresses_list = ''
+
+    # TODO дописать обработчик этих комманд
+    for number, address in enumerate(addresses):
+        addresses_list += f'📍 {address} - ' + \
+            f'{config.PREVIOUS_ADDRESS_PREFIX}{number}\n'
+
+    return addresses_list
 
 
 async def send_language_info(chat_id: int, data: FSMContextProxy) -> None:
@@ -1034,9 +1024,15 @@ async def print_violation_address_info(region, address, chat_id, language):
                            parse_mode='HTML')
 
 
-async def save_violation_address(address, coordinates, data):
+async def save_violation_address(address: str,
+                                 coordinates: Optional[List[float]],
+                                 data: FSMContextProxy):
     data['violation_address'] = address
     data['violation_location'] = coordinates
+
+    # в этом месте сохраним адрес нарушения для использования в
+    # следующем обращении
+    save_entered_address(data, address)
 
 
 async def ask_for_violation_time(chat_id, language):
@@ -1223,7 +1219,6 @@ def get_input_name_invite_text(language, name, invitation, example):
 
 async def show_name_part_invitation(part_name, state, chat_id):
     async with state.proxy() as data:
-        set_default_sender_info(data)
         language = await get_ui_lang(data=data)
 
         name_part = get_value(data,
@@ -1524,22 +1519,6 @@ async def skip_last_name_click(call, state: FSMContext):
             'sender_email',
             Form.sender_email,
             locales.text(language, 'nonexistent_email_warning'))
-
-
-@dp.callback_query_handler(lambda call: call.data == '/use_previous',
-                           state=Form.violation_location)
-async def use_previous_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие предыдущий адрес - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        previous_address = get_value(data, 'previous_violation_address')
-
-    await set_violation_location(call.message.chat.id,
-                                 previous_address,
-                                 state)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/change_ui_language',
@@ -2054,10 +2033,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
                            text)
 
     await Form.initial.set()
-
-    async with state.proxy() as data:
-        set_default_sender_info(data)
-
     await invite_to_fill_credentials(message.chat.id, state)
 
 
@@ -2142,10 +2117,6 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 
     text = locales.text(language, 'reset') + ' ¯\\_(ツ)_/¯'
     await bot.send_message(message.chat.id, text)
-
-    async with state.proxy() as data:
-        set_default_sender_info(data)
-
     await invite_to_fill_credentials(message.chat.id, state)
 
 
@@ -2200,6 +2171,28 @@ async def write_feedback(message: types.Message, state: FSMContext):
 
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.feedback.set()
+
+
+@dp.message_handler(regexp=config.PREVIOUS_ADDRESS_REGEX,
+                    state=Form.violation_location)
+async def use_saved_address_command(message: types.Message, state: FSMContext):
+    logger.info('Команда предыдущего адреса - ' +
+                str(message.from_user.username))
+
+    address_index = int(
+        message.text.replace(config.PREVIOUS_ADDRESS_PREFIX, ''))
+
+    async with state.proxy() as data:
+        try:
+            previous_address = \
+                get_value(data,
+                          'previous_violation_addresses')[int(address_index)]
+        except KeyError:
+            previous_address = message.text
+
+    await set_violation_location(message.chat.id,
+                                 previous_address,
+                                 state)
 
 
 @dp.message_handler(state=Form.feedback)
