@@ -32,6 +32,7 @@ from amqp_rabbit import Rabbit as AMQPRabbit
 from imap_email import Email
 from states_stack import StatesStack
 import datetime_parser
+from appeal_summary import AppealSummary
 
 
 loop = asyncio.get_event_loop()
@@ -52,6 +53,56 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 
 
+def get_sender_full_name(data):
+    first_name = get_value(data, "sender_first_name")
+    last_name = get_value(data, "sender_last_name")
+    patronymic = get_value(data, "sender_patronymic")
+
+    return f'{first_name} {patronymic} {last_name}'.strip()
+
+
+def get_value(data: Union[FSMContextProxy, dict],
+              key: str,
+              placeholder: Any = None,
+              read_only=False) -> Any:
+    try:
+        return get_text(data[key], placeholder)
+    except KeyError:
+        if not read_only:
+            set_default(data, key)
+
+        if placeholder is not None:
+            return placeholder
+
+        return data[key]
+
+
+def get_sender_address(data):
+    city = get_value(data, 'sender_city')
+    street = get_value(data, 'sender_street')
+    house = get_value(data, 'sender_house')
+    block = get_value(data, 'sender_block')
+    flat = get_value(data, 'sender_flat')
+    zipcode = get_value(data, 'sender_zipcode')
+
+    if house:
+        house = f'д.{house}'
+
+    if block:
+        block = f'корп.{block}'
+
+    if flat:
+        flat = f'кв.{flat}'
+
+    return f'{zipcode}, {city}, {street}, {house}, {block}, {flat}'.strip()
+
+
+appeal_summary = AppealSummary(locales,
+                               get_sender_full_name,
+                               get_value,
+                               get_sender_address)
+
+
 async def get_ui_lang(state=None,
                       data: Optional[FSMContextProxy] = None) -> str:
     if data:
@@ -68,22 +119,23 @@ async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
     await pop_saved_state(user_id, user_id, silent=True)
     state = dp.current_state(chat=user_id, user=user_id)
 
-    await state.set_state(Form.sending_approvement)
-    language = await get_ui_lang(state)
+    async with state.proxy() as data:
+        delete_appeal_from_user_queue(data,
+                                      user_id,
+                                      appeal_id)
+
+        delete_prepared_violation(data)
+        language = await get_ui_lang(data=data)
 
     text = locales.text(language, message)
 
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    approve_sending_button = types.InlineKeyboardButton(
+    repeat_sending_button = types.InlineKeyboardButton(
         text=locales.text(language, 'approve_sending_button'),
         callback_data='/repeat_sending')
 
-    cancel_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'cancel_button'),
-        callback_data='/cancel')
-
-    keyboard.add(approve_sending_button, cancel_button)
+    keyboard.add(repeat_sending_button)
 
     try:
         await bot.send_message(user_id,
@@ -94,20 +146,6 @@ async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
         await bot.send_message(user_id,
                                text,
                                reply_markup=keyboard)
-
-
-def get_value(data: Union[FSMContextProxy, dict],
-              key: str,
-              placeholder: str = None) -> Any:
-    try:
-        return get_text(data[key], placeholder)
-    except KeyError:
-        set_default(data, key)
-
-        if placeholder:
-            return placeholder
-
-        return data[key]
 
 
 broadcaster = Broadcaster(get_value, locales)
@@ -286,25 +324,34 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
 
     async with state.proxy() as data:
         appeal = get_appeal_from_user_queue(data, appeal_id)
-        await send_appeal_textfile_to_user(appeal['text'], language, user_id)
 
-        await send_violation_to_channel(language,
-                                        appeal['violation_datetime'],
-                                        appeal['violation_address'],
-                                        appeal['violation_vehicle_number'],
-                                        appeal['violation_photo_ids'])
+        if appeal:
+            await postsending_operations(language, user_id, appeal)
 
-        logger.info(f'Отправили в канал - {str(user_id)}')
-
-        await broadcaster.share(language,
-                                appeal['violation_photo_files_paths'],
-                                appeal['violation_location'],
-                                appeal['violation_datetime'],
-                                appeal['violation_vehicle_number'],
-                                appeal['violation_address'])
-
-        logger.info(f'Отправили в остальное - {str(user_id)}')
         delete_appeal_from_user_queue(data, user_id, appeal_id)
+
+
+async def postsending_operations(language: str,
+                                 user_id: int,
+                                 appeal: dict) -> None:
+    await send_appeal_textfile_to_user(appeal['text'], language, user_id)
+
+    await send_violation_to_channel(language,
+                                    appeal['violation_datetime'],
+                                    appeal['violation_address'],
+                                    appeal['violation_vehicle_number'],
+                                    appeal['violation_photo_ids'])
+
+    logger.info(f'Отправили в канал - {str(user_id)}')
+
+    await broadcaster.share(language,
+                            appeal['violation_photo_files_paths'],
+                            appeal['violation_location'],
+                            appeal['violation_datetime'],
+                            appeal['violation_vehicle_number'],
+                            appeal['violation_address'])
+
+    logger.info(f'Отправили в остальное - {str(user_id)}')
 
 
 async def fill_captcha(user_id: int,
@@ -354,20 +401,116 @@ async def send_appeal(user_id: int, appeal_id: int) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
+        delete_prepared_violation(data)
         appeal = get_appeal_from_user_queue(data, appeal_id)
 
         if not appeal:
-            text = locales.text(language, 'irrelevant_action')
-            await bot.send_message(user_id, text)
-            await delete_current_violation(state, user_id)
+            await parse_appeal_from_message(data, user_id, appeal_id)
             return
 
         await http_rabbit.send_appeal(appeal, user_id)
+
+        language = await get_ui_lang(data=data)
         text = locales.text(language, 'appeal_sent')
         logger.info(f'Обращение поставлено в очередь - {str(user_id)}')
         await bot.send_message(user_id, text)
         await Form.operational_mode.set()
+
+
+async def parse_appeal_from_message(data: FSMContextProxy,
+                                    user_id: int,
+                                    appeal_id: int) -> None:
+    appeal_photos_start_id = appeal_id - 1
+
+    if not await fill_photos_violation_data(data,
+                                            user_id,
+                                            appeal_photos_start_id) or \
+            not await fill_text_violation_data(data, user_id, appeal_id):
+        delete_prepared_violation(data)
+        language = await get_ui_lang(data=data)
+        text = locales.text(language, 'appeal_resending_failed')
+        await bot.send_message(user_id, text)
+        return
+
+    await Form.sending_approvement.set()
+    await approve_sending(user_id, data)
+
+
+async def process_entered_violation(data: FSMContextProxy,
+                                    user_id: int,
+                                    appeal_id: int) -> dict:
+    await prepare_photos(data, user_id, appeal_id)
+    appeal = await compose_appeal(data, user_id, appeal_id)
+    add_appeal_to_user_queue(data, appeal, appeal_id)
+    delete_prepared_violation(data)
+    return appeal
+
+
+async def fill_photos_violation_data(data: FSMContextProxy,
+                                     user_id: int,
+                                     message_start_id: int) -> bool:
+    message_id = message_start_id
+
+    photos_message = await bot.forward_message(chat_id=config.TRASH_CHANNEL,
+                                               from_chat_id=user_id,
+                                               message_id=message_id,
+                                               disable_notification=True)
+
+    while photos_message.photo:
+        await add_photo_to_attachments(photos_message.photo[-1],
+                                       data,
+                                       photos_message.chat.id)
+
+        message_id -= 1
+
+        await bot.delete_message(chat_id=config.TRASH_CHANNEL,
+                                 message_id=photos_message.message_id)
+
+        photos_message = await bot.forward_message(
+            chat_id=config.TRASH_CHANNEL,
+            from_chat_id=user_id,
+            message_id=message_id,
+            disable_notification=True)
+
+    await bot.delete_message(chat_id=config.TRASH_CHANNEL,
+                             message_id=photos_message.message_id)
+
+    return True
+
+
+async def fill_text_violation_data(data: FSMContextProxy,
+                                   user_id: int,
+                                   appeal_id: int) -> bool:
+    data['appeal_id'] = appeal_id
+    language = await get_ui_lang(data=data)
+
+    appeal_message = await bot.forward_message(chat_id=config.TRASH_CHANNEL,
+                                               from_chat_id=user_id,
+                                               message_id=appeal_id,
+                                               disable_notification=True)
+
+    violation_data = appeal_summary.parse_violation_data(language,
+                                                         appeal_message.text)
+
+    await bot.delete_message(chat_id=config.TRASH_CHANNEL,
+                             message_id=appeal_message.message_id)
+
+    if not violation_data:
+        return False
+
+    data['violation_vehicle_number'] = \
+        violation_data['violation_vehicle_number']
+
+    address = violation_data['violation_address']
+    data['violation_datetime'] = violation_data['violation_datetime']
+    data['violation_caption'] = violation_data['violation_caption']
+    recipient = locales.get_region_code(violation_data['violation_recipient'])
+    save_recipient(recipient, data)
+
+    coordinates = await locator.get_coordinates(address)
+    await save_violation_address(address, coordinates, data)
+
+    return True
 
 
 async def status_received(status: str) -> None:
@@ -411,12 +554,13 @@ async def reply_that_captcha_ok(user_id: int, appeal_id: int) -> None:
 
     await bot.send_message(user_id,
                            text,
-                           reply_to_message_id=appeal_id)
+                           reply_to_message_id=appeal_id,
+                           disable_notification=True)
 
 
 def get_appeal_email(data) -> Optional[str]:
-    if get_value(data, 'sender_email_password', None):
-        return get_value(data, 'sender_email', None)
+    if get_value(data, 'sender_email_password', ''):
+        return get_value(data, 'sender_email', '')
 
 
 async def send_captcha_text(state: FSMContext,
@@ -443,7 +587,7 @@ async def send_captcha_text(state: FSMContext,
         await bot.send_message(chat_id, text)
 
 
-def ensure_attachments_availability(data):
+def ensure_attachments_availability(data: FSMContextProxy):
     if (('violation_attachments' not in data) or
             ('violation_photo_ids' not in data) or
             ('violation_photo_files_paths' not in data) or
@@ -470,11 +614,10 @@ async def violation_storage_full(state):
 
 
 async def add_photo_to_attachments(photo: PhotoSize,
-                                   state: FSMContext,
+                                   data: FSMContextProxy,
                                    user_id: int) -> None:
-    async with semaphore, state.proxy() as data:
-        ensure_attachments_availability(data)
-        data['violation_photo_ids'].append(photo['file_id'])
+    ensure_attachments_availability(data)
+    data['violation_photo_ids'].append(photo['file_id'])
 
 
 async def prepare_photos(data: FSMContextProxy,
@@ -558,49 +701,22 @@ def get_default_value(key):
         return ''
 
 
-def get_sender_full_name(data):
-    first_name = get_value(data, "sender_first_name")
-    last_name = get_value(data, "sender_last_name")
-    patronymic = get_value(data, "sender_patronymic")
-
-    return f'{first_name} {patronymic} {last_name}'.strip()
-
-
-def get_sender_address(data):
-    city = get_value(data, 'sender_city')
-    street = get_value(data, 'sender_street')
-    house = get_value(data, 'sender_house')
-    block = get_value(data, 'sender_block')
-    flat = get_value(data, 'sender_flat')
-    zipcode = get_value(data, 'sender_zipcode')
-
-    if house:
-        house = f'д.{house}'
-
-    if block:
-        block = f'корп.{block}'
-
-    if flat:
-        flat = f'кв.{flat}'
-
-    return f'{zipcode}, {city}, {street}, {house}, {block}, {flat}'.strip()
-
-
 def add_appeal_to_user_queue(data: FSMContextProxy,
                              appeal: dict,
                              appeal_id: int) -> None:
     appeals = get_value(data, 'appeals')
     delete_old_appeals(appeals)
 
-    if str(appeal_id) not in appeals:
+    if not get_value(appeals, str(appeal_id), {}, read_only=True):
         logger.info(f'Такого обращения еще нет в хранилище - {appeal_id}')
         appeals[str(appeal_id)] = appeal
         data['appeals'] = appeals
 
 
-def get_appeal_from_user_queue(data: FSMContextProxy, appeal_id: int) -> dict:
+def get_appeal_from_user_queue(data: FSMContextProxy,
+                               appeal_id: int) -> dict:
     appeals = get_value(data, 'appeals')
-    appeal = get_value(appeals, str(appeal_id), None)
+    appeal = get_value(appeals, str(appeal_id), {}, read_only=True)
     return appeal
 
 
@@ -615,14 +731,14 @@ def delete_appeal_from_user_queue(data: FSMContextProxy,
     uploader.clear_storage(user_id, appeal_id)
 
 
-def delete_old_appeals(appeals: dict, limit: int = 5) -> dict:
+def delete_old_appeals(appeals: dict, limit: int = 10) -> dict:
     keys = list(appeals.keys())
     keys.sort(reverse=True)
     keys_amount = len(keys)
     logger.info(f'Длина хранилища обращений - {keys_amount}')
 
     if keys_amount > limit:
-        keys_to_delete = keys[5:]
+        keys_to_delete = keys[limit:]
 
         for key in keys_to_delete:
             appeals.pop(key)
@@ -647,61 +763,13 @@ async def pop_saved_state(user_id: int, from_id: int, silent=False):
 
 async def safe_forward(chat_id: int,
                        from_chat_id: int,
-                       message_id: int) -> types.Message:
+                       message_id: int) -> None:
     try:
         await bot.forward_message(chat_id=chat_id,
                                   from_chat_id=from_chat_id,
                                   message_id=message_id)
     except Exception:
         pass
-
-
-async def compose_summary(data: FSMContextProxy):
-    language = await get_ui_lang(data=data)
-
-    text = locales.text(language, 'check_please').format(
-        locales.text(language, get_value(data, 'recipient'))) + '\n' +\
-        '\n' +\
-        locales.text(language, 'letter_lang').format(
-            locales.text(language, 'lang' + get_value(data, 'letter_lang'))) +\
-        '\n' +\
-        '\n' +\
-        locales.text(language, 'sender') + '\n' +\
-        locales.text(language, 'sender_name') +\
-        ' <b>{}</b>'.format(get_sender_full_name(data)) + '\n' +\
-        locales.text(language, 'sender_email') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_email')) + '\n' +\
-        locales.text(language, 'sender_phone') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_phone')) + '\n' +\
-        locales.text(language, 'sender_address') +\
-        ' <b>{}</b>'.format(get_sender_address(data)) + '\n' +\
-        locales.text(language, 'sender_zipcode') +\
-        ' <b>{}</b>'.format(get_value(data, 'sender_zipcode')) + '\n' +\
-        '\n' +\
-        locales.text(language, 'violator') + '\n' +\
-        locales.text(language, 'violation_plate') +\
-        f' <b>{get_value(data, "violation_vehicle_number")}</b>' + '\n' +\
-        locales.text(language, 'violation_location') +\
-        f' <b>{get_value(data, "violation_address")}</b>' + '\n' +\
-        locales.text(language, 'violation_datetime') +\
-        f' <b>{get_value(data, "violation_datetime")}</b>' + '\n' +\
-        '\n' +\
-        get_caption_text(data, language) +\
-        locales.text(language, 'channel_warning').format(config.CHANNEL,
-                                                         config.TWI_URL)
-
-    return text
-
-
-def get_caption_text(data: FSMContextProxy, language: str) -> str:
-    caption = get_value(data, "violation_caption")
-
-    if caption:
-        return locales.text(language, 'caption') +\
-            f' {get_value(data, "violation_caption")}' + '\n' +\
-            '\n'
-    else:
-        return ''
 
 
 async def check_validity(pattern, message, language):
@@ -739,21 +807,20 @@ def get_appeal_text(data: FSMContextProxy) -> str:
     return AppealText.get(get_value(data, 'letter_lang'), violation_data)
 
 
-async def approve_sending(chat_id: int, state: FSMContext) -> int:
-    language = await get_ui_lang(state)
+async def approve_sending(chat_id: int, data: FSMContextProxy) -> int:
+    language = await get_ui_lang(data=data)
 
     caption_button_text = locales.text(language, 'add_caption_button')
 
-    async with state.proxy() as data:
-        text = await compose_summary(data)
+    text = await appeal_summary.compose_summary(language, data)
 
-        await send_photos_group_with_caption(
-            get_value(data, 'violation_photo_ids'),
-            chat_id)
+    await send_photos_group_with_caption(
+        get_value(data, 'violation_photo_ids'),
+        chat_id)
 
-        if get_value(data, 'violation_caption'):
-            caption_button_text = locales.text(language,
-                                               'change_caption_button')
+    if get_value(data, 'violation_caption'):
+        caption_button_text = locales.text(language,
+                                           'change_caption_button')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -944,7 +1011,6 @@ async def ask_for_violation_address(chat_id, data):
 def get_saved_addresses_list(addresses: list) -> str:
     addresses_list = ''
 
-    # TODO дописать обработчик этих комманд
     for number, address in enumerate(addresses):
         addresses_list += f'📍 {address} - ' + \
             f'{config.PREVIOUS_ADDRESS_PREFIX}{number}\n'
@@ -991,7 +1057,7 @@ async def send_appeal_email_info(chat_id: int, data: FSMContextProxy) -> None:
                            parse_mode='HTML')
 
 
-async def save_recipient(region, data):
+def save_recipient(region, data):
     if region is None:
         data['recipient'] = config.MINSK
     else:
@@ -1096,7 +1162,7 @@ async def send_photos_group_with_caption(photos_id: list,
 
 
 def prepare_registration_number(number: str):
-    """заменяем в номере все символы на киррилические"""
+    """replace all cyrillyc to latin"""
 
     kyrillic = 'АВСЕНКМОРТХУІ'
     latin = 'ABCEHKMOPTXYI'
@@ -1115,7 +1181,7 @@ async def set_violation_location(chat_id, address, state):
 
     async with state.proxy() as data:
         await save_violation_address(address, coordinates, data)
-        await save_recipient(region, data)
+        save_recipient(region, data)
         region = get_value(data, 'recipient')
         language = await get_ui_lang(data=data)
 
@@ -1780,7 +1846,7 @@ async def recipient_choosen_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         address = get_value(data, 'violation_address')
-        await save_recipient(call.data, data)
+        save_recipient(call.data, data)
         region = get_value(data, 'recipient')
 
     language = await get_ui_lang(state)
@@ -1928,7 +1994,7 @@ async def cancel_captcha_input(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.entering_captcha)
-async def send_letter_in_progress(call, state: FSMContext):
+async def send_appeal_in_progress(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
 
@@ -1938,8 +2004,37 @@ async def send_letter_in_progress(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
+                           state=Form.operational_mode)
+async def send_appeal_again(call, state: FSMContext):
+    await bot.answer_callback_query(call.id)
+    language = await get_ui_lang(state)
+
+    text = locales.text(language, 'send_appeal_again')
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    approve_sending_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'approve_sending_button'),
+        callback_data='/approve_sending')
+
+    cancel = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(approve_sending_button, cancel)
+
+    await bot.send_message(call.message.chat.id,
+                           text,
+                           reply_markup=keyboard,
+                           reply_to_message_id=call.message.message_id)
+
+    await Form.sending_approvement.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.sending_approvement)
-async def send_letter_click(call, state: FSMContext):
+async def send_appeal_click(call, state: FSMContext):
     logger.info('Нажата кнопка отправки в ГАИ - ' +
                 str(call.from_user.username))
 
@@ -1981,13 +2076,9 @@ async def send_letter_click(call, state: FSMContext):
 
             async with state.proxy() as data:
                 data['appeal_id'] = appeal_id
-                await prepare_photos(data, call.message.chat.id, appeal_id)
-                appeal = await compose_appeal(data,
-                                              call.message.chat.id,
-                                              appeal_id)
-
-                add_appeal_to_user_queue(data, appeal, appeal_id)
-                delete_prepared_violation(data)
+                await process_entered_violation(data,
+                                                call.message.chat.id,
+                                                appeal_id)
 
         await send_appeal(call.message.chat.id, appeal_id)
         return
@@ -1996,14 +2087,26 @@ async def send_letter_click(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/repeat_sending',
-                           state=Form.sending_approvement)
+                           state=Form.operational_mode)
 async def send_letter_again_click(call, state: FSMContext):
     logger.info('Нажата кнопка повторной отправки в ГАИ - ' +
                 str(call.from_user.username))
 
-    await bot.answer_callback_query(call.id)
     appeal_id = call.message.reply_to_message.message_id
     await send_appeal(call.message.chat.id, appeal_id)
+    await bot.answer_callback_query(call.id)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/repeat_sending',
+                           state='*')
+async def send_letter_again_click_wrong_mode(call, state: FSMContext):
+    await bot.answer_callback_query(call.id)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'operational_mode_only')
+    await bot.send_message(call.message.chat.id, text)
 
 
 @dp.callback_query_handler(state='*')
@@ -2515,13 +2618,12 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
         text = locales.text(language, 'violation_storage_full') +\
             str(config.MAX_VIOLATION_PHOTOS)
     else:
-        # Добавляем фотку наилучшего качества(последнюю в массиве) в список
-        # прикрепления в письме
-        asyncio.run_coroutine_threadsafe(
-            add_photo_to_attachments(message.photo[-1],
-                                     state,
-                                     message.chat.id),
-            loop)
+        async with state.proxy() as data:
+            # Добавляем фотку наилучшего качества(последнюю в массиве) в список
+            # прикрепления в письме
+            await add_photo_to_attachments(message.photo[-1],
+                                           data,
+                                           message.chat.id)
 
         text = locales.text(language, 'photo_or_info') + '\n' +\
             '\n' +\
@@ -2566,12 +2668,12 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод примечания - ' +
                 str(message.from_user.username))
 
-    async with state.proxy() as data:
-        data['violation_caption'] = message.text.strip()
-
     await pop_saved_state(message.chat.id, message.from_user.id)
     await Form.sending_approvement.set()
-    await approve_sending(message.chat.id, state)
+
+    async with state.proxy() as data:
+        data['violation_caption'] = message.text.strip()
+        await approve_sending(message.chat.id, data)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2627,7 +2729,7 @@ async def catch_gps_violation_location(message: types.Message,
             address = locales.text(language, 'no_address_detected')
 
         region = await locator.get_region(coordinates)
-        await save_recipient(region, data)
+        save_recipient(region, data)
         region = get_value(data, 'recipient')
 
     if address is None:
@@ -2673,8 +2775,7 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
             return
 
         data['violation_datetime'] = datetime
-
-    await approve_sending(message.chat.id, state)
+        await approve_sending(message.chat.id, data)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,

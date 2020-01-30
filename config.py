@@ -56,6 +56,7 @@ ADDRESS_FAIL = 'no_address'
 
 # to post into channel bot needs to be admin there
 CHANNEL = '@channel_name'
+TRASH_CHANNEL = '@channel_name'
 
 # email verifier url
 MAIL_VERIFIER_URL = 'http://localhost:18080/validate'  # response 111
