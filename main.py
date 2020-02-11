@@ -31,6 +31,7 @@ from http_rabbit import Rabbit as HTTPRabbit
 from amqp_rabbit import Rabbit as AMQPRabbit
 from imap_email import Email
 from states_stack import StatesStack
+import datetime_parser
 
 
 loop = asyncio.get_event_loop()
@@ -533,6 +534,7 @@ def get_default_value(key):
         'violation_location': [],
         'message_to_answer': 0,
         'states_stack': [],
+        'violation_date': datetime_parser.get_current_datetime()
     }
 
     try:
@@ -1038,15 +1040,30 @@ async def save_violation_address(address, coordinates, data):
 
 
 async def ask_for_violation_time(chat_id, language):
-    current_time = get_str_current_time()
+    text, keyboard = compose_violation_time_asking(
+        language,
+        datetime_parser.get_current_datetime())
 
-    text = locales.text(language, 'input_datetime') + '\n' +\
-        '\n' +\
-        locales.text(language, 'example') + \
-        ' <b>{}</b>.'.format(current_time)
+    await bot.send_message(chat_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
 
+    await Form.violation_datetime.set()
+
+
+def get_violation_datetime_keyboard(
+        language: str) -> types.InlineKeyboardMarkup:
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    yesterday_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'yesterday_button'),
+        callback_data='/yesterday')
+
+    before_yesterday_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'before_yesterday_button'),
+        callback_data='/before_yesterday')
 
     current_time_button = types.InlineKeyboardButton(
         text=locales.text(language, 'current_time_button'),
@@ -1056,14 +1073,12 @@ async def ask_for_violation_time(chat_id, language):
         text=locales.text(language, 'cancel_button'),
         callback_data='/cancel')
 
-    keyboard.add(current_time_button, cancel)
+    keyboard.add(before_yesterday_button,
+                 yesterday_button,
+                 current_time_button,
+                 cancel)
 
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.violation_datetime.set()
+    return keyboard
 
 
 async def send_photos_group_with_caption(photos_id: list,
@@ -1115,6 +1130,48 @@ async def set_violation_location(chat_id, address, state):
 
     await ask_for_violation_time(chat_id,
                                  language)
+
+
+def compose_violation_time_asking(
+        language: str,
+        datetime_iso: str) -> Tuple[str, types.InlineKeyboardMarkup]:
+    day, month, year = datetime_parser.parse_datetime(datetime_iso)
+    current_time = get_str_current_time()
+
+    text = locales.text(
+        language, 'enter_time_in_yesterday').format(
+            f'{day.rjust(2, "0")}.' +
+            f'{month.rjust(2, "0")}.' +
+            f'{year.rjust(2, "0")}') + '\n' +\
+        '\n' +\
+        locales.text(language, 'example') + \
+        ' <b>{}</b>.'.format(current_time)
+
+    keyboard = get_violation_datetime_keyboard(language)
+
+    return text, keyboard
+
+
+async def react_to_time_button(user_id: int,
+                               message_id: int,
+                               state: FSMContext,
+                               day_to_shift: int = 0) -> None:
+    async with state.proxy() as data:
+        data['violation_date'] = violation_date = \
+            datetime_parser.get_current_datetime(day_to_shift)
+
+        language = await get_ui_lang(data=data)
+
+    text, keyboard = compose_violation_time_asking(language,
+                                                   violation_date)
+    try:
+        await bot.edit_message_text(text,
+                                    user_id,
+                                    message_id,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML')
+    except MessageNotModified:
+        pass
 
 
 async def show_settings(message, state):
@@ -1665,6 +1722,34 @@ async def current_time_click(call, state: FSMContext):
     await catch_violation_time(message, state)
 
 
+@dp.callback_query_handler(lambda call: call.data == '/yesterday',
+                           state=Form.violation_datetime)
+async def yesterday_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки вчера - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    await react_to_time_button(call.message.chat.id,
+                               call.message.message_id,
+                               state,
+                               day_to_shift=-1)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/before_yesterday',
+                           state=Form.violation_datetime)
+async def before_yesterday_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки позавчера - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+
+    await react_to_time_button(call.message.chat.id,
+                               call.message.message_id,
+                               state,
+                               day_to_shift=-2)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/enter_violation_addr',
                            state=Form.violation_datetime)
 async def violation_address_click(call, state: FSMContext):
@@ -1908,8 +1993,6 @@ async def send_letter_click(call, state: FSMContext):
             logger.info(f'Это реплай - {str(call.from_user.username)}')
             message = call.message.reply_to_message
             appeal_id = message.message_id
-
-        # TODO eсли рабочий режим, то сообщений об отмене отправки не выводить
 
             async with state.proxy() as data:
                 data['appeal_id'] = appeal_id
@@ -2582,7 +2665,21 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
     await Form.sending_approvement.set()
 
     async with state.proxy() as data:
-        data['violation_datetime'] = message.text
+        datetime = datetime_parser.get_violation_datetime(
+                                            get_value(data, 'violation_date'),
+                                            message.text)
+
+        if not datetime:
+            logger.info('Неправильно ввел датовремя - ' +
+                        str(message.chat.username))
+
+            language = await get_ui_lang(data=data)
+            text = locales.text(language, 'invalid_datetime')
+            await bot.send_message(message.chat.id, text)
+            await ask_for_violation_time(message.chat.id, language)
+            return
+
+        data['violation_datetime'] = datetime
 
     await approve_sending(message.chat.id, state)
 
