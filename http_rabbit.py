@@ -21,6 +21,7 @@ class Rabbit:
 
         data = {
             'properties': {},
+            'persistent': True,
             'routing_key': routing_key,
             'payload': json.dumps(body),
             'payload_encoding': 'string'
