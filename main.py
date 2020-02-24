@@ -2618,7 +2618,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
         text = locales.text(language, 'violation_storage_full') +\
             str(config.MAX_VIOLATION_PHOTOS)
     else:
-        async with state.proxy() as data:
+        async with semaphore, state.proxy() as data:
             # Добавляем фотку наилучшего качества(последнюю в массиве) в список
             # прикрепления в письме
             await add_photo_to_attachments(message.photo[-1],
