@@ -57,11 +57,18 @@ def get_violation_datetime(saved_datetime: str,
 
     day = str(day).rjust(2, '0')
     month = str(month).rjust(2, '0')
-    year = str(year).rjust(2, '0')
+    year = format_year(str(year))
     hour = str(hour).rjust(2, '0')
     minute = str(minute).rjust(2, '0')
 
     return f'{day}.{month}.{year} {hour}:{minute}'
+
+
+def format_year(year_input: str):
+    if len(year_input) == 2:
+        return '20' + year_input
+
+    return year_input
 
 
 def parse_datetime(datetime_iso: str) -> Tuple[str, str, str]:
