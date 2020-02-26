@@ -514,35 +514,36 @@ async def fill_text_violation_data(data: FSMContextProxy,
 
 
 async def status_received(status: str) -> None:
-    data = json.loads(status)
-    queue_id = str(get_value(data, 'answer_queue', 'undefined'))
+    sender_data = json.loads(status)
+    queue_id = str(get_value(sender_data, 'answer_queue', 'undefined'))
 
     logger.info(f'Прилетел статус: ' +
-                f'{str(data["user_id"])} - {queue_id} - {data["type"]}')
+                f'{str(sender_data["user_id"])} - {queue_id} - ' +
+                f'{sender_data["type"]}')
 
-    user_id = int(data['user_id'])
-    appeal_id = int(data['appeal_id'])
+    user_id = int(sender_data['user_id'])
+    appeal_id = int(sender_data['appeal_id'])
 
-    if data['type'] == config.OK:
+    if sender_data['type'] == config.OK:
         asyncio.run_coroutine_threadsafe(
             send_success_sending(user_id, appeal_id),
             loop)
-    elif data['type'] == config.CAPTCHA_URL:
+    elif sender_data['type'] == config.CAPTCHA_URL:
         asyncio.run_coroutine_threadsafe(
             fill_captcha(user_id,
                          appeal_id,
-                         data['captcha'],
-                         data['answer_queue']),
+                         sender_data['captcha'],
+                         sender_data['answer_queue']),
             loop
         )
-    elif data['type'] == config.CAPTCHA_OK:
+    elif sender_data['type'] == config.CAPTCHA_OK:
         asyncio.run_coroutine_threadsafe(
             reply_that_captcha_ok(user_id, appeal_id),
             loop
         )
-    elif data['type'] == config.SENDING_CANCELLED:
+    elif sender_data['type'] == config.SENDING_CANCELLED:
         asyncio.run_coroutine_threadsafe(
-            cancel_sending(user_id, appeal_id, data['message']),
+            cancel_sending(user_id, appeal_id, sender_data['message']),
             loop
         )
 

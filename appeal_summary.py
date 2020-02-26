@@ -45,7 +45,8 @@ class AppealSummary():
                                                         config.TWI_URL)[:15]
 
         violation_caption = \
-            rf"(?:\s*{caption_str}\s*)(?P<caption>(.|\s)+?)(?:\s*{channel_warning_str})"
+            rf"(?:\s*{caption_str}\s*)(?P<caption>(.|\s)+?)" + \
+            rf"(?:\s*{channel_warning_str})"
 
         return violation_caption
 
