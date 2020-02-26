@@ -694,6 +694,7 @@ def get_default_value(key):
         'states_stack': [],
         'violation_date': datetime_parser.get_current_datetime(),
         'previous_violation_addresses': [],
+        'appeal_id': 0,
     }
 
     try:
@@ -915,7 +916,7 @@ async def delete_current_violation(state: FSMContext, user_id: int) -> None:
 
         delete_appeal_from_user_queue(data,
                                       user_id,
-                                      data['appeal_id'])
+                                      get_value(data, 'appeal_id'))
 
         delete_prepared_violation(data)
 
@@ -1982,13 +1983,13 @@ async def cancel_captcha_input(call, state: FSMContext):
         data['message_to_answer'] = 0
 
         await http_rabbit.send_cancel(
-            data['appeal_id'],
+            get_value(data, 'appeal_id'),
             call.message.chat.id,
             get_value(data, 'appeal_response_queue'))
 
         delete_appeal_from_user_queue(data,
                                       call.message.chat.id,
-                                      data['appeal_id'])
+                                      get_value(data, 'appeal_id'))
 
     await cancel_input(call, state)
 
@@ -2790,7 +2791,7 @@ async def catch_captcha(message: types.Message, state: FSMContext):
         await send_captcha_text(state,
                                 message.chat.id,
                                 message.text,
-                                data['appeal_id'])
+                                get_value(data, 'appeal_id'))
 
     await pop_saved_state(message.chat.id, message.from_user.id)
 
