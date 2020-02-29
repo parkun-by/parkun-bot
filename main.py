@@ -124,7 +124,6 @@ async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
                                       user_id,
                                       appeal_id)
 
-        delete_prepared_violation(data)
         language = await get_ui_lang(data=data)
 
     text = locales.text(language, message)
@@ -194,7 +193,6 @@ REQUIRED_CREDENTIALS = [
 ]
 
 VIOLATION_INFO_KEYS = [
-    'appeal_id',
     'violation_attachments',
     'violation_photo_ids',
     'violation_photo_files_paths',
@@ -283,7 +281,7 @@ async def send_violation_to_channel(language: str,
 
 async def compose_appeal(data: FSMContextProxy,
                          chat_id: int,
-                         message_id: int) -> dict:
+                         appeal_id: int) -> dict:
     appeal = {
         'type': config.APPEAL,
         'text': get_appeal_text(data),
@@ -303,7 +301,7 @@ async def compose_appeal(data: FSMContextProxy,
         'sender_email': get_appeal_email(data),
         'sender_email_password': get_value(data, 'sender_email_password'),
         'user_id': chat_id,
-        'appeal_id': message_id,
+        'appeal_id': appeal_id,
     }
 
     for key in VIOLATION_INFO_KEYS:
@@ -354,10 +352,10 @@ async def postsending_operations(language: str,
     logger.info(f'Отправили в остальное - {str(user_id)}')
 
 
-async def fill_captcha(user_id: int,
-                       appeal_id: int,
-                       captcha_url: str,
-                       answer_queue: str) -> None:
+async def ask_to_enter_captcha(user_id: int,
+                               appeal_id: int,
+                               captcha_url: str,
+                               answer_queue: str) -> None:
     logger.info(f'Приглашаем заполнить капчу - {user_id}')
     state = dp.current_state(chat=user_id, user=user_id)
 
@@ -384,14 +382,11 @@ async def fill_captcha(user_id: int,
 
     keyboard.add(cancel_button)
 
-    message = await bot.send_message(user_id,
-                                     text,
-                                     parse_mode='HTML',
-                                     reply_markup=keyboard,
-                                     reply_to_message_id=appeal_id)
-
-    async with state.proxy() as data:
-        data['message_to_answer'] = message.message_id
+    await bot.send_message(user_id,
+                           text,
+                           parse_mode='HTML',
+                           reply_markup=keyboard,
+                           reply_to_message_id=appeal_id)
 
     await state.set_state(Form.entering_captcha)
 
@@ -481,7 +476,6 @@ async def fill_photos_violation_data(data: FSMContextProxy,
 async def fill_text_violation_data(data: FSMContextProxy,
                                    user_id: int,
                                    appeal_id: int) -> bool:
-    data['appeal_id'] = appeal_id
     language = await get_ui_lang(data=data)
 
     appeal_message = await bot.forward_message(chat_id=config.TRASH_CHANNEL,
@@ -530,10 +524,10 @@ async def status_received(status: str) -> None:
             loop)
     elif sender_data['type'] == config.CAPTCHA_URL:
         asyncio.run_coroutine_threadsafe(
-            fill_captcha(user_id,
-                         appeal_id,
-                         sender_data['captcha'],
-                         sender_data['answer_queue']),
+            ask_to_enter_captcha(user_id,
+                                 appeal_id,
+                                 sender_data['captcha'],
+                                 sender_data['answer_queue']),
             loop
         )
     elif sender_data['type'] == config.CAPTCHA_OK:
@@ -690,7 +684,6 @@ def get_default_value(key):
         'violation_photos_amount': 0,
         'banned_users': {},
         'violation_location': [],
-        'message_to_answer': 0,
         'states_stack': [],
         'violation_date': datetime_parser.get_current_datetime(),
         'previous_violation_addresses': [],
@@ -914,10 +907,6 @@ async def get_skip_keyboard(language):
 async def delete_current_violation(state: FSMContext, user_id: int) -> None:
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-
-        delete_appeal_from_user_queue(data,
-                                      user_id,
-                                      get_value(data, 'appeal_id'))
 
         delete_prepared_violation(data)
 
@@ -1981,7 +1970,6 @@ async def cancel_captcha_input(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        data['message_to_answer'] = 0
 
         await http_rabbit.send_cancel(
             get_value(data, 'appeal_id'),
@@ -2070,15 +2058,11 @@ async def send_appeal_click(call, state: FSMContext):
             logger.info(f'Это реплай - {str(call.from_user.username)}')
             message = call.message.reply_to_message
             appeal_id = message.message_id
-
-            async with state.proxy() as data:
-                data['appeal_id'] = appeal_id
         else:
             message = call.message
             appeal_id = message.message_id
 
             async with state.proxy() as data:
-                data['appeal_id'] = appeal_id
                 await process_entered_violation(data,
                                                 call.message.chat.id,
                                                 appeal_id)
