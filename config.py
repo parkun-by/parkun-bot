@@ -9,8 +9,10 @@ MAX_VIOLATION_PHOTOS = 10
 BY = '_by'
 RU = '_ru'
 
+# bot config
 PREVIOUS_ADDRESS_PREFIX = '/saved_'
 PREVIOUS_ADDRESS_REGEX = r'\/saved_\d+'
+APPEAL_STORAGE_LIMIT = 3
 
 # regionalization
 MINSK = 'minsk'

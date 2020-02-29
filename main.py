@@ -733,7 +733,8 @@ def delete_appeal_from_user_queue(data: FSMContextProxy,
     uploader.clear_storage(user_id, appeal_id)
 
 
-def delete_old_appeals(appeals: dict, limit: int = 10) -> dict:
+def delete_old_appeals(appeals: dict,
+                       limit: int = config.APPEAL_STORAGE_LIMIT) -> dict:
     keys = list(appeals.keys())
     keys.sort(reverse=True)
     keys_amount = len(keys)
