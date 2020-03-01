@@ -116,7 +116,7 @@ async def get_ui_lang(state=None,
 
 async def cancel_sending(user_id: int, appeal_id: int, text_id: str) -> None:
     logger.info(f'Время вышло - {user_id}')
-    await pop_saved_state(user_id, user_id, silent=True)
+    await pop_saved_state(user_id, user_id)
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
@@ -758,19 +758,23 @@ def delete_old_appeals(appeals: dict,
     return appeals
 
 
-async def pop_saved_state(user_id: int, from_id: int, silent=False):
+async def pop_saved_state(user_id: int, from_id: int):
     message_id, message_text = await states_stack.pop(user_id)
-
-    if silent:
-        return
 
     if message_id:
         await safe_forward(chat_id=user_id,
                            from_chat_id=from_id,
                            message_id=message_id)
+        return
 
     if message_text:
         await bot.send_message(user_id, message_text)
+    else:
+        state = dp.current_state(chat=user_id, user=user_id)
+        language = await get_ui_lang(state)
+        await send_form_message(await state.get_state(),
+                                user_id,
+                                language)
 
 
 async def safe_forward(chat_id: int,
@@ -920,20 +924,8 @@ async def get_skip_keyboard(language):
     return keyboard
 
 
-async def delete_current_violation(state: FSMContext, user_id: int) -> None:
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
-        delete_prepared_violation(data)
-
-    text = locales.text(language, 'operation_mode')
-    await bot.send_message(user_id, text)
-    await Form.operational_mode.set()
-
-
 async def ask_for_sender_info(chat_id: int,
                               data: FSMContextProxy,
-                              info_type: str,
                               next_state: State,
                               remark: str = '') -> None:
     language = await get_ui_lang(data=data)
@@ -941,16 +933,18 @@ async def ask_for_sender_info(chat_id: int,
     if remark:
         remark = remark + '\n'
 
+    storage_key = next_state.state.replace('Form:', '')
+
     current_value = get_value(data,
-                              info_type,
+                              storage_key,
                               locales.text(language, 'empty_input'))
 
-    text = locales.text(language, f'input_{info_type}') + '\n' +\
+    text = locales.text(language, next_state.state) + '\n' +\
         remark +\
         '\n' +\
         locales.text(language, 'current_value') + f'<b>{current_value}</b>' +\
         '\n' +\
-        locales.text(language, f'{info_type}_example')
+        locales.text(language, f'{next_state.state}_example')
 
     keyboard = await get_skip_keyboard(language)
 
@@ -992,10 +986,11 @@ async def show_private_info_summary(chat_id, state):
 async def ask_for_violation_address(chat_id, data):
     language = await get_ui_lang(data=data)
 
-    text = locales.text(language, 'input_violation_address') + '\n' +\
+    text = locales.text(language, Form.violation_address.state) + '\n' +\
         locales.text(language, 'bot_can_guess_address') + '\n' +\
         '\n' +\
-        locales.text(language, 'violation_address_example') + '\n' +\
+        locales.text(language,
+                     f'{Form.violation_address.state}_example') + '\n' +\
         '\n'
 
     # настроим клавиатуру
@@ -1013,7 +1008,7 @@ async def ask_for_violation_address(chat_id, data):
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
-    await Form.violation_location.set()
+    await Form.violation_address.set()
 
 
 def get_saved_addresses_list(addresses: list) -> str:
@@ -1244,6 +1239,13 @@ async def react_to_time_button(user_id: int,
         pass
 
 
+async def send_form_message(form: str, user_id: int, language: str) -> None:
+    text = locales.text(language, 'continue_work') + '\n\n' + \
+        locales.text(language, form)
+
+    await bot.send_message(user_id, text)
+
+
 async def show_settings(message, state):
     logger.info('Настройки - ' + str(message.from_user.username))
 
@@ -1299,10 +1301,12 @@ async def show_name_part_invitation(part_name, state, chat_id):
                               f'sender_{part_name}',
                               locales.text(language, 'empty_input'))
 
+    full_item_name = f'Form:sender_{part_name}'
+
     text = get_input_name_invite_text(language,
                                       name_part,
-                                      f'input_{part_name}',
-                                      f'{part_name}_example')
+                                      full_item_name,
+                                      f'{full_item_name}_example')
 
     keyboard = await get_skip_keyboard(language)
 
@@ -1590,7 +1594,6 @@ async def skip_last_name_click(call, state: FSMContext):
         await ask_for_sender_info(
             call.message.chat.id,
             data,
-            'sender_email',
             Form.sender_email,
             locales.text(language, 'nonexistent_email_warning'))
 
@@ -1662,7 +1665,6 @@ async def skip_email_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_phone',
                                   Form.sender_phone)
 
 
@@ -1677,7 +1679,6 @@ async def skip_phone_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_city',
                                   Form.sender_city)
 
 
@@ -1692,7 +1693,6 @@ async def skip_city_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_street',
                                   Form.sender_street)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1706,7 +1706,6 @@ async def skip_city_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_block',
                                   Form.sender_block)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1720,7 +1719,6 @@ async def skip_house_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_flat',
                                   Form.sender_flat)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1734,7 +1732,6 @@ async def skip_block_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_house',
                                   Form.sender_house)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1748,7 +1745,6 @@ async def skip_block_click(call, state: FSMContext):
     async with state.proxy() as data:
         await ask_for_sender_info(call.message.chat.id,
                                   data,
-                                  'sender_zipcode',
                                   Form.sender_zipcode)
 
 @dp.callback_query_handler(lambda call: call.data == '/skip',
@@ -1882,9 +1878,9 @@ async def enter_violation_info_click(call, state: FSMContext):
         # зададим сразу пустое примечание
         set_default(data, 'violation_caption')
 
-    text = locales.text(language, 'input_plate') + '\n' +\
+    text = locales.text(language, Form.vehicle_number.state) + '\n' +\
         '\n' +\
-        locales.text(language, 'plate_example')
+        locales.text(language, f'{Form.vehicle_number.state}_example')
 
     # настроим клавиатуру
     async with state.proxy() as data:
@@ -1912,7 +1908,7 @@ async def add_caption_click(call, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     await states_stack.add(call.message.chat.id)
-    text = locales.text(language, 'input_caption')
+    text = locales.text(language, Form.caption.state)
 
     # настроим клавиатуру
     async with state.proxy() as data:
@@ -1937,7 +1933,7 @@ async def answer_feedback_click(call, state: FSMContext):
         data['feedback_post'] = call.message.text
 
         language = await get_ui_lang(data=data)
-        text = locales.text(language, 'input_reply')
+        text = locales.text(language, Form.feedback_answering.state)
 
         # настроим клавиатуру
         keyboard = await get_cancel_keyboard(data)
@@ -1954,14 +1950,23 @@ async def answer_feedback_click(call, state: FSMContext):
                            state=[Form.violation_photo,
                                   Form.vehicle_number,
                                   Form.violation_datetime,
-                                  Form.violation_location,
+                                  Form.violation_address,
                                   Form.sending_approvement])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await delete_current_violation(state, call.message.chat.id)
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+
+        delete_prepared_violation(data)
+
+    await Form.operational_mode.set()
+    await send_form_message(Form.operational_mode.state,
+                            call.message.chat.id,
+                            language)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
@@ -2270,7 +2275,7 @@ async def write_feedback(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         current_state = await state.get_state()
         language = await get_ui_lang(data=data)
-        text = locales.text(language, 'input_feedback')
+        text = locales.text(language, Form.feedback.state)
         keyboard = await get_cancel_keyboard(data)
         data_to_save = {'feedback_post': get_value(data, 'feedback_post')}
 
@@ -2282,7 +2287,7 @@ async def write_feedback(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(regexp=config.PREVIOUS_ADDRESS_REGEX,
-                    state=Form.violation_location)
+                    state=Form.violation_address)
 async def use_saved_address_command(message: types.Message, state: FSMContext):
     logger.info('Команда предыдущего адреса - ' +
                 str(message.from_user.username))
@@ -2434,7 +2439,6 @@ async def catch_sender_last_name(message: types.Message, state: FSMContext):
         await ask_for_sender_info(
             message.chat.id,
             data,
-            'sender_email',
             Form.sender_email,
             locales.text(language, 'nonexistent_email_warning'))
 
@@ -2460,7 +2464,6 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
                 await ask_for_sender_info(
                     message.chat.id,
                     data,
-                    'sender_email',
                     Form.sender_email,
                     locales.text(language, 'nonexistent_email_warning'))
 
@@ -2474,7 +2477,6 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         data['verified'] = False
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_phone',
                                   Form.sender_phone)
 
 
@@ -2487,7 +2489,6 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
         data['sender_phone'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_city',
                                   Form.sender_city)
 
 
@@ -2503,7 +2504,6 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
         if not await check_validity(validator.city, message, language):
             await ask_for_sender_info(message.chat.id,
                                       data,
-                                      'sender_city',
                                       Form.sender_city)
             return
 
@@ -2511,7 +2511,6 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
         data['sender_city'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_street',
                                   Form.sender_street)
 
 
@@ -2527,7 +2526,6 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
         if not await check_validity(validator.street, message, language):
             await ask_for_sender_info(message.chat.id,
                                       data,
-                                      'sender_street',
                                       Form.sender_street)
             return
 
@@ -2535,7 +2533,6 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
         data['sender_street'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_block',
                                   Form.sender_block)
 
 
@@ -2551,7 +2548,6 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
         if not await check_validity(validator.building, message, language):
             await ask_for_sender_info(message.chat.id,
                                       data,
-                                      'sender_house',
                                       Form.sender_house)
             return
 
@@ -2559,7 +2555,6 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
         data['sender_house'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_flat',
                                   Form.sender_flat)
 
 
@@ -2573,7 +2568,6 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
         data['sender_block'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_house',
                                   Form.sender_house)
 
 
@@ -2587,7 +2581,6 @@ async def catch_sender_flat(message: types.Message, state: FSMContext):
         data['sender_flat'] = message.text
         await ask_for_sender_info(message.chat.id,
                                   data,
-                                  'sender_zipcode',
                                   Form.sender_zipcode)
 
 
@@ -2716,7 +2709,7 @@ async def catch_email_password(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.violation_location)
+                    state=Form.violation_address)
 async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
                 str(message.from_user.username))
@@ -2725,7 +2718,7 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.LOCATION,
-                    state=Form.violation_location)
+                    state=Form.violation_address)
 async def catch_gps_violation_location(message: types.Message,
                                        state: FSMContext):
     logger.info('Обрабатываем ввод локации адреса нарушения - ' +
@@ -2852,7 +2845,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=[Form.vehicle_number,
                            Form.violation_datetime,
-                           Form.violation_location,
+                           Form.violation_address,
                            Form.caption,
                            Form.sender_first_name,
                            Form.sender_last_name,

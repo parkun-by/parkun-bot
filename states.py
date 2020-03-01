@@ -18,7 +18,7 @@ class Form(StatesGroup):
     operational_mode = State()
     violation_photo = State()
     vehicle_number = State()
-    violation_location = State()
+    violation_address = State()
     recipient = State()
     violation_datetime = State()
     sending_approvement = State()

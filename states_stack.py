@@ -52,19 +52,13 @@ class StatesStack:
                     'state': Form.operational_mode.state,
                     'data': {},
                     'message_id': 0,
-                    'message_text': self.get_text(language, 'operation_mode'),
+                    'message_text': '',
                 }
 
             state_to_set = state_to_apply['state']
             data_to_set = state_to_apply['data']
             message_id = state_to_apply['message_id']
             message_text: str = state_to_apply['message_text']
-
-            if not message_id and not message_text:
-                message_text = self.get_text(language, 'continue_work')
-
-            if state_to_set == Form.operational_mode.state:
-                message_text = self.get_text(language, 'operation_mode')
 
             await state.set_state(state_to_set)
             self.set_data(data_to_set, data)

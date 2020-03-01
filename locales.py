@@ -9,7 +9,10 @@ class Locales:
             self.__localization = json.load(file)
 
     def text(self, locale: str, text_id: str) -> str:
-        return self.__localization[locale][text_id]
+        try:
+            return self.__localization[locale][text_id]
+        except KeyError:
+            return ''
 
     def text_exists(self, key: str, text: str) -> bool:
         for locale in self.__localization:
