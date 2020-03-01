@@ -114,7 +114,7 @@ async def get_ui_lang(state=None,
     return config.RU
 
 
-async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
+async def cancel_sending(user_id: int, appeal_id: int, text_id: str) -> None:
     logger.info(f'Время вышло - {user_id}')
     await pop_saved_state(user_id, user_id, silent=True)
     state = dp.current_state(chat=user_id, user=user_id)
@@ -126,7 +126,17 @@ async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
 
         language = await get_ui_lang(data=data)
 
-    text = locales.text(language, message)
+    await invite_to_send_violation_again(language, user_id, appeal_id, text_id)
+
+
+broadcaster = Broadcaster(get_value, locales)
+
+
+async def invite_to_send_violation_again(language: str,
+                                         user_id: int,
+                                         appeal_id: int,
+                                         text_id: str) -> None:
+    text = locales.text(language, text_id)
 
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
@@ -145,9 +155,6 @@ async def cancel_sending(user_id: int, appeal_id: int, message: str) -> None:
         await bot.send_message(user_id,
                                text,
                                reply_markup=keyboard)
-
-
-broadcaster = Broadcaster(get_value, locales)
 
 
 def setup_logging():
@@ -706,6 +713,15 @@ def add_appeal_to_user_queue(data: FSMContextProxy,
         logger.info(f'Такого обращения еще нет в хранилище - {appeal_id}')
         appeals[str(appeal_id)] = appeal
         data['appeals'] = appeals
+
+
+def get_original_appeal_id(message: types.Message,
+                           it_is_reply=False) -> Tuple[bool, int]:
+    if message.reply_to_message:
+        logger.info(f'Это реплай - {str(message.from_user.username)}')
+        return get_original_appeal_id(message.reply_to_message, True)
+    else:
+        return it_is_reply, message.message_id
 
 
 def get_appeal_from_user_queue(data: FSMContextProxy,
@@ -1980,6 +1996,8 @@ async def cancel_captcha_input(call, state: FSMContext):
                                       call.message.chat.id,
                                       get_value(data, 'appeal_id'))
 
+        data['appeal_id'] = 0
+
     await cancel_input(call, state)
 
 
@@ -2015,10 +2033,12 @@ async def send_appeal_again(call, state: FSMContext):
 
     keyboard.add(approve_sending_button, cancel)
 
+    it_is_reply, appeal_id = get_original_appeal_id(call.message)
+
     await bot.send_message(call.message.chat.id,
                            text,
                            reply_markup=keyboard,
-                           reply_to_message_id=call.message.message_id)
+                           reply_to_message_id=appeal_id)
 
     await Form.sending_approvement.set()
 
@@ -2044,6 +2064,9 @@ async def send_appeal_click(call, state: FSMContext):
 
         async with state.proxy() as data:
             delete_prepared_violation(data)
+            # appeal_id saved to retry sending when credentials will be filled
+            it_is_reply, data['appeal_id'] = \
+                get_original_appeal_id(call.message)
 
     elif not await verified_email(state):
         logger.info('Обращение не отправлено, email не подтвержден - ' +
@@ -2054,14 +2077,9 @@ async def send_appeal_click(call, state: FSMContext):
             delete_prepared_violation(data)
 
     else:
-        if call.message.reply_to_message:
-            logger.info(f'Это реплай - {str(call.from_user.username)}')
-            message = call.message.reply_to_message
-            appeal_id = message.message_id
-        else:
-            message = call.message
-            appeal_id = message.message_id
+        it_is_reply, appeal_id = get_original_appeal_id(call.message)
 
+        if not it_is_reply:
             async with state.proxy() as data:
                 await process_entered_violation(data,
                                                 call.message.chat.id,
@@ -2079,7 +2097,7 @@ async def send_letter_again_click(call, state: FSMContext):
     logger.info('Нажата кнопка повторной отправки в ГАИ - ' +
                 str(call.from_user.username))
 
-    appeal_id = call.message.reply_to_message.message_id
+    it_is_reply, appeal_id = get_original_appeal_id(call.message)
     await send_appeal(call.message.chat.id, appeal_id)
     await bot.answer_callback_query(call.id)
 
@@ -2354,6 +2372,14 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
 
     await bot.send_message(message.chat.id, text, parse_mode='HTML')
     await Form.operational_mode.set()
+
+    async with state.proxy() as data:
+        if get_value(data, 'appeal_id'):
+            await invite_to_send_violation_again(language,
+                                                 message.chat.id,
+                                                 data['appeal_id'],
+                                                 'sending_allowed')
+            data['appeal_id'] = 0
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2777,6 +2803,8 @@ async def catch_captcha(message: types.Message, state: FSMContext):
                                 message.chat.id,
                                 message.text,
                                 get_value(data, 'appeal_id'))
+
+        data['appeal_id'] = 0
 
     await pop_saved_state(message.chat.id, message.from_user.id)
 
