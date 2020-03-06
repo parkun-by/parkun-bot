@@ -209,6 +209,7 @@ VIOLATION_INFO_KEYS = [
     'violation_location',
     'violation_datetime',
     'violation_caption',
+    'violation_date',
 ]
 
 
