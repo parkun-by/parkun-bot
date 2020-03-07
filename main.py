@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import json
+import copy
 from datetime import datetime
 from typing import Any, Optional, Tuple, Union, List
 from aiogram.dispatcher.storage import FSMContextProxy
@@ -198,6 +199,27 @@ REQUIRED_CREDENTIALS = [
     'sender_zipcode',
     'sender_house',
 ]
+
+SENDER_INFO = [
+    Form.sender_first_name.state,
+    Form.sender_patronymic.state,
+    Form.sender_last_name.state,
+    Form.sender_email.state,
+    Form.sender_phone.state,
+    Form.sender_city.state,
+    Form.sender_street.state,
+    Form.sender_block.state,
+    Form.sender_house.state,
+    Form.sender_flat.state,
+    Form.sender_zipcode.state,
+]
+
+REVERSED_SENDER_INFO = copy.deepcopy(SENDER_INFO)
+REVERSED_SENDER_INFO.reverse()
+
+ADDITIONAL_MESSAGE = {
+    Form.sender_email.state: 'nonexistent_email_warning',
+}
 
 VIOLATION_INFO_KEYS = [
     'violation_attachments',
@@ -912,49 +934,77 @@ async def get_cancel_keyboard(data):
     return keyboard
 
 
-async def get_skip_keyboard(language):
+async def get_sender_param_keyboard(language):
     # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    skip = types.InlineKeyboardButton(
-        text=locales.text(language, 'skip_button'),
-        callback_data='/skip')
+    backward = types.InlineKeyboardButton(
+        text=locales.text(language, 'back_button'),
+        callback_data='/back_button')
 
-    keyboard.add(skip)
+    forward = types.InlineKeyboardButton(
+        text=locales.text(language, 'forward_button'),
+        callback_data='/forward_button')
+
+    finish = types.InlineKeyboardButton(
+        text=locales.text(language, 'finish_button'),
+        callback_data='/finish_button')
+
+    keyboard.add(backward, forward, finish)
 
     return keyboard
 
 
-async def ask_for_sender_info(chat_id: int,
-                              data: FSMContextProxy,
+async def ask_for_sender_info(message: types.Message,
+                              state: FSMContext,
                               next_state: State,
-                              remark: str = '') -> None:
-    language = await get_ui_lang(data=data)
+                              edit=False) -> None:
+    storage_key = next_state.replace('Form:', '')
 
-    if remark:
-        remark = remark + '\n'
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
 
-    storage_key = next_state.state.replace('Form:', '')
+        current_value = get_value(data,
+                                  storage_key,
+                                  locales.text(language, 'empty_input'))
 
-    current_value = get_value(data,
-                              storage_key,
-                              locales.text(language, 'empty_input'))
+    remark = get_remark(next_state, language)
 
-    text = locales.text(language, next_state.state) + '\n' +\
+    text = locales.text(language, next_state) + '\n' +\
         remark +\
         '\n' +\
         locales.text(language, 'current_value') + f'<b>{current_value}</b>' +\
         '\n' +\
-        locales.text(language, f'{next_state.state}_example')
+        locales.text(language, f'{next_state}_example')
 
-    keyboard = await get_skip_keyboard(language)
+    keyboard = await get_sender_param_keyboard(language)
 
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
+    if edit:
+        try:
+            await bot.edit_message_text(text,
+                                        message.chat.id,
+                                        message.message_id,
+                                        reply_markup=keyboard,
+                                        parse_mode='HTML')
+        except MessageNotModified:
+            pass
+    else:
+        await bot.send_message(message.chat.id,
+                               text,
+                               reply_markup=keyboard,
+                               parse_mode='HTML')
 
-    await next_state.set()
+    await state.set_state(next_state)
+
+
+def get_remark(form: str, language: str) -> str:
+    text_key = get_value(ADDITIONAL_MESSAGE, form, "", read_only=True)
+    text = ""
+
+    if text_key:
+        text = locales.text(language, text_key) + '\n'
+
+    return text
 
 
 async def show_private_info_summary(chat_id, state):
@@ -1284,6 +1334,18 @@ async def show_settings(message, state):
                            parse_mode='HTML')
 
 
+def get_next_form(items: list, current: Any) -> Any:
+    return_next = False
+
+    while True:
+        for item in items:
+            if return_next:
+                return item
+
+            if item == current:
+                return_next = True
+
+
 def get_input_name_invite_text(language, name, invitation, example):
     text = locales.text(language, invitation) + '\n' +\
         '\n' +\
@@ -1292,51 +1354,6 @@ def get_input_name_invite_text(language, name, invitation, example):
         locales.text(language, example)
 
     return text
-
-
-async def show_name_part_invitation(part_name, state, chat_id):
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
-        name_part = get_value(data,
-                              f'sender_{part_name}',
-                              locales.text(language, 'empty_input'))
-
-    full_item_name = f'Form:sender_{part_name}'
-
-    text = get_input_name_invite_text(language,
-                                      name_part,
-                                      full_item_name,
-                                      f'{full_item_name}_example')
-
-    keyboard = await get_skip_keyboard(language)
-
-    await bot.send_message(chat_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-
-async def enter_first_name(message, state):
-    logger.info('Ввод имени отправителя - ' + str(message.from_user.username))
-    await show_name_part_invitation('first_name', state, message.chat.id)
-    await Form.sender_first_name.set()
-
-
-async def enter_patronymic(message, state):
-    logger.info('Ввод отчества отправителя - ' +
-                str(message.from_user.username))
-
-    await show_name_part_invitation('patronymic', state, message.chat.id)
-    await Form.sender_patronymic.set()
-
-
-async def enter_last_name(message, state):
-    logger.info('Ввод фамилии отправителя - ' +
-                str(message.from_user.username))
-
-    await show_name_part_invitation('last_name', state, message.chat.id)
-    await Form.sender_last_name.set()
 
 
 async def show_personal_info(message: types.Message, state: FSMContext):
@@ -1513,7 +1530,9 @@ async def enter_personal_info_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await enter_first_name(call.message, state)
+    await ask_for_sender_info(call.message,
+                              state,
+                              Form.sender_first_name.state)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/verify_email',
@@ -1561,42 +1580,30 @@ async def delete_personal_info_click(call, state: FSMContext):
     await cmd_reset(call.message, state)
 
 
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_first_name)
-async def skip_first_name_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода имени - ' +
+@dp.callback_query_handler(lambda call: call.data == '/forward_button',
+                           state=SENDER_INFO)
+async def sender_info_forward(call, state: FSMContext):
+    current_form = await state.get_state()
+
+    logger.info(f'Кнопка вперед {current_form} - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await enter_patronymic(call.message, state)
+    next_form = get_next_form(SENDER_INFO, current_form)
+    await ask_for_sender_info(call.message, state, next_form, edit=True)
 
 
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_patronymic)
-async def skip_patronymic_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода отчества - ' +
+@dp.callback_query_handler(lambda call: call.data == '/back_button',
+                           state=SENDER_INFO)
+async def sender_info_forward(call, state: FSMContext):
+    current_form = await state.get_state()
+
+    logger.info(f'Кнопка назад {current_form} - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    await enter_last_name(call.message, state)
-
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_last_name)
-async def skip_last_name_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода фамилии - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
-        await ask_for_sender_info(
-            call.message.chat.id,
-            data,
-            Form.sender_email,
-            locales.text(language, 'nonexistent_email_warning'))
+    next_form = get_next_form(REVERSED_SENDER_INFO, current_form)
+    await ask_for_sender_info(call.message, state, next_form, edit=True)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/change_ui_language',
@@ -1655,103 +1662,20 @@ async def change_language_click(call, state: FSMContext):
         pass
 
 
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_email)
-async def skip_email_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода email - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_phone)
-
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_phone)
-async def skip_phone_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода телефона - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_city)
-
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_city)
-async def skip_city_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода города - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_street)
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_street)
-async def skip_city_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода улицы - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_block)
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_house)
-async def skip_house_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода дома - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_flat)
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_block)
-async def skip_block_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода корпуса - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_house)
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_flat)
-async def skip_block_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода квартиры - ' +
-                str(call.from_user.username))
-
-    await bot.answer_callback_query(call.id)
-
-    async with state.proxy() as data:
-        await ask_for_sender_info(call.message.chat.id,
-                                  data,
-                                  Form.sender_zipcode)
-
-@dp.callback_query_handler(lambda call: call.data == '/skip',
-                           state=Form.sender_zipcode)
-async def skip_zipcode_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки пропуска ввода индекса - ' +
+@dp.callback_query_handler(lambda call: call.data == '/finish_button',
+                           state=[Form.sender_first_name,
+                                  Form.sender_last_name,
+                                  Form.sender_patronymic,
+                                  Form.sender_email,
+                                  Form.sender_phone,
+                                  Form.sender_city,
+                                  Form.sender_street,
+                                  Form.sender_house,
+                                  Form.sender_block,
+                                  Form.sender_flat,
+                                  Form.sender_zipcode])
+async def finish_entering_personal_data(call, state: FSMContext):
+    logger.info('Кнопка завершения ввода личных данных - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
@@ -2395,13 +2319,13 @@ async def catch_sender_first_name(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.first_name, message, language):
-        await enter_first_name(message, state)
+        await ask_for_sender_info(message, state, Form.sender_first_name.state)
         return
 
     async with state.proxy() as data:
         data['sender_first_name'] = message.text
 
-    await enter_patronymic(message, state)
+    await ask_for_sender_info(message, state, Form.sender_patronymic.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2413,13 +2337,15 @@ async def catch_sender_patronymic(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.patronymic, message, language):
-        await enter_patronymic(message, state)
+        await ask_for_sender_info(message,
+                                  state,
+                                  Form.sender_patronymic.state)
         return
 
     async with state.proxy() as data:
         data['sender_patronymic'] = message.text
 
-    await enter_last_name(message, state)
+    await ask_for_sender_info(message, state, Form.sender_last_name.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2431,17 +2357,13 @@ async def catch_sender_last_name(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.last_name, message, language):
-        await enter_last_name(message, state)
+        await ask_for_sender_info(message, state, Form.sender_last_name.state)
         return
 
     async with state.proxy() as data:
         data['sender_last_name'] = message.text
 
-        await ask_for_sender_info(
-            message.chat.id,
-            data,
-            Form.sender_email,
-            locales.text(language, 'nonexistent_email_warning'))
+    await ask_for_sender_info(message, state, Form.sender_email.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2452,21 +2374,12 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        current_user_email = get_value(
-            data, 'sender_email', locales.text(language, 'empty_input'))
-
     try:
         if message.text.split('@')[1] in blocklist:
             logger.info('Временный email - ' + str(message.from_user.username))
             text = locales.text(language, 'no_temporary_email')
             await bot.send_message(message.chat.id, text)
-
-            async with state.proxy() as data:
-                await ask_for_sender_info(
-                    message.chat.id,
-                    data,
-                    Form.sender_email,
-                    locales.text(language, 'nonexistent_email_warning'))
+            await ask_for_sender_info(message, state, Form.sender_email.state)
 
             return
     except IndexError:
@@ -2476,9 +2389,8 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         data['sender_email'] = message.text
         data['sender_email_password'] = ''
         data['verified'] = False
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_phone)
+
+    await ask_for_sender_info(message, state, Form.sender_phone.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2488,9 +2400,8 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_phone'] = message.text
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_city)
+
+    await ask_for_sender_info(message, state, Form.sender_city.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2502,17 +2413,14 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        if not await check_validity(validator.city, message, language):
-            await ask_for_sender_info(message.chat.id,
-                                      data,
-                                      Form.sender_city)
-            return
+    if not await check_validity(validator.city, message, language):
+        await ask_for_sender_info(message, state, Form.sender_city.state)
+        return
 
     async with state.proxy() as data:
         data['sender_city'] = message.text
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_street)
+
+    await ask_for_sender_info(message, state, Form.sender_street.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2524,17 +2432,14 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        if not await check_validity(validator.street, message, language):
-            await ask_for_sender_info(message.chat.id,
-                                      data,
-                                      Form.sender_street)
-            return
+    if not await check_validity(validator.street, message, language):
+        await ask_for_sender_info(message, state, Form.sender_street.state)
+        return
 
     async with state.proxy() as data:
         data['sender_street'] = message.text
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_block)
+
+    await ask_for_sender_info(message, state, Form.sender_block.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2546,17 +2451,14 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
-        if not await check_validity(validator.building, message, language):
-            await ask_for_sender_info(message.chat.id,
-                                      data,
-                                      Form.sender_house)
-            return
+    if not await check_validity(validator.building, message, language):
+        await ask_for_sender_info(message, state, Form.sender_house.state)
+        return
 
     async with state.proxy() as data:
         data['sender_house'] = message.text
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_flat)
+
+    await ask_for_sender_info(message, state, Form.sender_flat.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2567,9 +2469,8 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_block'] = message.text
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_house)
+
+    await ask_for_sender_info(message, state, Form.sender_house.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -2580,9 +2481,8 @@ async def catch_sender_flat(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         data['sender_flat'] = message.text
-        await ask_for_sender_info(message.chat.id,
-                                  data,
-                                  Form.sender_zipcode)
+
+    await ask_for_sender_info(message, state, Form.sender_zipcode.state)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
