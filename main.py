@@ -79,12 +79,12 @@ def get_value(data: Union[FSMContextProxy, dict],
 
 
 def get_sender_address(data):
-    city = get_value(data, 'sender_city')
-    street = get_value(data, 'sender_street')
-    house = get_value(data, 'sender_house')
-    block = get_value(data, 'sender_block')
+    city = commer(get_value(data, 'sender_city'))
+    street = commer(get_value(data, 'sender_street'))
+    house = commer(get_value(data, 'sender_house'))
+    block = commer(get_value(data, 'sender_block'))
     flat = get_value(data, 'sender_flat')
-    zipcode = get_value(data, 'sender_zipcode')
+    zipcode = commer(get_value(data, 'sender_zipcode'))
 
     if house:
         house = f'д.{house}'
@@ -95,7 +95,14 @@ def get_sender_address(data):
     if flat:
         flat = f'кв.{flat}'
 
-    return f'{zipcode}, {city}, {street}, {house}, {block}, {flat}'.strip()
+    return f'{zipcode}{city}{street}{house}{block}{flat}'.strip().strip(',')
+
+
+def commer(text: str) -> str:
+    if text:
+        return f'{text}, '
+
+    return text
 
 
 appeal_summary = AppealSummary(locales,
