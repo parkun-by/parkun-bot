@@ -536,7 +536,7 @@ async def fill_text_violation_data(data: FSMContextProxy,
     data['violation_datetime'] = violation_data['violation_datetime']
     data['violation_caption'] = violation_data['violation_caption']
     recipient = locales.get_region_code(violation_data['violation_recipient'])
-    save_recipient(recipient, data)
+    save_recipient(data, recipient)
 
     coordinates = await locator.get_coordinates(address)
     await save_violation_address(address, coordinates, data)
@@ -1118,11 +1118,11 @@ async def send_appeal_email_info(chat_id: int, data: FSMContextProxy) -> None:
                            parse_mode='HTML')
 
 
-def save_recipient(region, data):
-    if region is None:
+def save_recipient(data: FSMContextProxy, recipient: Optional[str]) -> None:
+    if recipient is None:
         data['recipient'] = config.MINSK
     else:
-        data['recipient'] = region
+        data['recipient'] = recipient
 
 
 async def print_violation_address_info(region, address, chat_id, language):
@@ -1242,7 +1242,7 @@ async def set_violation_location(chat_id, address, state):
 
     async with state.proxy() as data:
         await save_violation_address(address, coordinates, data)
-        save_recipient(region, data)
+        save_recipient(data, region)
         region = get_value(data, 'recipient')
         language = await get_ui_lang(data=data)
 
@@ -1782,7 +1782,7 @@ async def recipient_choosen_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         address = get_value(data, 'violation_address')
-        save_recipient(call.data, data)
+        save_recipient(data, call.data)
         region = get_value(data, 'recipient')
 
     language = await get_ui_lang(state)
@@ -2643,7 +2643,7 @@ async def catch_gps_violation_location(message: types.Message,
             address = locales.text(language, 'no_address_detected')
 
         region = await locator.get_region(coordinates)
-        save_recipient(region, data)
+        save_recipient(data, region)
         region = get_value(data, 'recipient')
 
     if address is None:
