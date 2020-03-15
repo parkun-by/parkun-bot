@@ -1,18 +1,20 @@
+from asyncio.events import AbstractEventLoop
+import asyncio
 import aiohttp
 import config
 import json
+import territory
 
 
 class Locator:
-    def __init__(self):
+    def __init__(self, loop: AbstractEventLoop):
         self._timeout = aiohttp.ClientTimeout(connect=5)
-        self._http_session = aiohttp.ClientSession()
         self._boundaries = {}
+        self.loop = loop
 
-    def __del__(self):
-        self._http_session.close()
-
-    async def __get_boundary(self, http_session, region_name):
+    async def __get_boundary(self,
+                             region: str) -> None:
+        region_name = config.OSM_REGIONS[region]
         url = 'http://nominatim.openstreetmap.org/search?'
 
         params = (
@@ -22,16 +24,20 @@ class Locator:
         )
 
         try:
-            async with http_session.get(url,
-                                        params=params,
-                                        timeout=self._timeout) as response:
-                if response.status != 200:
-                    return None
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.get(url,
+                                            params=params,
+                                            timeout=self._timeout) as response:
+                    if response.status != 200:
+                        return None
 
-                resp_json = await response.json(content_type=None)
-                boundary = resp_json[0]['geojson']['coordinates'][0]
+                    resp_json = await response.json(content_type=None)
+                    boundary = resp_json[0]['geojson']['coordinates'][0]
 
         except aiohttp.client_exceptions.ServerTimeoutError:
+            boundary = []
+
+        except aiohttp.client_exceptions.ClientOSError:
             boundary = []
 
         except json.decoder.JSONDecodeError:
@@ -40,38 +46,17 @@ class Locator:
         except IndexError:
             boundary = []
 
-        return boundary
+        if not boundary:
+            await asyncio.sleep(5)
+            await self.__get_boundary(region)
+        else:
+            self._boundaries[region] = boundary
 
     async def download_boundaries(self):
-        self._boundaries = {
-            config.MINSK:
-                await self.__get_boundary(self._http_session,
-                                          'Minsk, Belarus'),
-
-            config.BREST_REGION:
-                await self.__get_boundary(self._http_session,
-                                          'Brest Region, Belarus'),
-
-            config.VITSEBSK_REGION:
-                await self.__get_boundary(self._http_session,
-                                          'Vitsebsk Region, Belarus'),
-
-            config.HOMEL_REGION:
-                await self.__get_boundary(self._http_session,
-                                          'Homel Region, Belarus'),
-
-            config.HRODNA_REGION:
-                await self.__get_boundary(self._http_session,
-                                          'Hrodna Region, Belarus'),
-
-            config.MINSK_REGION:
-                await self.__get_boundary(self._http_session,
-                                          'Minsk Region, Belarus'),
-
-            config.MAHILEU_REGION:
-                await self.__get_boundary(self._http_session,
-                                          'Mahilyow Region, Belarus'),
-        }
+        asyncio.ensure_future(
+            asyncio.gather(*(self.__get_boundary(region)
+                             for region in config.OSM_REGIONS)),
+            loop=self.loop)
 
     def __point_is_in_polygon(self, boundary, longitude, latitude):
         overlap = False
@@ -105,18 +90,24 @@ class Locator:
         except IndexError:
             yield []
 
-    async def get_region(self, coordinates):
+    async def get_region(self, coordinates, region=None):
         if not isinstance(coordinates, list):
             return None
 
-        for region in self._boundaries:
+        for region in territory.regions(region):
+            if region not in self._boundaries:
+                continue
+
             areas = self.__areas_in_region(self._boundaries[region])
 
             for area in areas:
                 if self.__point_is_in_polygon(area,
                                               coordinates[0],
                                               coordinates[1]):
-                    return region
+                    if territory.has_subregions(region):
+                        return await self.get_region(coordinates, region)
+                    else:
+                        return region
 
     async def get_address(self, coordinates, language=config.RU):
         coordinates = (str(coordinates[0]) + ', ' + str(coordinates[1]))
@@ -136,23 +127,25 @@ class Locator:
             ('lang', lang)
         )
 
-        async with self._http_session.get(config.BASE_YANDEX_MAPS_URL,
-                                          params=params) as response:
-            if response.status != 200:
-                return None
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.get(config.BASE_YANDEX_MAPS_URL,
+                                        params=params) as response:
+                if response.status != 200:
+                    return None
 
-            resp_json = await response.json(content_type=None)
-            address_array = resp_json['response']['GeoObjectCollection']
+                resp_json = await response.json(content_type=None)
+                address_array = resp_json['response']['GeoObjectCollection']
 
-            try:
-                address_bottom = address_array['featureMember'][0]['GeoObject']
+                try:
+                    address_bottom = \
+                        address_array['featureMember'][0]['GeoObject']
 
-                address = address_bottom['name'] + ', ' +\
-                    address_bottom['description']
-            except IndexError:
-                address = config.ADDRESS_FAIL
+                    address = address_bottom['name'] + ', ' +\
+                        address_bottom['description']
+                except IndexError:
+                    address = config.ADDRESS_FAIL
 
-            return address
+                return address
 
     async def get_coordinates(self, address):
         params = (
@@ -162,22 +155,25 @@ class Locator:
             ('format', 'json'),
         )
 
-        async with self._http_session.get(config.BASE_YANDEX_MAPS_URL,
-                                          params=params) as response:
-            if response.status != 200:
-                return None
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.get(config.BASE_YANDEX_MAPS_URL,
+                                        params=params) as response:
+                if response.status != 200:
+                    return None
 
-            resp_json = await response.json(content_type=None)
-            address_array = resp_json['response']['GeoObjectCollection']
+                resp_json = await response.json(content_type=None)
+                address_array = resp_json['response']['GeoObjectCollection']
 
-            try:
-                address_bottom = address_array['featureMember'][0]['GeoObject']
-                str_coordinates = address_bottom['Point']['pos']
-                str_coordinates = str_coordinates.split(' ')
+                try:
+                    address_bottom = \
+                        address_array['featureMember'][0]['GeoObject']
 
-                coordinates = [float(str_coordinates[0]),
-                               float(str_coordinates[1])]
-            except IndexError:
-                return None
+                    str_coordinates = address_bottom['Point']['pos']
+                    str_coordinates = str_coordinates.split(' ')
 
-            return coordinates
+                    coordinates = [float(str_coordinates[0]),
+                                   float(str_coordinates[1])]
+                except IndexError:
+                    return None
+
+                return coordinates

@@ -1,17 +1,19 @@
-from typing import Iterator
+from typing import Iterator, Optional
 import config
 
 
 def all() -> Iterator[str]:
-    return __flat_territories(config.MINSK, config.REGIONS)
+    return __flat_territories(None, config.REGIONS)
 
 
-def __flat_territories(name: str, region: dict) -> Iterator[str]:
+def __flat_territories(name: Optional[str],
+                       region: Optional[dict]) -> Iterator[str]:
+    if name:
+        yield name
+
     if region:
         for subregion in region:
-            return __flat_territories(subregion, region[subregion])
-    else:
-        yield name
+            yield from __flat_territories(subregion, region.get(subregion))
 
 
 def regions(parent_region: str = None) -> Iterator[str]:

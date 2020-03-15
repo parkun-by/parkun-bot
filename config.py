@@ -16,6 +16,17 @@ APPEAL_STORAGE_LIMIT = 3
 
 # regionalization
 MINSK = 'minsk'
+
+CENTRALNY = 'centralny'
+SAVIECKI = 'saviecki'
+PIERSAMAJSKI = 'piersamajski'
+PARTYZANSKI = 'partyzanski'
+ZAVODSKI = 'zavodski'
+LENINSKI = 'leninski'
+KASTRYCNICKI = 'kastrycnicki'
+MASKOUSKI = 'maskouski'
+FRUNZIENSKI = 'frunzienski'
+
 BREST_REGION = 'brest_region'
 VITSEBSK_REGION = 'vitsebsk_region'
 HOMEL_REGION = 'homel_region'
@@ -23,24 +34,41 @@ HRODNA_REGION = 'hrodna_region'
 MINSK_REGION = 'minsk_region'
 MAHILEU_REGION = 'mahileu_region'
 
-REGIONS = [
-    MINSK,
-    BREST_REGION,
-    VITSEBSK_REGION,
-    HOMEL_REGION,
-    HRODNA_REGION,
-    MINSK_REGION,
-    MAHILEU_REGION,
-]
+REGIONS = {
+    MINSK: {CENTRALNY: {},
+            FRUNZIENSKI: {},
+            KASTRYCNICKI: {},
+            LENINSKI: {},
+            MASKOUSKI: {},
+            PARTYZANSKI: {},
+            PIERSAMAJSKI: {},
+            SAVIECKI: {},
+            ZAVODSKI: {}, },
+    BREST_REGION: {},
+    VITSEBSK_REGION: {},
+    HOMEL_REGION: {},
+    HRODNA_REGION: {},
+    MINSK_REGION: {},
+    MAHILEU_REGION: {},
+}
 
-DEPARTMENT_NAMES = {
-    MINSK: 'ГУВД Мингорисполкома',
-    BREST_REGION: 'УВД Брестского облисполкома',
-    VITSEBSK_REGION: 'УВД Витебского облисполкома',
-    HOMEL_REGION: 'УВД Гомельского облисполкома',
-    HRODNA_REGION: 'УВД Гродненского облисполкома',
-    MINSK_REGION: 'УВД Минского облисполкома',
-    MAHILEU_REGION: 'УВД Могилевского облисполкома',
+OSM_REGIONS = {
+    CENTRALNY: 'Centralny raion, Minsk',
+    FRUNZIENSKI: 'Frunzienski paion, Minsk',
+    KASTRYCNICKI: 'Kastryčnicki raion, Minsk',
+    LENINSKI: 'Leninski raion, Minsk',
+    MASKOUSKI: 'Maskoŭski raion, Minsk',
+    PARTYZANSKI: 'Partyzanski raion, Minsk',
+    PIERSAMAJSKI: 'Pieršamajski Rajon, Minsk',
+    SAVIECKI: 'Saviecki raion, Minsk',
+    ZAVODSKI: 'Zavodski raion, Minsk',
+    MINSK: 'Minsk, Belarus',
+    BREST_REGION: 'Brest Region, Belarus',
+    VITSEBSK_REGION: 'Vitsebsk Region, Belarus',
+    HOMEL_REGION: 'Homel Region, Belarus',
+    HRODNA_REGION: 'Hrodna Region, Belarus',
+    MINSK_REGION: 'Minsk Region, Belarus',
+    MAHILEU_REGION: 'Mahilyow Region, Belarus',
 }
 
 # redis

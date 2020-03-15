@@ -1,5 +1,6 @@
 import json
 import config
+import territory
 from typing import Optional
 
 
@@ -23,7 +24,7 @@ class Locales:
 
     def get_region_code(self, text: str) -> Optional[str]:
         for locale in self.__localization:
-            for region in config.REGIONS:
+            for region in territory.all():
                 if text == self.__localization[locale][region]:
                     return region
 

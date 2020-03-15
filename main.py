@@ -34,6 +34,7 @@ from imap_email import Email
 from states_stack import StatesStack
 import datetime_parser
 from appeal_summary import AppealSummary
+import territory
 
 
 loop = asyncio.get_event_loop()
@@ -46,7 +47,7 @@ storage = RedisStorage2(host=config.REDIS_HOST,
 dp = Dispatcher(bot, storage=storage)
 
 
-locator = Locator()
+locator = Locator(loop)
 mail_verifier = MailVerifier()
 semaphore = asyncio.Semaphore()
 locales = Locales()
@@ -322,10 +323,7 @@ async def compose_appeal(data: FSMContextProxy,
     appeal = {
         'type': config.APPEAL,
         'text': get_appeal_text(data),
-
-        'police_department':
-            config.DEPARTMENT_NAMES[get_value(data, 'recipient')],
-
+        'police_department': get_value(data, 'recipient'),
         'sender_first_name': get_value(data, 'sender_first_name'),
         'sender_last_name': get_value(data, 'sender_last_name'),
         'sender_patronymic': get_value(data, 'sender_patronymic'),
@@ -1238,15 +1236,15 @@ def prepare_registration_number(number: str):
 
 async def set_violation_location(chat_id, address, state):
     coordinates = await locator.get_coordinates(address)
-    region = await locator.get_region(coordinates)
+    recipient = await locator.get_region(coordinates)
 
     async with state.proxy() as data:
         await save_violation_address(address, coordinates, data)
-        save_recipient(data, region)
-        region = get_value(data, 'recipient')
+        save_recipient(data, recipient)
+        recipient = get_value(data, 'recipient')
         language = await get_ui_lang(data=data)
 
-    await print_violation_address_info(region,
+    await print_violation_address_info(recipient,
                                        address,
                                        chat_id,
                                        language)
@@ -1758,7 +1756,7 @@ async def recipient_click(call, state: FSMContext):
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
-    for region in config.REGIONS:
+    for region in territory.all():
         button = types.InlineKeyboardButton(
             text=locales.text(language, region),
             callback_data=region)
@@ -1783,11 +1781,11 @@ async def recipient_choosen_click(call, state: FSMContext):
     async with state.proxy() as data:
         address = get_value(data, 'violation_address')
         save_recipient(data, call.data)
-        region = get_value(data, 'recipient')
+        recipient = get_value(data, 'recipient')
 
     language = await get_ui_lang(state)
 
-    await print_violation_address_info(region,
+    await print_violation_address_info(recipient,
                                        address,
                                        call.message.chat.id,
                                        language)
@@ -1883,7 +1881,8 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.vehicle_number,
                                   Form.violation_datetime,
                                   Form.violation_address,
-                                  Form.sending_approvement])
+                                  Form.sending_approvement,
+                                  Form.recipient])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.username))
@@ -2779,7 +2778,8 @@ async def reject_non_text_input(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
-                    state=[Form.sending_approvement])
+                    state=[Form.sending_approvement,
+                           Form.recipient])
 async def ask_for_button_press(message: types.Message, state: FSMContext):
     logger.info('Нужно нажать на кнопку - ' + str(message.from_user.username))
     language = await get_ui_lang(state)
@@ -2798,7 +2798,6 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
     logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
-    logger.info('Загрузили.')
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
