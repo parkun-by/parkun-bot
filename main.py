@@ -1756,10 +1756,17 @@ async def recipient_click(call, state: FSMContext):
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
-    for region in territory.all():
+    for region in territory.regions():
+        if region == config.MINSK:
+            postfix = ' ▶️'
+            callback_data = 'minsk_menu'
+        else:
+            postfix = ''
+            callback_data = region
+
         button = types.InlineKeyboardButton(
-            text=locales.text(language, region),
-            callback_data=region)
+            text=locales.text(language, region) + postfix,
+            callback_data=callback_data)
 
         keyboard.add(button)
 
@@ -1768,6 +1775,36 @@ async def recipient_click(call, state: FSMContext):
                            reply_markup=keyboard)
 
     await Form.recipient.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == 'minsk_menu',
+                           state=Form.recipient)
+async def recipient_minsk_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки в подрегионы - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    language = await get_ui_lang(state)
+
+    # настроим клавиатуру
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    button = types.InlineKeyboardButton(
+        text=locales.text(language, config.MINSK),
+        callback_data=config.MINSK)
+
+    keyboard.add(button)
+
+    for region in territory.regions(config.MINSK):
+        button = types.InlineKeyboardButton(
+            text=locales.text(language, region),
+            callback_data=region)
+
+        keyboard.add(button)
+
+    await bot.edit_message_reply_markup(call.message.chat.id,
+                                        call.message.message_id,
+                                        reply_markup=keyboard)
 
 
 @dp.callback_query_handler(
