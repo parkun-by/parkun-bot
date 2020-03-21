@@ -18,7 +18,7 @@ class Rabbit:
                 connected = True
                 pause = 1
             except Exception:
-                self.logger.exception('Fail. Trying reconnect Rabbit.')
+                self.logger.info('Fail. Trying reconnect Rabbit.')
                 connected = False
                 await asyncio.sleep(pause)
 
