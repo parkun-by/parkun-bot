@@ -294,9 +294,14 @@ async def invite_to_confirm_email(data, chat_id):
 
 
 async def send_appeal_textfile_to_user(appeal_text, language, chat_id):
+    appeal_text = convert_for_windows(appeal_text)
     file = io.StringIO(appeal_text)
     file.name = locales.text(language, 'letter_html')
     await bot.send_document(chat_id, file)
+
+
+def convert_for_windows(appeal_text: str) -> str:
+    return appeal_text.replace('\n', '\r\n')
 
 
 async def send_violation_to_channel(language: str,
