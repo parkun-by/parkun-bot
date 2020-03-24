@@ -11,6 +11,7 @@ services:
     restart: always
     volumes:
       - /tmp/temp_files_parkun:/tmp/temp_files_parkun
+      - ./parkun_bot/config:/tmp/parkun_config
     depends_on:
       - redis
       - rabbit

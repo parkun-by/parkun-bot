@@ -117,3 +117,4 @@ dmypy.json
 # IDE
 .vscode/
 .idea/
+env_parkun/parkun_bot/config/config.py
