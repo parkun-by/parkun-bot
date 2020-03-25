@@ -11,13 +11,13 @@ py_env:
 	)
 
 start_dev_env:
-	docker-compose -f env_parkun/docker-compose-prod-env.yml -f env_parkun/docker-compose-dev-env.yml up -d --build
+	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-dev-env.yml up -d --build
 
 stop_dev_env:
-	docker-compose -f env_parkun/docker-compose-prod-env.yml -f env_parkun/docker-compose-dev-env.yml down
+	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-dev-env.yml down
 
 start_prod:
-	docker-compose -f env_parkun/docker-compose-prod-env.yml -f env_parkun/docker-compose-bot.yml up -d --build
+	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-bot.yml up -d --build
 
 stop_prod:
-	docker-compose -f env_parkun/docker-compose-prod-env.yml -f env_parkun/docker-compose-bot.yml down
+	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-bot.yml down

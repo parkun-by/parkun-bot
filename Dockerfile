@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD [ "./env_parkun/parkun_bot/entrypoint.sh" ]
+CMD [ "./env_docker/parkun_bot/entrypoint.sh" ]
