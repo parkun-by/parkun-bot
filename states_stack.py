@@ -1,18 +1,15 @@
-from logging import Logger
-from typing import Any, Awaitable, Callable, Tuple, Optional, Union
-from aiogram.dispatcher import FSMContext, Dispatcher
-from aiogram.types import Message
+from typing import Callable, Tuple
+from aiogram.dispatcher import Dispatcher
+from aiogram.dispatcher.storage import FSMContextProxy
 from states import Form
 
 
 class StatesStack:
     def __init__(self,
-                 logger: Logger,
                  dp: Dispatcher,
                  get_value: Callable,
                  get_lang: Callable,
                  get_text: Callable):
-        self.logger = logger
         self.dispatcher = dp
         self.get_value = get_value
         self.get_ui_lang = get_lang
@@ -67,6 +64,6 @@ class StatesStack:
 
         return message_id, message_text
 
-    def set_data(self, data_to_set: dict, data: dict) -> None:
+    def set_data(self, data_to_set: dict, data: FSMContextProxy) -> None:
         for key in data_to_set:
             data[key] = data_to_set[key]

@@ -1,4 +1,4 @@
-from logging import Logger
+import logging
 import aiohttp
 import asyncio
 import requests
@@ -8,11 +8,13 @@ import shutil
 from typing import Tuple
 
 
+logger = logging.getLogger(__name__)
+
+
 class Uploader:
-    def __init__(self, logger: Logger):
+    def __init__(self):
         self._http_session = aiohttp.ClientSession()
         self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
-        self.logger = logger
 
         try:
             os.makedirs(self.files_dir)
@@ -71,7 +73,7 @@ class Uploader:
                     else:
                         result = None
                 except Exception:
-                    self.logger.exception('Не залилась на телеграф фотка')
+                    logger.exception('Не залилась на телеграф фотка')
                     result = None
 
                 if not uploaded and tries != 0:

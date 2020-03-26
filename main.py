@@ -3,6 +3,7 @@ import io
 import logging
 import json
 import copy
+import sys
 from datetime import datetime
 from typing import Any, Optional, Tuple, Union, List
 from aiogram.dispatcher.storage import FSMContextProxy
@@ -37,6 +38,13 @@ from appeal_summary import AppealSummary
 import territory
 
 
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
+
 loop = asyncio.get_event_loop()
 bot = Bot(token=config.API_TOKEN, loop=loop)
 
@@ -45,22 +53,14 @@ storage = RedisStorage2(host=config.REDIS_HOST,
                         password=config.REDIS_PASSWORD)
 
 dp = Dispatcher(bot, storage=storage)
-
-
 locator = Locator(loop)
 mail_verifier = MailVerifier()
 semaphore = asyncio.Semaphore()
 locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
-
-
-def get_sender_full_name(data):
-    first_name = get_value(data, "sender_first_name")
-    last_name = get_value(data, "sender_last_name")
-    patronymic = get_value(data, "sender_patronymic")
-
-    return f'{first_name} {patronymic} {last_name}'.strip()
+amqp_rabbit = AMQPRabbit()
+uploader = Uploader()
 
 
 def get_value(data: Union[FSMContextProxy, dict],
@@ -77,6 +77,9 @@ def get_value(data: Union[FSMContextProxy, dict],
             return placeholder
 
         return data[key]
+
+
+broadcaster = Broadcaster(get_value, locales)
 
 
 def get_sender_address(data):
@@ -99,11 +102,12 @@ def get_sender_address(data):
     return f'{zipcode}{city}{street}{house}{block}{flat}'.strip().strip(',')
 
 
-def commer(text: str) -> str:
-    if text:
-        return f'{text}, '
+def get_sender_full_name(data):
+    first_name = get_value(data, "sender_first_name")
+    last_name = get_value(data, "sender_last_name")
+    patronymic = get_value(data, "sender_patronymic")
 
-    return text
+    return f'{first_name} {patronymic} {last_name}'.strip()
 
 
 appeal_summary = AppealSummary(locales,
@@ -123,6 +127,16 @@ async def get_ui_lang(state=None,
     return config.RU
 
 
+states_stack = StatesStack(dp, get_value, get_ui_lang, locales.text)
+
+
+def commer(text: str) -> str:
+    if text:
+        return f'{text}, '
+
+    return text
+
+
 async def cancel_sending(user_id: int, appeal_id: int, text_id: str) -> None:
     logger.info(f'Время вышло - {user_id}')
     await pop_saved_state(user_id, user_id)
@@ -136,9 +150,6 @@ async def cancel_sending(user_id: int, appeal_id: int, text_id: str) -> None:
         language = await get_ui_lang(data=data)
 
     await invite_to_send_violation_again(language, user_id, appeal_id, text_id)
-
-
-broadcaster = Broadcaster(get_value, locales)
 
 
 async def invite_to_send_violation_again(language: str,
@@ -164,39 +175,6 @@ async def invite_to_send_violation_again(language: str,
         await bot.send_message(user_id,
                                text,
                                reply_markup=keyboard)
-
-
-def setup_logging():
-    # create logger
-    my_logger = logging.getLogger('parkun_log')
-    my_logger.setLevel(logging.DEBUG)
-
-    # create file handler which logs even debug messages
-    # fh = logging.FileHandler(config.LOG_PATH)
-    # fh.setLevel(logging.DEBUG)
-
-    # create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    # fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-
-    # add the handlers to the logger
-    # logger.addHandler(fh)
-    my_logger.addHandler(ch)
-
-    return my_logger
-
-
-logger = setup_logging()
-amqp_rabbit = AMQPRabbit(logger)
-uploader = Uploader(logger)
-states_stack = StatesStack(logger, dp, get_value, get_ui_lang, locales.text)
-
 
 REQUIRED_CREDENTIALS = [
     'sender_first_name',
@@ -2716,8 +2694,8 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
 
     async with state.proxy() as data:
         datetime = datetime_parser.get_violation_datetime(
-                                            get_value(data, 'violation_date'),
-                                            message.text)
+            get_value(data, 'violation_date'),
+            message.text)
 
         if not datetime:
             logger.info('Неправильно ввел датовремя - ' +

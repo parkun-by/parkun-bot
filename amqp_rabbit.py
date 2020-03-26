@@ -1,13 +1,13 @@
-from logging import Logger
+import logging
 import aio_pika
 import config
 import asyncio
 
 
-class Rabbit:
-    def __init__(self, logger: Logger):
-        self.logger = logger
+logger = logging.getLogger(__name__)
 
+
+class Rabbit:
     async def start(self, loop, callback):
         connected = False
         pause = 1
@@ -18,7 +18,7 @@ class Rabbit:
                 connected = True
                 pause = 1
             except Exception:
-                self.logger.info('Fail. Trying reconnect Rabbit.')
+                logger.info('Fail. Trying reconnect Rabbit.')
                 connected = False
                 await asyncio.sleep(pause)
 
@@ -41,7 +41,7 @@ class Rabbit:
                 passive=True
             )
 
-            self.logger.info("Подключились к раббиту")
+            logger.info("Подключились к раббиту")
 
             while True:
                 async with queue.iterator() as queue_iter:
