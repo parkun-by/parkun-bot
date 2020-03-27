@@ -1031,6 +1031,8 @@ async def ask_for_violation_address(chat_id, data):
     text = locales.text(language, Form.violation_address.state) + '\n' +\
         locales.text(language, 'bot_can_guess_address') + '\n' +\
         '\n' +\
+        locales.text(language, 'irrelevant_information_warning') + '\n' +\
+        '\n' +\
         locales.text(language,
                      f'{Form.violation_address.state}_example') + '\n' +\
         '\n'
