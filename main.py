@@ -2250,16 +2250,22 @@ async def use_saved_address_command(message: types.Message, state: FSMContext):
         message.text.replace(config.PREVIOUS_ADDRESS_PREFIX, ''))
 
     async with state.proxy() as data:
+        addresses = get_value(data, 'previous_violation_addresses')
+
         try:
-            previous_address = \
-                get_value(data,
-                          'previous_violation_addresses')[int(address_index)]
+            previous_address = addresses[int(address_index)]
         except KeyError:
+            logger.error('Ошибка при вводе предыдущего адреса' +
+                         f'{str(message.from_user.username)}.\n' +
+                         f'Адреса: {addresses}\n' +
+                         f'Индекс: {address_index}')
+
             previous_address = message.text
 
-    await set_violation_location(message.chat.id,
-                                 previous_address,
-                                 state)
+    logger.info(f'Выбрался адрес: {previous_address} - ' +
+                str(message.from_user.username))
+
+    await set_violation_location(message.chat.id, previous_address, state)
 
 
 @dp.message_handler(state=Form.feedback)
