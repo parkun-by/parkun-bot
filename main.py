@@ -425,7 +425,10 @@ async def send_appeal(user_id: int, appeal_id: int) -> None:
 
         language = await get_ui_lang(data=data)
         text = locales.text(language, 'appeal_sent')
-        logger.info(f'Обращение поставлено в очередь - {str(user_id)}')
+
+        logger.info(f'Обращение {str(appeal_id)} ' +
+                    f'поставлено в очередь - {str(user_id)}')
+
         await bot.send_message(user_id, text)
         await Form.operational_mode.set()
 
