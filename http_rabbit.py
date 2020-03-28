@@ -6,12 +6,6 @@ from exceptions import *
 
 
 class Rabbit:
-    def __init__(self):
-        self._http_session = aiohttp.ClientSession()
-
-    def __del__(self):
-        self._http_session.close()
-
     async def _send(self,
                     exchange_name: str,
                     routing_key: str,
@@ -27,10 +21,11 @@ class Rabbit:
             'payload_encoding': 'string'
         }
 
-        async with self._http_session.post(url, json=data) as response:
-            if response.status != 200:
-                raise ErrorWhilePutInQueue(
-                    f'Ошибка при отправке обращения: {response.reason}')
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(url, json=data) as response:
+                if response.status != 200:
+                    raise ErrorWhilePutInQueue(
+                        f'Ошибка при отправке обращения: {response.reason}')
 
     async def send_appeal(self,
                           appeal: dict,
@@ -111,14 +106,15 @@ class Rabbit:
             'encoding': 'auto',
         }
 
-        async with self._http_session.post(url, json=data) as response:
-            if response.status != 200:
-                raise ErrorWhilePutInQueue(
-                    f'Ошибка при отправке обращения: {response.reason}')
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.post(url, json=data) as response:
+                if response.status != 200:
+                    raise ErrorWhilePutInQueue(
+                        f'Ошибка при отправке обращения: {response.reason}')
 
-            try:
-                data = json.loads((await response.json())[0]['payload'])
-            except IndexError:
-                raise NoCaptchaInQueue()
+                try:
+                    data = json.loads((await response.json())[0]['payload'])
+                except IndexError:
+                    raise NoCaptchaInQueue()
 
-            return data
+                return data
