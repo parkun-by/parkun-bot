@@ -1,9 +1,9 @@
 import logging
 import aiohttp
 import asyncio
-import requests
 import os
 import shutil
+import secrets
 
 from typing import Tuple
 
@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 class Uploader:
     def __init__(self):
-        self._http_session = aiohttp.ClientSession()
         self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
 
         try:
@@ -22,7 +21,6 @@ class Uploader:
             pass
 
     def __del__(self):
-        self._http_session.close()
         shutil.rmtree(self.files_dir, ignore_errors=True)
 
     def _get_user_dir(self, user_id: int, appeal_id: int) -> str:
@@ -45,46 +43,59 @@ class Uploader:
                                 url: str,
                                 user_id: int,
                                 appeal_id: int) -> Tuple[str, str]:
-        filename = os.path.join(self._get_user_dir(user_id, appeal_id),
-                                url.split('/')[-1])
+        file_path = os.path.join(self._get_user_dir(user_id, appeal_id),
+                                 url.split('/')[-1])
 
-        async with self._http_session.get(url) as resp:
-            raw_file = await resp.content.read()
+        await self.save_photo_to_disk(file_path, url)
+        permanent_url = await self.upload_photo(file_path, url)
+        return permanent_url, file_path
 
-        with open(filename, 'wb') as file:
-            file.write(raw_file)
+    async def upload_photo(self, file_path: str, temp_url: str) -> str:
+        file_id = await self.upload_file(file_path)
 
-        # костыль, надо переписать красиво
+        if file_id:
+            full_path = 'https://telegra.ph' + file_id
+        else:
+            full_path = temp_url
+
+        return full_path
+
+    async def upload_file(self, file_path: str) -> str:
         uploaded = False
         tries = 5
+        file_id = ''
 
         while not uploaded:
-            with open(filename, 'rb') as file:
+            form = aiohttp.FormData(quote_fields=False)
+
+            with open(file_path, 'rb') as file:
+                form.add_field(secrets.token_urlsafe(8),
+                               file,
+                               filename='file',
+                               content_type='image/jpg')
+
                 upload_url = 'https://telegra.ph/upload'
-                files = {'file': ('file', file, 'image/jpg')}
-                result = None
 
-                try:
-                    result_raw = requests.post(upload_url, files=files)
+                async with aiohttp.ClientSession() as http_session:
+                    async with http_session.post(upload_url, data=form) as r:
+                        result = await r.json()
 
-                    if result_raw.status_code == 200:
-                        result = result_raw.json()
-                        uploaded = True
-                    else:
-                        result = None
-                except Exception:
-                    logger.exception('Не залилась на телеграф фотка')
-                    result = None
-
-                if not uploaded and tries != 0:
-                    await asyncio.sleep(0.5)
+            if isinstance(result, dict) and 'error' in result:
+                if tries != 0:
+                    await asyncio.sleep(1)
                     tries -= 1
                 else:
                     uploaded = True
+            else:
+                uploaded = True
+                file_id = result[0]['src']
 
-        try:
-            full_path = 'https://telegra.ph' + result[0]['src']
-        except Exception:
-            full_path = url
+        return file_id
 
-        return full_path, filename
+    async def save_photo_to_disk(self, file_path: str, url: str):
+        async with aiohttp.ClientSession() as http_session:
+            async with http_session.get(url) as resp:
+                raw_file = await resp.content.read()
+
+        with open(file_path, 'wb') as file:
+            file.write(raw_file)
