@@ -12,11 +12,14 @@ services:
   redis:
     container_name: parkun_redis
     image: redis:5.0.7-alpine
-    command: redis-server --requirepass 'redis' --appendonly yes
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
     ports:
       - 16379:6379
     volumes:
       - /home/parkun/redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
     restart: always
     networks:
       - proxynet
