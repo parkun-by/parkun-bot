@@ -30,4 +30,3 @@ class Form(StatesGroup):
     entering_captcha = State()
     email_password = State()
     short_address_check = State()
-    violation_city_input = State()

@@ -1238,21 +1238,38 @@ def prepare_registration_number(number: str):
     return up_number
 
 
-async def ask_about_short_address(chat_id: int, language: str) -> None:
-    text = locales.text(language, 'short_address_check')
+async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        user_city = get_value(data, 'sender_city')
+
+    question = locales.text(language, 'short_address_check')
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    yes_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'yes_button'),
-        callback_data='/yes_button')
+    confirm_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'address_is_full'),
+        callback_data='/confirm_button')
 
-    no_button = types.InlineKeyboardButton(
-        text=locales.text(language, 'no_button'),
-        callback_data='/no_button')
+    if user_city:
+        press_button_text = " " + locales.text(language, 'or_press_button')
+        city_button_text = user_city
+    else:
+        press_button_text = ''
+        city_button_text = ''
 
-    keyboard.add(yes_button, no_button)
+    city_button = types.InlineKeyboardButton(
+        text=city_button_text,
+        callback_data='/user_city_as_violations')
+
+    keyboard.add(confirm_button, city_button)
+
+    input_invitation = \
+        locales.text(language,
+                     'input_violation_city').format(press_button_text)
+
+    text = question + "\n\n" + input_invitation
 
     await bot.send_message(chat_id,
                            text,
@@ -1516,7 +1533,7 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
     async with state.proxy() as data:
         entered_address = get_value(data, "violation_address")
         delete_saved_address(data, entered_address)
-        violation_address = f'г.{city}, {entered_address}'
+        violation_address = f'{city}, {entered_address}'
         language = await get_ui_lang(data=data)
 
     await set_violation_address(user_id, violation_address, state)
@@ -1526,8 +1543,8 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
 
 @dp.callback_query_handler(
     lambda call: call.data == '/user_city_as_violations',
-    state=Form.violation_city_input)
-async def address_is_full_click(call, state: FSMContext):
+    state=Form.short_address_check)
+async def choose_users_city(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     logger.info('Нажал на кнопку своего города как города нарушения - ' +
                 str(call.from_user.username))
@@ -1538,7 +1555,7 @@ async def address_is_full_click(call, state: FSMContext):
     await set_violation_city(state, call.message.chat.id, user_city)
 
 
-@dp.callback_query_handler(lambda call: call.data == '/yes_button',
+@dp.callback_query_handler(lambda call: call.data == '/confirm_button',
                            state=Form.short_address_check)
 async def address_is_full_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
@@ -1548,46 +1565,6 @@ async def address_is_full_click(call, state: FSMContext):
     language = await get_ui_lang(state)
     await print_violation_address_info(state, call.message.chat.id)
     await ask_for_violation_time(call.message.chat.id, language)
-
-
-@dp.callback_query_handler(lambda call: call.data == '/no_button',
-                           state=Form.short_address_check)
-async def address_is_short_click(call, state: FSMContext):
-    await bot.answer_callback_query(call.id)
-    logger.info('Подтвердил, что адрес без города - ' +
-                str(call.from_user.username))
-
-    async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-        user_city = get_value(data, 'sender_city')
-
-    if user_city:
-        press_button_text = " " + locales.text(language, 'or_press_button')
-        city_button = types.InlineKeyboardButton(
-            text=user_city,
-            callback_data=f'/user_city_as_violations')
-    else:
-        press_button_text = ''
-        city_button = None
-
-    text = locales.text(language,
-                        'input_violation_city').format(press_button_text)
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    cancel = types.InlineKeyboardButton(
-        text=locales.text(language, 'cancel_button'),
-        callback_data='/cancel')
-
-    keyboard.add(city_button, cancel)
-
-    await bot.send_message(call.message.chat.id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.violation_city_input.set()
 
 
 @dp.callback_query_handler(lambda call: call.data == '/settings',
@@ -2045,8 +2022,7 @@ async def answer_feedback_click(call, state: FSMContext):
                                   Form.violation_address,
                                   Form.sending_approvement,
                                   Form.recipient,
-                                  Form.short_address_check,
-                                  Form.violation_city_input])
+                                  Form.short_address_check])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 str(call.from_user.username))
@@ -2413,7 +2389,7 @@ async def use_saved_address_command(message: types.Message, state: FSMContext):
         logger.info(f'Адрес без города: {previous_address} - ' +
                     str(message.from_user.username))
 
-        await ask_about_short_address(message.chat.id, language)
+        await ask_about_short_address(state, message.chat.id)
     else:
         await print_violation_address_info(state, message.chat.id)
         await ask_for_violation_time(message.chat.id, language)
@@ -2796,7 +2772,7 @@ async def catch_email_password(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.violation_city_input)
+                    state=Form.short_address_check)
 async def catch_violation_city(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод города нарушения - ' +
                 str(message.from_user.username))
@@ -2816,7 +2792,7 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
         logger.info(f'Адрес без города: {message.text} - ' +
                     str(message.from_user.username))
 
-        await ask_about_short_address(message.chat.id, language)
+        await ask_about_short_address(state, message.chat.id)
     else:
         await print_violation_address_info(state, message.chat.id)
         await ask_for_violation_time(message.chat.id, language)
@@ -2961,7 +2937,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_zipcode,
                            Form.entering_captcha,
                            Form.email_password,
-                           Form.violation_city_input])
+                           Form.short_address_check])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
                 str(message.from_user.username))
@@ -2974,8 +2950,7 @@ async def reject_non_text_input(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
                     state=[Form.sending_approvement,
-                           Form.recipient,
-                           Form.short_address_check])
+                           Form.recipient])
 async def ask_for_button_press(message: types.Message, state: FSMContext):
     logger.info('Нужно нажать на кнопку - ' + str(message.from_user.username))
     language = await get_ui_lang(state)
