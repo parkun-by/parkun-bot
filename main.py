@@ -1275,7 +1275,8 @@ def maybe_no_city_in_address(address: str) -> bool:
         return False
 
     address = address.replace('вул.', '').replace('зав.', '') \
-        .replace('пер.', '').replace('д.', '').replace('ул.', '')
+        .replace('пер.', '').replace('д.', '').replace('ул.', '') \
+        .replace('пр.', '').replace('пр-т.', '').replace('пр-т', '')
 
     cities_by = ['Мінск', 'Брэст', 'Гродна', 'Віцебск', 'Гомель', 'Магілёў']
     cities_ru = ['Минск', 'Брест', 'Гродно', 'Витебск', 'Гомель', 'Могилев']
