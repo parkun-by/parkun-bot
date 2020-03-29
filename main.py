@@ -5,7 +5,7 @@ import json
 import copy
 import sys
 from datetime import datetime
-from typing import Any, Optional, Tuple, Union, List
+from typing import Any, Optional, Tuple, Union, List, Callable
 from aiogram.dispatcher.storage import FSMContextProxy
 from aiogram.types.photo_size import PhotoSize
 
@@ -636,26 +636,29 @@ async def add_photo_to_attachments(photo: PhotoSize,
     data['violation_photo_ids'].append(photo['file_id'])
 
 
+async def process_photo(photo_id: str,
+                        store_and_upload: Callable) -> Tuple[str, str]:
+    file = await bot.get_file(photo_id)
+    temp_url = config.URL_BASE + file.file_path
+    return await store_and_upload(temp_url)
+
+
 async def prepare_photos(data: FSMContextProxy,
                          user_id: int,
                          appeal_id: int) -> None:
-    # потанцевально узкое место, все потоки всех пользователей будут ждать
-    # пока кто-то один аппендит, если я правильно понимаю
-    # нужно сделать каждому пользователю свой личный семафорчик, но я пока
-    # что не знаю как
-    async with semaphore:
-        for file_id in data['violation_photo_ids']:
-            file = await bot.get_file(file_id)
+    async def store_and_upload(temp_photo_url):
+        return await uploader.get_permanent_url(temp_photo_url,
+                                                user_id,
+                                                appeal_id)
 
-            image_url, image_path = await uploader.get_permanent_url(
-                config.URL_BASE + file.file_path, user_id, appeal_id)
+    processed_photos = asyncio.gather(
+        *[process_photo(file_id, store_and_upload)
+            for file_id in data['violation_photo_ids']]
+    )
 
-            # это скорее всего не нужно, и так уже было сделано когда
-            # добавлялась фотка
-            ensure_attachments_availability(data)
-
-            data['violation_attachments'].append(image_url)
-            data['violation_photo_files_paths'].append(image_path)
+    for image_url, image_path in await processed_photos:
+        data['violation_attachments'].append(image_url)
+        data['violation_photo_files_paths'].append(image_path)
 
     logger.info('Вгрузили фоточки - ' + str(user_id))
 
