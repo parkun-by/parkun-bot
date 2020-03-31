@@ -1263,7 +1263,7 @@ async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
         text=city_button_text,
         callback_data='/user_city_as_violations')
 
-    keyboard.add(confirm_button, city_button)
+    keyboard.add(city_button, confirm_button)
 
     input_invitation = \
         locales.text(language,
