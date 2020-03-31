@@ -1315,10 +1315,10 @@ def maybe_no_city_in_address(address: str) -> bool:
 
     space_parts_len = len(address.replace(',', '').split(' '))
 
-    if space_parts_len >= 3:
+    if space_parts_len >= 4:
         return False
 
-    if space_parts_len > 1 and space_parts_len < 3:
+    if space_parts_len > 1 and space_parts_len < 4:
         return True
 
     return False
