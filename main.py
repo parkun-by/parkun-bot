@@ -43,7 +43,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("parkun_bot")
 
 loop = asyncio.get_event_loop()
 bot = Bot(token=config.API_TOKEN, loop=loop)
