@@ -11,7 +11,7 @@ from typing import Tuple
 logger = logging.getLogger(__name__)
 
 
-class Uploader:
+class PhotoManager:
     def __init__(self):
         self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
 

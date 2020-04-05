@@ -25,7 +25,7 @@ from locator import Locator
 from mail_verifier import MailVerifier
 from photoitem import PhotoItem
 from states import Form
-from uploader import Uploader
+from photo_manager import PhotoManager
 from locales import Locales
 from broadcaster import Broadcaster
 from validator import Validator
@@ -60,7 +60,7 @@ locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
-uploader = Uploader()
+photo_manager = PhotoManager()
 
 
 def get_value(data: Union[FSMContextProxy, dict],
@@ -647,7 +647,7 @@ async def prepare_photos(data: FSMContextProxy,
                          user_id: int,
                          appeal_id: int) -> None:
     async def store_and_upload(temp_photo_url):
-        return await uploader.get_permanent_url(temp_photo_url,
+        return await photo_manager.get_permanent_url(temp_photo_url,
                                                 user_id,
                                                 appeal_id)
 
@@ -763,7 +763,7 @@ def delete_appeal_from_user_queue(data: FSMContextProxy,
     data['appeals'] = appeals
 
     # также удалим временные файлы картинок нарушений
-    uploader.clear_storage(user_id, appeal_id)
+    photo_manager.clear_storage(user_id, appeal_id)
 
 
 def delete_old_appeals(appeals: dict,
