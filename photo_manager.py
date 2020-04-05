@@ -5,15 +5,19 @@ import os
 import shutil
 import secrets
 
-from typing import Tuple
+from typing import Tuple, Awaitable
+from telegraph import Telegraph
+from asyncio.events import AbstractEventLoop
 
 
 logger = logging.getLogger(__name__)
 
 
 class PhotoManager:
-    def __init__(self):
+    def __init__(self, loop: AbstractEventLoop):
         self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
+        self.storage = {}
+        self.telegraph = Telegraph(loop)
 
         try:
             os.makedirs(self.files_dir)
@@ -22,6 +26,80 @@ class PhotoManager:
 
     def __del__(self):
         shutil.rmtree(self.files_dir, ignore_errors=True)
+
+    def stash_photo(self, user_id: int, appeal_id: int, temp_url: str):
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+        tasks: list = appeal_stash.setdefault('task', [])
+
+        storing_task = asyncio.create_task(
+            self._store_photo(user_id, appeal_id, temp_url)
+        )
+
+        tasks.append(storing_task)
+        appeal_stash['task'] = tasks
+        user_stash[appeal_id] = appeal_stash
+        self.storage[user_id] = user_stash
+
+    async def _store_photo(self, user_id: int, appeal_id: int, temp_url: str):
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+
+        folder_path = self._get_user_dir(user_id, appeal_id)
+        file_name = temp_url.split('/')[-1]
+        file_path = os.path.join(folder_path, file_name)
+
+        await self._save_photo_to_disk(file_path, temp_url)
+        file_pathes: list = appeal_stash.setdefault('file_path', [])
+        file_pathes.append(file_path)
+
+        permanent_url = await self._upload_photo(file_path, temp_url)
+        permanent_urls: list = appeal_stash.setdefault('url', [])
+        permanent_urls.append(permanent_url)
+
+        appeal_stash['file_path'] = file_pathes
+        appeal_stash['url'] = permanent_urls
+        user_stash[appeal_id] = appeal_stash
+        self.storage[user_id] = user_stash
+
+    def stash_page(self, user_id: int, appeal_id: int, title: str):
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+        tasks: list = appeal_stash.setdefault('task', [])
+
+        storing_task = asyncio.create_task(
+            self._create_page(user_id, appeal_id, title)
+        )
+
+        tasks.append(storing_task)
+        appeal_stash['task'] = tasks
+        user_stash[appeal_id] = appeal_stash
+        self.storage[user_id] = user_stash
+
+    async def _create_page(self, user_id: int, appeal_id: int, title: str):
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+
+        page_url = await self.telegraph.create_page(appeal_stash['url'], title)
+        appeal_stash['page_url'] = page_url
+
+        user_stash[appeal_id] = appeal_stash
+        self.storage[user_id] = user_stash
+
+    async def get_photo_data(self, user_id: int, appeal_id: int) -> dict:
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+
+        if not appeal_stash:
+            return appeal_stash
+
+        tasks = appeal_stash.get('task', [])
+        await asyncio.gather(*tasks)
+
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+
+        return appeal_stash
 
     def _get_user_dir(self, user_id: int, appeal_id: int) -> str:
         dir_path = os.path.join(self.files_dir, str(user_id), str(appeal_id))
@@ -33,11 +111,15 @@ class PhotoManager:
             return dir_path
 
     def clear_storage(self, user_id: int, appeal_id: int) -> None:
+        user_stash: dict = self.storage.get(user_id, {})
+        user_stash.pop(appeal_id, None)
+
+        if not user_stash:
+            self.storage.pop(user_id, None)
+        # need to check!!!!!!!!!!!!!!
+
         shutil.rmtree(self._get_user_dir(user_id, appeal_id),
                       ignore_errors=True)
-
-    def get_file_list(self, user_id: int, appeal_id: int) -> list:
-        return os.listdir(self._get_user_dir(user_id, appeal_id))
 
     async def get_permanent_url(self,
                                 url: str,
@@ -46,12 +128,12 @@ class PhotoManager:
         file_path = os.path.join(self._get_user_dir(user_id, appeal_id),
                                  url.split('/')[-1])
 
-        await self.save_photo_to_disk(file_path, url)
-        permanent_url = await self.upload_photo(file_path, url)
+        await self._save_photo_to_disk(file_path, url)
+        permanent_url = await self._upload_photo(file_path, url)
         return permanent_url, file_path
 
-    async def upload_photo(self, file_path: str, temp_url: str) -> str:
-        file_id = await self.upload_file(file_path)
+    async def _upload_photo(self, file_path: str, temp_url: str) -> str:
+        file_id = await self._upload_file(file_path)
 
         if file_id:
             full_path = 'https://telegra.ph' + file_id
@@ -60,7 +142,7 @@ class PhotoManager:
 
         return full_path
 
-    async def upload_file(self, file_path: str) -> str:
+    async def _upload_file(self, file_path: str) -> str:
         uploaded = False
         tries = 5
         file_id = ''
@@ -92,7 +174,7 @@ class PhotoManager:
 
         return file_id
 
-    async def save_photo_to_disk(self, file_path: str, url: str):
+    async def _save_photo_to_disk(self, file_path: str, url: str):
         async with aiohttp.ClientSession() as http_session:
             async with http_session.get(url) as resp:
                 raw_file = await resp.content.read()

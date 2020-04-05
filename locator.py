@@ -53,10 +53,11 @@ class Locator:
             self._boundaries[region] = boundary
 
     async def download_boundaries(self):
-        asyncio.ensure_future(
+        asyncio.create_task(
             asyncio.gather(*(self.__get_boundary(region)
                              for region in config.OSM_REGIONS)),
-            loop=self.loop)
+            loop=self.loop
+        )
 
     def __point_is_in_polygon(self, boundary, longitude, latitude):
         overlap = False

@@ -60,7 +60,7 @@ locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
-photo_manager = PhotoManager()
+photo_manager = PhotoManager(loop)
 
 
 def get_value(data: Union[FSMContextProxy, dict],
@@ -648,8 +648,8 @@ async def prepare_photos(data: FSMContextProxy,
                          appeal_id: int) -> None:
     async def store_and_upload(temp_photo_url):
         return await photo_manager.get_permanent_url(temp_photo_url,
-                                                user_id,
-                                                appeal_id)
+                                                     user_id,
+                                                     appeal_id)
 
     processed_photos = asyncio.gather(
         *[process_photo(file_id, store_and_upload)
@@ -2970,7 +2970,7 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
     logger.info('Подключаемся к очереди статусов обращений.')
-    asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
+    asyncio.create_task(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
 
 
