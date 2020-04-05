@@ -132,3 +132,12 @@ BUSY_WORKER = 'busy_worker'
 OK = 'ok'
 FAIL = 'fail'
 WRONG_INPUT = 'wrong_input'
+
+# Telegra.ph
+TPH_ACCESS_TOKEN = "put_token_here"
+
+TPH_SHORT_NAME = "author_nickname"
+TPH_AUTHOR_NAME = "author_name"
+TPH_AUTHOR_URL = "author_url"
+
+TPH_AUTH_URL = "author_auth_url"
