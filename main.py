@@ -143,9 +143,9 @@ async def cancel_sending(user_id: int, appeal_id: int, text_id: str) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
-        delete_appeal_from_user_queue(data,
-                                      user_id,
-                                      appeal_id)
+        await delete_appeal_from_user_queue(data,
+                                            user_id,
+                                            appeal_id)
 
         language = await get_ui_lang(data=data)
 
@@ -218,6 +218,7 @@ VIOLATION_INFO_KEYS = [
     'violation_datetime',
     'violation_caption',
     'violation_date',
+    'violation_photo_page',
 ]
 
 
@@ -282,17 +283,24 @@ def convert_for_windows(appeal_text: str) -> str:
     return appeal_text.replace('\n', '\r\n')
 
 
-async def send_violation_to_channel(language: str,
-                                    date_time: str,
-                                    location: str,
-                                    plate: str,
-                                    photos_id: list) -> None:
-    caption = locales.text(language, 'violation_datetime') +\
+def get_violation_caption(language: str,
+                          date_time: str,
+                          location: str,
+                          plate: str) -> str:
+    return locales.text(language, 'violation_datetime') +\
         ' {}'.format(date_time) + '\n' +\
         locales.text(language, 'violation_location') +\
         ' {}'.format(location) + '\n' +\
         locales.text(language, 'violation_plate') + \
         ' {}'.format(plate)
+
+
+async def send_violation_to_channel(language: str,
+                                    date_time: str,
+                                    location: str,
+                                    plate: str,
+                                    photos_id: list) -> None:
+    caption = get_violation_caption(language, date_time, location, plate)
 
     # в канал
     await send_photos_group_with_caption(photos_id,
@@ -344,7 +352,7 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
         if appeal:
             await postsending_operations(language, user_id, appeal)
 
-        delete_appeal_from_user_queue(data, user_id, appeal_id)
+        await delete_appeal_from_user_queue(data, user_id, appeal_id)
 
 
 async def postsending_operations(language: str,
@@ -455,7 +463,7 @@ async def parse_appeal_from_message(data: FSMContextProxy,
 async def process_entered_violation(data: FSMContextProxy,
                                     user_id: int,
                                     appeal_id: int) -> dict:
-    await prepare_photos(data, user_id, appeal_id)
+    await get_prepared_photos(data, user_id, appeal_id)
     appeal = await compose_appeal(data, user_id, appeal_id)
     add_appeal_to_user_queue(data, appeal, appeal_id)
     delete_prepared_violation(data)
@@ -636,31 +644,51 @@ async def add_photo_to_attachments(photo: PhotoSize,
     data['violation_photo_ids'].append(photo['file_id'])
 
 
-async def process_photo(photo_id: str,
-                        store_and_upload: Callable) -> Tuple[str, str]:
+async def get_temp_photo_url(photo_id: str) -> str:
     file = await bot.get_file(photo_id)
-    temp_url = config.URL_BASE + file.file_path
-    return await store_and_upload(temp_url)
+    return config.URL_BASE + file.file_path
 
 
 async def prepare_photos(data: FSMContextProxy,
                          user_id: int,
                          appeal_id: int) -> None:
-    async def store_and_upload(temp_photo_url):
-        return await photo_manager.get_permanent_url(temp_photo_url,
-                                                     user_id,
-                                                     appeal_id)
+    await photo_manager.clear_storage(user_id, appeal_id)
+    urls_tasks = map(get_temp_photo_url, data['violation_photo_ids'])
+    urls = asyncio.gather(*urls_tasks)
 
-    processed_photos = asyncio.gather(
-        *[process_photo(file_id, store_and_upload)
-            for file_id in data['violation_photo_ids']]
+    for url in await urls:
+        photo_manager.stash_photo(user_id, appeal_id, url)
+
+    violation_summary = get_violation_caption(
+        await get_ui_lang(data=data),
+        data['violation_datetime'],
+        data['violation_address'],
+        data['violation_vehicle_number']
     )
 
-    for image_url, image_path in await processed_photos:
+    photo_manager.stash_page(user_id, appeal_id, violation_summary)
+
+
+async def get_prepared_photos(data: FSMContextProxy,
+                              user_id: int,
+                              appeal_id: int):
+    photos_data = await photo_manager.get_photo_data(user_id, appeal_id)
+
+    for image_url in photos_data['urls']:
+        image_url = remove_http(image_url)
         data['violation_attachments'].append(image_url)
+
+    for image_path in photos_data['file_paths']:
         data['violation_photo_files_paths'].append(image_path)
 
+    page_url = remove_http(photos_data['page_url'])
+    data['violation_photo_page'] = page_url
+
     logger.info('Вгрузили фоточки - ' + str(user_id))
+
+
+def remove_http(url: str) -> str:
+    return url.replace('https://', '').replace('http://', '')
 
 
 def delete_prepared_violation(data: FSMContextProxy) -> None:
@@ -755,15 +783,15 @@ def get_appeal_from_user_queue(data: FSMContextProxy,
     return appeal
 
 
-def delete_appeal_from_user_queue(data: FSMContextProxy,
-                                  user_id: int,
-                                  appeal_id: int) -> None:
+async def delete_appeal_from_user_queue(data: FSMContextProxy,
+                                        user_id: int,
+                                        appeal_id: int) -> None:
     appeals: dict = get_value(data, 'appeals')
     appeals.pop(str(appeal_id), 'default_value')
     data['appeals'] = appeals
 
     # также удалим временные файлы картинок нарушений
-    photo_manager.clear_storage(user_id, appeal_id)
+    await photo_manager.clear_storage(user_id, appeal_id)
 
 
 def delete_old_appeals(appeals: dict,
@@ -835,6 +863,7 @@ def get_photos_links(data):
 def get_appeal_text(data: FSMContextProxy) -> str:
     violation_data = {
         'photos': get_photos_links(data),
+        'photos_post_url': get_value(data, 'violation_photo_page'),
         'vehicle_number': get_value(data, 'violation_vehicle_number'),
         'address': get_value(data, 'violation_address'),
         'datetime': get_value(data, 'violation_datetime'),
@@ -847,7 +876,7 @@ def get_appeal_text(data: FSMContextProxy) -> str:
     return AppealText.get(get_value(data, 'letter_lang'), violation_data)
 
 
-async def approve_sending(chat_id: int, data: FSMContextProxy) -> int:
+async def approve_sending(user_id: int, data: FSMContextProxy) -> int:
     language = await get_ui_lang(data=data)
 
     caption_button_text = locales.text(language, 'add_caption_button')
@@ -856,7 +885,7 @@ async def approve_sending(chat_id: int, data: FSMContextProxy) -> int:
 
     await send_photos_group_with_caption(
         get_value(data, 'violation_photo_ids'),
-        chat_id)
+        user_id)
 
     if get_value(data, 'violation_caption'):
         caption_button_text = locales.text(language,
@@ -884,12 +913,13 @@ async def approve_sending(chat_id: int, data: FSMContextProxy) -> int:
     keyboard.add(enter_violation_info_button, add_caption_button)
     keyboard.add(approve_sending_button, cancel_button)
 
-    message = await bot.send_message(chat_id,
+    message = await bot.send_message(user_id,
                                      text,
                                      reply_markup=keyboard,
                                      parse_mode='HTML',
                                      disable_web_page_preview=True)
 
+    await prepare_photos(data, user_id, message.message_id)
     return message.message_id
 
 
@@ -2068,9 +2098,9 @@ async def cancel_captcha_input(call, state: FSMContext):
             call.message.chat.id,
             get_value(data, 'appeal_response_queue'))
 
-        delete_appeal_from_user_queue(data,
-                                      call.message.chat.id,
-                                      get_value(data, 'appeal_id'))
+        await delete_appeal_from_user_queue(data,
+                                            call.message.chat.id,
+                                            get_value(data, 'appeal_id'))
 
         data['appeal_id'] = 0
 

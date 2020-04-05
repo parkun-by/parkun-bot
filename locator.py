@@ -40,7 +40,7 @@ class Locator:
         except aiohttp.client_exceptions.ClientOSError:
             boundary = []
 
-        except json.decoder.JSONDecodeError:
+        except json.JSONDecodeError:
             boundary = []
 
         except IndexError:
@@ -53,11 +53,13 @@ class Locator:
             self._boundaries[region] = boundary
 
     async def download_boundaries(self):
-        asyncio.create_task(
-            asyncio.gather(*(self.__get_boundary(region)
-                             for region in config.OSM_REGIONS)),
-            loop=self.loop
-        )
+        tasks = []
+
+        for region in config.OSM_REGIONS:
+            task = asyncio.create_task(self.__get_boundary(region))
+            tasks.append(task)
+
+        asyncio.gather(*tasks)
 
     def __point_is_in_polygon(self, boundary, longitude, latitude):
         overlap = False

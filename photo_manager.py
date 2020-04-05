@@ -30,14 +30,14 @@ class PhotoManager:
     def stash_photo(self, user_id: int, appeal_id: int, temp_url: str):
         user_stash: dict = self.storage.get(user_id, {})
         appeal_stash: dict = user_stash.get(appeal_id, {})
-        tasks: list = appeal_stash.setdefault('task', [])
+        tasks: list = appeal_stash.setdefault('photo_tasks', [])
 
         storing_task = asyncio.create_task(
             self._store_photo(user_id, appeal_id, temp_url)
         )
 
         tasks.append(storing_task)
-        appeal_stash['task'] = tasks
+        appeal_stash['photo_tasks'] = tasks
         user_stash[appeal_id] = appeal_stash
         self.storage[user_id] = user_stash
 
@@ -50,37 +50,44 @@ class PhotoManager:
         file_path = os.path.join(folder_path, file_name)
 
         await self._save_photo_to_disk(file_path, temp_url)
-        file_pathes: list = appeal_stash.setdefault('file_path', [])
+        file_pathes: list = appeal_stash.setdefault('file_paths', [])
         file_pathes.append(file_path)
 
         permanent_url = await self._upload_photo(file_path, temp_url)
-        permanent_urls: list = appeal_stash.setdefault('url', [])
+        permanent_urls: list = appeal_stash.setdefault('urls', [])
         permanent_urls.append(permanent_url)
 
-        appeal_stash['file_path'] = file_pathes
-        appeal_stash['url'] = permanent_urls
+        appeal_stash['file_paths'] = file_pathes
+        appeal_stash['urls'] = permanent_urls
         user_stash[appeal_id] = appeal_stash
         self.storage[user_id] = user_stash
 
     def stash_page(self, user_id: int, appeal_id: int, title: str):
         user_stash: dict = self.storage.get(user_id, {})
         appeal_stash: dict = user_stash.get(appeal_id, {})
-        tasks: list = appeal_stash.setdefault('task', [])
+        page_tasks: list = appeal_stash.setdefault('page_tasks', [])
 
         storing_task = asyncio.create_task(
             self._create_page(user_id, appeal_id, title)
         )
 
-        tasks.append(storing_task)
-        appeal_stash['task'] = tasks
+        page_tasks.append(storing_task)
+        appeal_stash['page_tasks'] = page_tasks
         user_stash[appeal_id] = appeal_stash
         self.storage[user_id] = user_stash
 
     async def _create_page(self, user_id: int, appeal_id: int, title: str):
         user_stash: dict = self.storage.get(user_id, {})
         appeal_stash: dict = user_stash.get(appeal_id, {})
+        photo_tasks: list = appeal_stash.setdefault('photo_tasks', [])
 
-        page_url = await self.telegraph.create_page(appeal_stash['url'], title)
+        await asyncio.gather(*photo_tasks)
+
+        user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+
+        page_url = await self.telegraph.create_page(appeal_stash['urls'],
+                                                    title)
         appeal_stash['page_url'] = page_url
 
         user_stash[appeal_id] = appeal_stash
@@ -93,8 +100,9 @@ class PhotoManager:
         if not appeal_stash:
             return appeal_stash
 
-        tasks = appeal_stash.get('task', [])
-        await asyncio.gather(*tasks)
+        page_tasks = appeal_stash.get('page_tasks', [])
+        photo_tasks = appeal_stash.get('photo_tasks', [])
+        await asyncio.gather(*(page_tasks + photo_tasks))
 
         user_stash: dict = self.storage.get(user_id, {})
         appeal_stash: dict = user_stash.get(appeal_id, {})
@@ -110,13 +118,18 @@ class PhotoManager:
         except FileExistsError:
             return dir_path
 
-    def clear_storage(self, user_id: int, appeal_id: int) -> None:
+    async def clear_storage(self, user_id: int, appeal_id: int) -> None:
         user_stash: dict = self.storage.get(user_id, {})
+        appeal_stash: dict = user_stash.get(appeal_id, {})
+
+        page_tasks = appeal_stash.get('page_tasks', [])
+        photo_tasks = appeal_stash.get('photo_tasks', [])
+        await asyncio.gather(*(page_tasks + photo_tasks))
+
         user_stash.pop(appeal_id, None)
 
         if not user_stash:
             self.storage.pop(user_id, None)
-        # need to check!!!!!!!!!!!!!!
 
         shutil.rmtree(self._get_user_dir(user_id, appeal_id),
                       ignore_errors=True)

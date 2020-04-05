@@ -61,4 +61,3 @@ class Telegraph():
             'tag': 'p',
             'children': [text]
         }
-
