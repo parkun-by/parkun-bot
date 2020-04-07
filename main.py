@@ -143,10 +143,7 @@ async def cancel_sending(user_id: int, appeal_id: int, text_id: str) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
 
     async with state.proxy() as data:
-        await delete_appeal_from_user_queue(data,
-                                            user_id,
-                                            appeal_id)
-
+        await delete_appeal_from_user_queue(data, user_id, appeal_id)
         language = await get_ui_lang(data=data)
 
     await invite_to_send_violation_again(language, user_id, appeal_id, text_id)
@@ -462,12 +459,15 @@ async def parse_appeal_from_message(data: FSMContextProxy,
 
 async def process_entered_violation(data: FSMContextProxy,
                                     user_id: int,
-                                    appeal_id: int) -> dict:
-    await get_prepared_photos(data, user_id, appeal_id)
+                                    appeal_id: int):
+    await photo_manager.set_id_to_current_photos(user_id, appeal_id)
+
+    if not await get_prepared_photos(data, user_id, appeal_id):
+        return
+
     appeal = await compose_appeal(data, user_id, appeal_id)
     add_appeal_to_user_queue(data, appeal, appeal_id)
     delete_prepared_violation(data)
-    return appeal
 
 
 async def fill_photos_violation_data(data: FSMContextProxy,
@@ -483,7 +483,7 @@ async def fill_photos_violation_data(data: FSMContextProxy,
     while photos_message.photo:
         await add_photo_to_attachments(photos_message.photo[-1],
                                        data,
-                                       photos_message.chat.id)
+                                       user_id)
 
         message_id -= 1
 
@@ -643,36 +643,22 @@ async def add_photo_to_attachments(photo: PhotoSize,
     ensure_attachments_availability(data)
     data['violation_photo_ids'].append(photo['file_id'])
 
+    url = await get_temp_photo_url(photo['file_id'])
+    photo_manager.stash_photo(user_id, url)
+
 
 async def get_temp_photo_url(photo_id: str) -> str:
     file = await bot.get_file(photo_id)
     return config.URL_BASE + file.file_path
 
 
-async def prepare_photos(data: FSMContextProxy,
-                         user_id: int,
-                         appeal_id: int) -> None:
-    await photo_manager.clear_storage(user_id, appeal_id)
-    urls_tasks = map(get_temp_photo_url, data['violation_photo_ids'])
-    urls = asyncio.gather(*urls_tasks)
-
-    for url in await urls:
-        photo_manager.stash_photo(user_id, appeal_id, url)
-
-    violation_summary = get_violation_caption(
-        await get_ui_lang(data=data),
-        data['violation_datetime'],
-        data['violation_address'],
-        data['violation_vehicle_number']
-    )
-
-    photo_manager.stash_page(user_id, appeal_id, violation_summary)
-
-
 async def get_prepared_photos(data: FSMContextProxy,
                               user_id: int,
-                              appeal_id: int):
+                              appeal_id: int) -> bool:
     photos_data = await photo_manager.get_photo_data(user_id, appeal_id)
+
+    if not photo_manager.valid(photos_data):
+        return False
 
     for image_url in photos_data['urls']:
         image_url = remove_http(image_url)
@@ -685,6 +671,7 @@ async def get_prepared_photos(data: FSMContextProxy,
     data['violation_photo_page'] = page_url
 
     logger.info('Вгрузили фоточки - ' + str(user_id))
+    return True
 
 
 def remove_http(url: str) -> str:
@@ -919,7 +906,14 @@ async def approve_sending(user_id: int, data: FSMContextProxy) -> int:
                                      parse_mode='HTML',
                                      disable_web_page_preview=True)
 
-    await prepare_photos(data, user_id, message.message_id)
+    violation_summary = get_violation_caption(
+        language,
+        data['violation_datetime'],
+        data['violation_address'],
+        data['violation_vehicle_number']
+    )
+
+    photo_manager.stash_page(user_id, violation_summary)
     return message.message_id
 
 
@@ -2694,8 +2688,14 @@ async def catch_sender_zipcode(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
-                    state=[Form.operational_mode,
-                           Form.violation_photo])
+                    state=Form.operational_mode)
+async def initial_violation_photo(message: types.Message, state: FSMContext):
+    await photo_manager.clear_storage(message.chat.id)
+    await process_violation_photo(message, state)
+
+
+@dp.message_handler(content_types=types.ContentTypes.PHOTO,
+                    state=Form.violation_photo)
 async def process_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки нарушения - ' +
                 str(message.from_user.username))
