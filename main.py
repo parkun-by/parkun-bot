@@ -36,6 +36,7 @@ from states_stack import StatesStack
 import datetime_parser
 from appeal_summary import AppealSummary
 import territory
+import re
 
 
 logging.basicConfig(
@@ -1315,15 +1316,18 @@ async def set_violation_address(chat_id: int,
 
 
 def maybe_no_city_in_address(address: str) -> bool:
+    address = address.lower()
+
     if 'г.' in address:
         return False
 
-    address = address.replace('вул.', '').replace('зав.', '') \
-        .replace('пер.', '').replace('д.', '').replace('ул.', '') \
-        .replace('пр.', '').replace('пр-т.', '').replace('пр-т', '')
+    unneeded = ['вул.', 'зав.', 'пер.', 'д.', 'ул.', 'пр.', 'пр-т.', 'пр-т']
 
-    cities_by = ['Мінск', 'Брэст', 'Гродна', 'Віцебск', 'Гомель', 'Магілёў']
-    cities_ru = ['Минск', 'Брест', 'Гродно', 'Витебск', 'Гомель', 'Могилев']
+    for word in unneeded:
+        address = case_insensitive_delete(address, word)
+
+    cities_by = ['мінск', 'брэст', 'гродна', 'віцебск', 'гомель', 'магілёў']
+    cities_ru = ['минск', 'брест', 'гродно', 'витебск', 'гомель', 'могилев']
 
     for city in cities_by + cities_ru:
         if city in address:
@@ -1346,6 +1350,11 @@ def maybe_no_city_in_address(address: str) -> bool:
         return True
 
     return False
+
+
+def case_insensitive_delete(text: str, to_delete: str) -> str:
+    insensitive_hippo = re.compile(re.escape(to_delete), re.IGNORECASE)
+    return insensitive_hippo.sub('', text)
 
 
 def compose_violation_time_asking(
