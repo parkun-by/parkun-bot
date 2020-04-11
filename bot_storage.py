@@ -18,5 +18,20 @@ class BotStorage():
                                           user=self._bot_id).proxy() as data:
             data['banned_users'] = bans
 
+    async def get_appeals_count(self) -> int:
+        async with self._dp.current_state(chat=self._bot_id,
+                                          user=self._bot_id).proxy() as data:
+            count = data.setdefault('appeals_sent', 0)
+
+            if count is None:
+                return 0
+
+            return count
+
+    async def count_sent_appeal(self, amount=1):
+        async with self._dp.current_state(chat=self._bot_id,
+                                          user=self._bot_id).proxy() as data:
+            return data.setdefault('appeals_sent', 0)
+
     def set_bot_id(self, bot_id: int):
         self._bot_id = bot_id

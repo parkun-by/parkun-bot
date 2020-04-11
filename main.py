@@ -347,6 +347,8 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                            parse_mode='HTML',
                            reply_to_message_id=appeal_id)
 
+    await bot_storage.count_sent_appeal()
+
     async with state.proxy() as data:
         appeal = get_appeal_from_user_queue(data, appeal_id)
 

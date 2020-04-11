@@ -1,15 +1,17 @@
-import aioredis
-import aiohttp
-import config
-from typing import Optional
-
-import asyncio
+from datetime import datetime, timedelta
 import json
+
+import aiohttp
+import aioredis
+
+from bot_storage import BotStorage
+import config
 
 
 class Statistic():
-    def __init__(self):
-        self._bot_id: Optional[int] = None
+    def __init__(self, bot_storage: BotStorage):
+        self._storage = dict()
+        self._bot_storage = bot_storage
 
     async def get_appeal_queue_size(self) -> int:
         url = f'http://{config.RABBIT_LOGIN}:{config.RABBIT_PASSWORD}@' + \
@@ -26,7 +28,7 @@ class Statistic():
                 return messages_count
 
     async def get_appeals_sent_count(self) -> int:
-        return 10_000
+        return await self._bot_storage.get_appeals_count()
 
     async def get_registered_users_count(self) -> int:
         redis = await aioredis.create_redis(
@@ -50,14 +52,7 @@ class Statistic():
                 verified_users += 1
 
         redis.close()
+        self._storage['verified_users'] = verified_users
+        self._storage['verified_users_timestamp'] = datetime.now()
         return verified_users
 
-    def set_bot_id(self, bot_id: int):
-        self._bot_id = bot_id
-
-
-if __name__ == "__main__":
-    stats = Statistic()
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(stats.get_registered_users_count())
