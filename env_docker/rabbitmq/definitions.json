@@ -19,11 +19,6 @@
             "name": "appeal_sender",
             "password": "appeal_sender",
             "tags": "administrator"
-        },
-        {
-            "name": "appeal_manager",
-            "password": "appeal_manager",
-            "tags": "administrator"
         }
     ],
     "permissions": [
@@ -43,13 +38,6 @@
         },
         {
             "user": "appeal_sender",
-            "vhost": "/",
-            "configure": ".*",
-            "write": ".*",
-            "read": ".*"
-        },
-        {
-            "user": "appeal_manager",
             "vhost": "/",
             "configure": ".*",
             "write": ".*",
@@ -96,15 +84,6 @@
             }
         },
         {
-            "name": "sender_available",
-            "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "arguments": {
-                "x-queue-mode": "lazy"
-            }
-        },
-        {
             "name": "appeal",
             "vhost": "/",
             "durable": true,
@@ -138,14 +117,6 @@
             "destination": "appeal",
             "destination_type": "queue",
             "routing_key": "appeal_to_queue",
-            "arguments": {}
-        },
-        {
-            "source": "managing",
-            "vhost": "/",
-            "destination": "sender_available",
-            "destination_type": "queue",
-            "routing_key": "sender_availability",
             "arguments": {}
         },
         {
