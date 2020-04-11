@@ -37,6 +37,7 @@ import datetime_parser
 from appeal_summary import AppealSummary
 import territory
 import re
+from statistic import Statistic
 
 
 logging.basicConfig(
@@ -62,6 +63,7 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
 photo_manager = PhotoManager(loop)
+statistic = Statistic()
 
 
 def get_value(data: Union[FSMContextProxy, dict],
@@ -1465,6 +1467,18 @@ def get_input_name_invite_text(language, name, invitation, example):
     return text
 
 
+async def get_statistic() -> dict:
+    users_count = await statistic.get_registered_users_count()
+    appeals_sent = await statistic.get_appeals_sent_count()
+    appeals_queue_size = await statistic.get_appeal_queue_size()
+
+    return {
+        'registered_users': str(users_count),
+        'appeals_sent': str(appeals_sent),
+        'appeal_queue_size': str(appeals_queue_size),
+    }
+
+
 async def show_personal_info(message: types.Message, state: FSMContext):
     logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
 
@@ -2245,12 +2259,30 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
     text = locales.text(language, 'greeting')
-
-    await bot.send_message(message.chat.id,
-                           text)
-
+    await bot.send_message(message.chat.id, text)
     await Form.initial.set()
     await invite_to_fill_credentials(message.chat.id, state)
+
+
+@dp.message_handler(commands=['stats'], state='*')
+async def cmd_statistic(message: types.Message, state: FSMContext):
+    """
+    Show bot's statistic
+    """
+    logger.info('Показ статистики - ' + str(message.from_user.username))
+    statistic = await get_statistic()
+    language = await get_ui_lang(state)
+    registered_users_count_text = locales.text(language, 'registered_users')
+    appeals_sent_text = locales.text(language, 'appeals_sent')
+    appeal_queue_size_text = locales.text(language, 'appeal_queue_size')
+
+    text = registered_users_count_text.format(statistic['registered_users']) +\
+        '\n' +\
+        appeals_sent_text.format(statistic['appeals_sent']) +\
+        '\n' +\
+        appeal_queue_size_text.format(statistic['appeal_queue_size'])
+
+    await bot.send_message(message.chat.id, text)
 
 
 @dp.message_handler(commands=['settings'], state='*')
@@ -3011,6 +3043,7 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.create_task(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
+    statistic.set_bot_id((await bot.get_me()).id)
 
 
 async def shutdown(dispatcher: Dispatcher):

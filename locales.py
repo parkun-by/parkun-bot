@@ -1,5 +1,4 @@
 import json
-import config
 import territory
 from typing import Optional
 
