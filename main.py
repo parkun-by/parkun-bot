@@ -1,44 +1,44 @@
 import asyncio
-import io
-import logging
-import json
 import copy
+import io
+import json
+import logging
+import re
 import sys
 from datetime import datetime
-from typing import Any, Optional, Tuple, Union, List, Callable
-from aiogram.dispatcher.storage import FSMContextProxy
-from aiogram.types.photo_size import PhotoSize
+from typing import Any, Callable, List, Optional, Tuple, Union
 
-from dateutil import tz
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.dispatcher.filters.state import State
+from aiogram.dispatcher.storage import FSMContextProxy
+from aiogram.types.photo_size import PhotoSize
 from aiogram.utils import executor
-from aiogram.utils.exceptions import BadRequest as AiogramBadRequest, \
-    MessageNotModified
+from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
+from aiogram.utils.exceptions import MessageNotModified
+from dateutil import tz
 from disposable_email_domains import blocklist
 
 import config
+import datetime_parser
+import territory
+from amqp_rabbit import Rabbit as AMQPRabbit
+from appeal_summary import AppealSummary
 from appeal_text import AppealText
+from bot_storage import BotStorage
+from broadcaster import Broadcaster
+from http_rabbit import Rabbit as HTTPRabbit
+from imap_email import Email
+from locales import Locales
 from locator import Locator
 from mail_verifier import MailVerifier
+from photo_manager import PhotoManager
 from photoitem import PhotoItem
 from states import Form
-from photo_manager import PhotoManager
-from locales import Locales
-from broadcaster import Broadcaster
-from validator import Validator
-from http_rabbit import Rabbit as HTTPRabbit
-from amqp_rabbit import Rabbit as AMQPRabbit
-from imap_email import Email
 from states_stack import StatesStack
-import datetime_parser
-from appeal_summary import AppealSummary
-import territory
-import re
 from statistic import Statistic
-
+from validator import Validator
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -63,7 +63,8 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
 photo_manager = PhotoManager(loop)
-statistic = Statistic()
+bot_storage = BotStorage(dp)
+statistic = Statistic(bot_storage)
 
 
 def get_value(data: Union[FSMContextProxy, dict],
@@ -731,7 +732,6 @@ def get_default_value(key):
         'violation_photo_ids': [],
         'violation_photo_files_paths': [],
         'violation_photos_amount': 0,
-        'banned_users': {},
         'violation_location': [],
         'states_stack': [],
         'violation_date': datetime_parser.get_current_datetime(),
@@ -1549,12 +1549,11 @@ async def get_language_text_and_keyboard(data):
 
 
 async def user_banned(*args):
-    bot_id = (await bot.get_me()).id
+    bans = await bot_storage.get_bans()
 
-    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
-        for name in args:
-            if name in get_value(data, 'banned_users'):
-                return True, get_value(data, 'banned_users')[name]
+    for name in args:
+        if name in bans:
+            return True, bans[name]
 
     return False, ''
 
@@ -2278,7 +2277,7 @@ async def cmd_statistic(message: types.Message, state: FSMContext):
 
     text = registered_users_count_text.format(statistic['registered_users']) +\
         '\n' +\
-        appeals_sent_text.format(statistic['appeals_sent']) +\
+        appeals_sent_text.format('~' + statistic['appeals_sent']) +\
         '\n' +\
         appeal_queue_size_text.format(statistic['appeal_queue_size'])
 
@@ -2297,12 +2296,8 @@ async def banlist_user_command(message: types.Message):
         return
 
     logger.info('Банлист - ' + str(message.from_user.username))
-
-    bot_id = (await bot.get_me()).id
-
-    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
-        text = str(get_value(data, 'banned_users'))
-        await bot.send_message(message.chat.id, text)
+    bans = await bot_storage.get_bans()
+    await bot.send_message(message.chat.id, str(bans))
 
 
 @dp.message_handler(commands=['unban'], state='*')
@@ -2320,12 +2315,11 @@ async def unban_user_command(message: types.Message, state: FSMContext):
         await bot.send_message(message.chat.id, text)
         return
 
-    bot_id = (await bot.get_me()).id
+    bans = await bot_storage.get_bans()
+    bans.pop(user, None)
+    await bot_storage.set_bans(bans)
 
-    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
-        data['banned_users'].pop(user, None)
-        text = user + ' ' + locales.text(language, 'unbanned_succesfully')
-
+    text = f'{user} {locales.text(language, "unbanned_succesfully")}'
     await bot.send_message(message.chat.id, text)
 
 
@@ -2344,15 +2338,11 @@ async def ban_user_command(message: types.Message, state: FSMContext):
         await bot.send_message(message.chat.id, text)
         return
 
-    bot_id = (await bot.get_me()).id
+    bans = await bot_storage.get_bans()
+    bans[user] = caption
+    await bot_storage.set_bans(bans)
 
-    async with dp.current_state(chat=bot_id, user=bot_id).proxy() as data:
-        banned_users = get_value(data, 'banned_users')
-        banned_users[user] = caption
-        data['banned_users'] = banned_users
-
-        text = user + ' ' + locales.text(language, 'banned_succesfully')
-
+    text = f'{user} {locales.text(language, "banned_succesfully")}'
     await bot.send_message(message.chat.id, text)
 
 
@@ -3043,7 +3033,7 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.create_task(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
-    statistic.set_bot_id((await bot.get_me()).id)
+    bot_storage.set_bot_id((await bot.get_me()).id)
 
 
 async def shutdown(dispatcher: Dispatcher):
