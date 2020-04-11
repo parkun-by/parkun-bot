@@ -31,6 +31,26 @@ class Statistic():
         return await self._bot_storage.get_appeals_count()
 
     async def get_registered_users_count(self) -> int:
+        return await self._get_cached_users_count() or \
+            await self._count_users()
+
+    async def _get_cached_users_count(self):
+        EXPIRATION_TIME = timedelta(hours=1)
+        current_time = datetime.now()
+
+        verified_users = self._storage.get('verified_users', None)
+
+        if not verified_users:
+            return None
+
+        timestamp = self._storage.get('verified_users_timestamp', current_time)
+
+        if current_time - timestamp < EXPIRATION_TIME:
+            return verified_users
+        else:
+            return None
+
+    async def _count_users(self):
         redis = await aioredis.create_redis(
             f'redis://{config.REDIS_HOST}:{config.REDIS_PORT}',
             password=config.REDIS_PASSWORD)
@@ -55,4 +75,3 @@ class Statistic():
         self._storage['verified_users'] = verified_users
         self._storage['verified_users_timestamp'] = datetime.now()
         return verified_users
-
