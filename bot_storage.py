@@ -21,9 +21,10 @@ class BotStorage():
     async def get_appeals_count(self) -> int:
         async with self._dp.current_state(chat=self._bot_id,
                                           user=self._bot_id).proxy() as data:
-            count = data.setdefault('appeals_sent', 0)
+            count = data.get('appeals_sent', None)
 
             if count is None:
+                data['appeals_sent'] = 0
                 return 0
 
             return count
