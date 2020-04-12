@@ -28,6 +28,12 @@ def get_current_datetime(shift_days=0) -> str:
     return current_datetime.isoformat()
 
 
+def get_today(shift_days=0) -> str:
+    tz_minsk = pytz.timezone('Europe/Minsk')
+    current_datetime = datetime.now(tz_minsk) + timedelta(days=shift_days)
+    return current_datetime.date().isoformat()
+
+
 def get_violation_datetime(saved_datetime: str,
                            entered_datetime: str) -> Optional[str]:
     year = 0

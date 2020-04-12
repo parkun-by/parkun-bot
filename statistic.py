@@ -30,6 +30,12 @@ class Statistic():
     async def get_appeals_sent_count(self) -> int:
         return await self._bot_storage.get_appeals_count()
 
+    async def get_appeals_sent_today_count(self) -> int:
+        return await self._bot_storage.get_appeals_today_count()
+
+    async def get_appeals_sent_yesterday_count(self) -> int:
+        return await self._bot_storage.get_appeals_yesterday_count()
+
     async def get_registered_users_count(self) -> int:
         return await self._get_cached_users_count() or \
             await self._count_users()
@@ -74,3 +80,6 @@ class Statistic():
         self._storage['verified_users'] = verified_users
         self._storage['verified_users_timestamp'] = datetime.now()
         return verified_users
+
+    async def count_sent_appeal(self, amount=1):
+        await self._bot_storage.update_appeals_count(amount)

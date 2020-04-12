@@ -347,7 +347,7 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                            parse_mode='HTML',
                            reply_to_message_id=appeal_id)
 
-    await bot_storage.count_sent_appeal()
+    await statistic.count_sent_appeal()
 
     async with state.proxy() as data:
         appeal = get_appeal_from_user_queue(data, appeal_id)
@@ -1472,11 +1472,15 @@ def get_input_name_invite_text(language, name, invitation, example):
 async def get_statistic() -> dict:
     users_count = await statistic.get_registered_users_count()
     appeals_sent = await statistic.get_appeals_sent_count()
+    appeals_sent_today = await statistic.get_appeals_sent_today_count()
+    appeals_sent_yesterday = await statistic.get_appeals_sent_yesterday_count()
     appeals_queue_size = await statistic.get_appeal_queue_size()
 
     return {
         'registered_users': str(users_count),
         'appeals_sent': str(appeals_sent),
+        'appeals_sent_today': str(appeals_sent_today),
+        'appeals_sent_yesterday': str(appeals_sent_yesterday),
         'appeal_queue_size': str(appeals_queue_size),
     }
 
@@ -2275,11 +2279,21 @@ async def cmd_statistic(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
     registered_users_count_text = locales.text(language, 'registered_users')
     appeals_sent_text = locales.text(language, 'appeals_sent')
+    appeals_sent_today_text = locales.text(language, 'appeals_sent_today')
+
+    appeals_sent_yesterday_text = locales.text(language,
+                                               'appeals_sent_yesterday')
+
     appeal_queue_size_text = locales.text(language, 'appeal_queue_size')
 
     text = registered_users_count_text.format(statistic['registered_users']) +\
         '\n' +\
         appeals_sent_text.format('~' + statistic['appeals_sent']) +\
+        '\n' +\
+        appeals_sent_today_text.format(statistic['appeals_sent_today']) +\
+        '\n' +\
+        appeals_sent_yesterday_text.format(
+            statistic['appeals_sent_yesterday']) +\
         '\n' +\
         appeal_queue_size_text.format(statistic['appeal_queue_size'])
 
