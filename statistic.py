@@ -57,19 +57,18 @@ class Statistic():
 
         keys = []
         cur = b'0'  # set initial cursor to 0
+        verified_users = 0
 
         while cur:
             cur, keys = await redis.scan(cur, match='fsm:*:*:data')
 
-        verified_users = 0
+            for key in keys:
+                val = await redis.get(key)
+                user_data: dict = json.loads(val)
+                user_verified = user_data.get('verified', False)
 
-        for key in keys:
-            val = await redis.get(key)
-            user_data: dict = json.loads(val)
-            user_verified = user_data.get('verified', False)
-
-            if user_verified:
-                verified_users += 1
+                if user_verified:
+                    verified_users += 1
 
         redis.close()
         self._storage['verified_users'] = verified_users
