@@ -1267,6 +1267,21 @@ def prepare_registration_number(number: str):
     return up_number
 
 
+def get_photo_step_keyboard(language: str) -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    violation_info_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'violation_info_button'),
+        callback_data='/enter_violation_info')
+
+    cancel = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(violation_info_button, cancel)
+    return keyboard
+
+
 async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -2775,18 +2790,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
             '\n' +\
             '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
 
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    enter_violation_info = types.InlineKeyboardButton(
-        text=locales.text(language, 'violation_info_button'),
-        callback_data='/enter_violation_info')
-
-    cancel = types.InlineKeyboardButton(
-        text=locales.text(language, 'cancel_button'),
-        callback_data='/cancel')
-
-    keyboard.add(enter_violation_info, cancel)
+    keyboard = get_photo_step_keyboard(language)
 
     await message.reply(text,
                         reply_markup=keyboard,
@@ -2979,20 +2983,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                                              state: FSMContext):
     language = await get_ui_lang(state)
     text = locales.text(language, 'photo_or_info')
-
-    # настроим клавиатуру
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    enter_violation_info = types.InlineKeyboardButton(
-        text=locales.text(language, 'violation_info_button'),
-        callback_data='/enter_violation_info')
-
-    cancel = types.InlineKeyboardButton(
-        text=locales.text(language, 'cancel_button'),
-        callback_data='/cancel')
-
-    keyboard.add(enter_violation_info, cancel)
-
+    keyboard = get_photo_step_keyboard(language)
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 
