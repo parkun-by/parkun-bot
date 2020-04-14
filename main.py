@@ -300,13 +300,13 @@ async def send_violation_to_channel(language: str,
                                     date_time: str,
                                     location: str,
                                     plate: str,
-                                    photos_id: list) -> None:
+                                    photos_id: list) -> str:
     caption = get_violation_caption(language, date_time, location, plate)
 
     # в канал
-    await send_photos_group_with_caption(photos_id,
-                                         config.CHANNEL,
-                                         caption)
+    return await send_photos_group_with_caption(photos_id,
+                                                config.CHANNEL,
+                                                caption)
 
 
 async def compose_appeal(data: FSMContextProxy,
@@ -342,10 +342,10 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
     text = locales.text(language, 'successful_sending')
-    await bot.send_message(user_id,
-                           text,
-                           parse_mode='HTML',
-                           reply_to_message_id=appeal_id)
+    ok_post = await bot.send_message(user_id,
+                                     text,
+                                     parse_mode='HTML',
+                                     reply_to_message_id=appeal_id)
 
     await statistic.count_sent_appeal()
 
@@ -353,21 +353,50 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
         appeal = get_appeal_from_user_queue(data, appeal_id)
 
         if appeal:
-            await postsending_operations(language, user_id, appeal)
+            post_url = await postsending_operations(language, user_id, appeal)
+
+            await add_channel_post_to_success_message(language,
+                                                      user_id,
+                                                      ok_post.message_id,
+                                                      post_url)
 
         await delete_appeal_from_user_queue(data, user_id, appeal_id)
 
 
+async def add_channel_post_to_success_message(language: str,
+                                              user_id: int,
+                                              message_id: int,
+                                              url: str):
+    text0 = locales.text(language, 'successful_sending') + '\n'
+    channel_name = config.CHANNEL.replace('@', 'https://t.me/')
+    text1 = locales.text(language, 'police_response').format(url, channel_name)
+
+    keyboard = types.InlineKeyboardMarkup()
+
+    police_response_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'police_response_button'),
+        callback_data='/police_response'+url)
+
+    keyboard.add(police_response_button)
+
+    await bot.edit_message_text(text0 + text1,
+                                user_id,
+                                message_id,
+                                reply_markup=keyboard,
+                                parse_mode='HTML')
+
+
 async def postsending_operations(language: str,
                                  user_id: int,
-                                 appeal: dict) -> None:
+                                 appeal: dict) -> str:
     await send_appeal_textfile_to_user(appeal['text'], language, user_id)
 
-    await send_violation_to_channel(language,
-                                    appeal['violation_datetime'],
-                                    appeal['violation_address'],
-                                    appeal['violation_vehicle_number'],
-                                    appeal['violation_photo_ids'])
+    post_url = await send_violation_to_channel(
+        language,
+        appeal['violation_datetime'],
+        appeal['violation_address'],
+        appeal['violation_vehicle_number'],
+        appeal['violation_photo_ids'])
 
     logger.info(f'Отправили в канал - {str(user_id)}')
 
@@ -379,6 +408,8 @@ async def postsending_operations(language: str,
                             appeal['violation_address'])
 
     logger.info(f'Отправили в остальное - {str(user_id)}')
+
+    return post_url
 
 
 async def ask_to_enter_captcha(user_id: int,
@@ -949,7 +980,7 @@ async def verified_email(state):
         return get_value(data, 'verified')
 
 
-async def get_cancel_keyboard(data):
+async def get_cancel_keyboard(data: FSMContextProxy):
     language = await get_ui_lang(data=data)
 
     # настроим клавиатуру
@@ -1237,7 +1268,7 @@ def get_violation_datetime_keyboard(
 
 async def send_photos_group_with_caption(photos_id: list,
                                          chat_name: Union[str, int],
-                                         caption=''):
+                                         caption='') -> str:
     photos = []
 
     for count, photo_id in enumerate(photos_id):
@@ -1250,7 +1281,13 @@ async def send_photos_group_with_caption(photos_id: list,
         photo = PhotoItem('photo', photo_id, text)
         photos.append(photo)
 
-    await bot.send_media_group(chat_id=chat_name, media=photos)
+    message = await bot.send_media_group(chat_id=chat_name, media=photos)
+    return get_channel_post_url_by_id(message[0].message_id)
+
+
+def get_channel_post_url_by_id(post_id: int) -> str:
+    channel = config.CHANNEL.replace('@', '')
+    return f't.me/{channel}/{str(post_id)}'
 
 
 def prepare_registration_number(number: str):
@@ -1498,6 +1535,53 @@ async def get_statistic() -> dict:
         'appeals_sent_yesterday': str(appeals_sent_yesterday),
         'appeal_queue_size': str(appeals_queue_size),
     }
+
+
+def post_from_channel(message: types.Message) -> bool:
+    logger.info('Фотка из канала - ' + str(message.from_user.username))
+
+    if not message.forward_from_chat:
+        return False
+
+    return message.forward_from_chat.mention == config.CHANNEL
+
+
+def message_is_violation_post(message: types.Message) -> bool:
+    samples = []
+
+    for language in config.LANGUAGES:
+        samples.append(locales.text(language, 'violation_datetime'))
+
+    try:
+        if message.html_text:
+            for sample in samples:
+                if sample in message.html_text:
+                    return True
+    except TypeError:
+        pass
+
+    return False
+
+
+async def police_response_sending(message: types.Message, state: FSMContext):
+    if not message_is_violation_post(message):
+        return
+
+    url = get_channel_post_url_by_id(message.forward_from_message_id)
+    await ask_for_police_response(state, message.from_user.id, url)
+
+
+async def ask_for_police_response(state: FSMContext,
+                                  user_id: int,
+                                  violation_post_url: str):
+    async with state.proxy() as data:
+        data['responsed_post_url'] = violation_post_url
+        language = await get_ui_lang(data=data)
+        keyboard = await get_cancel_keyboard(data)
+
+    text = locales.text(language, 'send_police_response')
+    await bot.send_message(user_id, text, reply_markup=keyboard)
+    await Form.police_response.set()
 
 
 async def show_personal_info(message: types.Message, state: FSMContext):
@@ -1815,6 +1899,20 @@ async def change_language_click(call, state: FSMContext):
         pass
 
 
+@dp.callback_query_handler(lambda call: '/police_response' in call.data,
+                           state=Form.operational_mode)
+async def police_response_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ответГАИ - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    violation_post_url: str = call.data.replace('/police_response', '')
+
+    await ask_for_police_response(state,
+                                  call.message.chat.id,
+                                  violation_post_url)
+
+
 @dp.callback_query_handler(lambda call: call.data == '/change_letter_language',
                            state='*')
 async def change_language_click(call, state: FSMContext):
@@ -2111,7 +2209,8 @@ async def cancel_violation_input(call, state: FSMContext):
                            state=[Form.feedback,
                                   Form.feedback_answering,
                                   Form.caption,
-                                  Form.email_password])
+                                  Form.email_password,
+                                  Form.police_response])
 async def cancel_input(call, state: FSMContext):
     logger.info('Отмена, возврат в предыдущий режим - ' +
                 str(call.from_user.username))
@@ -2750,16 +2849,65 @@ async def catch_sender_zipcode(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
+                    state=Form.police_response)
+async def police_response_photo(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем посылку фотки ответа ГАИ - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        response_violation_post_url = get_value(data, 'responsed_post_url')
+        language = await get_ui_lang(data=data)
+
+    caption = f'{config.RESPONSE_HASHTAG}\n{response_violation_post_url}'
+    photo_id = message.photo[-1]['file_id']
+
+    post_url = await send_photos_group_with_caption([photo_id],
+                                                    config.CHANNEL,
+                                                    caption)
+
+    text = locales.text(language, 'response_sended').format(post_url)
+    await bot.send_message(message.chat.id, text, parse_mode='HTML')
+    await Form.operational_mode.set()
+
+
+@dp.message_handler(content_types=types.ContentTypes.TEXT,
+                    state=Form.police_response)
+async def police_response_photo(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем посылку текста ответа ГАИ - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        response_violation_post_url = get_value(data, 'responsed_post_url')
+        language = await get_ui_lang(data=data)
+
+    caption = f'{config.RESPONSE_HASHTAG}\n{response_violation_post_url}'
+    response = f'<pre>{message.text}</pre>'
+    text = caption + '\n\n' + response
+    post = await bot.send_message(config.CHANNEL, text, parse_mode='HTML')
+
+    post_url = get_channel_post_url_by_id(post.message_id)
+    text = locales.text(language, 'response_sended').format(post_url)
+    await bot.send_message(message.chat.id, text, parse_mode='HTML')
+    await Form.operational_mode.set()
+
+
+@dp.message_handler(content_types=types.ContentTypes.PHOTO,
                     state=Form.operational_mode)
 async def initial_violation_photo(message: types.Message, state: FSMContext):
-    await photo_manager.clear_storage(message.chat.id)
-    await process_violation_photo(message, state)
+    logger.info('Обрабатываем посылку первой фотки - ' +
+                str(message.from_user.username))
+
+    if post_from_channel(message):
+        await police_response_sending(message, state)
+    else:
+        await photo_manager.clear_storage(message.chat.id)
+        await process_violation_photo(message, state)
 
 
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
                     state=Form.violation_photo)
 async def process_violation_photo(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем посылку фотки нарушения - ' +
+    logger.info('Обрабатываем посылку еще фотки нарушения - ' +
                 str(message.from_user.username))
 
     language = await get_ui_lang(state)
@@ -2975,6 +3123,19 @@ async def reject_wrong_input(message: types.Message, state: FSMContext):
     text = locales.text(language, 'great_expectations')
 
     await bot.send_message(message.chat.id, text)
+
+
+@dp.message_handler(content_types=types.ContentTypes.ANY,
+                    state=Form.police_response)
+async def reject_wrong_police_response_input(message: types.Message,
+                                             state: FSMContext):
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'photo_or_text')
+
+    async with state.proxy() as data:
+        keyboard = await get_cancel_keyboard(data)
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY,
