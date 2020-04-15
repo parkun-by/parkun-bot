@@ -86,6 +86,8 @@ BASE_YANDEX_MAPS_URL = 'http://localhost:18080/yandex_maps/?'
 ADDRESS_FAIL = 'no_address'
 
 # to post into channel bot needs to be admin there
+CHANNEL = '@channel_name'
+TRASH_CHANNEL = '@channel_name'
 RESPONSE_HASHTAG = '#ответГАИ'
 
 # email verifier url
