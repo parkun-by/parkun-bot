@@ -4,6 +4,8 @@ import config
 import json
 from exceptions import *
 
+PERSISTENT = 2
+
 
 class Rabbit:
     async def _send(self,
@@ -15,7 +17,7 @@ class Rabbit:
 
         data = {
             'properties': {},
-            'persistent': True,
+            'delivery_mode': PERSISTENT,
             'routing_key': routing_key,
             'payload': json.dumps(body),
             'payload_encoding': 'string'
