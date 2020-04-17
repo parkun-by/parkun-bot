@@ -345,7 +345,8 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
     ok_post = await bot.send_message(user_id,
                                      text,
                                      parse_mode='HTML',
-                                     reply_to_message_id=appeal_id)
+                                     reply_to_message_id=appeal_id,
+                                     disable_notification=True)
 
     await statistic.count_sent_appeal()
 
@@ -2912,7 +2913,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
 
-    # проверим не забанен ли пользователь
+    # check if user banned
     banned, reason = await user_banned(message.from_user.username,
                                        str(message.chat.id))
 
