@@ -14,6 +14,7 @@ LANGUAGES = [BY, RU]
 PREVIOUS_ADDRESS_PREFIX = '/saved_'
 PREVIOUS_ADDRESS_REGEX = r'\/saved_\d+'
 APPEAL_STORAGE_LIMIT = 3
+TEMP_FILES_PATH = '/tmp/temp_files_parkun'
 
 # regionalization
 MINSK = 'minsk'

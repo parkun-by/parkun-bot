@@ -8,6 +8,7 @@ import secrets
 from typing import Union
 from telegraph import Telegraph
 from asyncio.events import AbstractEventLoop
+from config import TEMP_FILES_PATH
 
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ CURRENT = "current"
 
 class PhotoManager:
     def __init__(self, loop: AbstractEventLoop):
-        self.files_dir = os.path.join('/tmp', 'temp_files_parkun')
+        self.files_dir = TEMP_FILES_PATH
         self.storage = {}
         self.telegraph = Telegraph(loop)
 
