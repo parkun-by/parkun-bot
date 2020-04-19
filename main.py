@@ -27,7 +27,6 @@ from amqp_rabbit import Rabbit as AMQPRabbit
 from appeal_summary import AppealSummary
 from appeal_text import AppealText
 from bot_storage import BotStorage
-from broadcaster import Broadcaster
 from http_rabbit import Rabbit as HTTPRabbit
 from imap_email import Email
 from locales import Locales
@@ -81,9 +80,6 @@ def get_value(data: Union[FSMContextProxy, dict],
             return placeholder
 
         return data[key]
-
-
-broadcaster = Broadcaster(get_value, locales)
 
 
 def get_sender_address(data):
