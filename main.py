@@ -386,6 +386,8 @@ async def share_violation_post(language: str, appeal: dict):
         'caption': caption,
         'photo_paths': appeal['violation_photo_files_paths'],
         'coordinates': appeal['violation_location'],
+        'user_id': appeal['user_id'],
+        'appeal_id': appeal['appeal_id'],
     }
 
     await http_rabbit.send_sharing(data)
