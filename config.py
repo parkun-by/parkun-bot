@@ -96,12 +96,6 @@ MAIL_VERIFIER_URL = 'http://localhost:18080/validate'  # response 111
 VERIFYING_FAIL = '42'
 
 # Twitter twitter unnecessary for general development
-CONSUMER_KEY = 'consumer_key'
-CONSUMER_SECRET = 'consumer_secret'
-ACCESS_TOKEN = 'access_token'
-ACCESS_TOKEN_SECRET = 'access_token_secret'
-MAX_TWI_CHARACTERS = 280
-MAX_TWI_PHOTOS = 4
 TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
 
 # RabbitMQ
