@@ -136,7 +136,7 @@
             "vhost": "/",
             "destination": "broadcast",
             "destination_type": "queue",
-            "routing_key": "*",
+            "routing_key": "violation",
             "arguments": {}
         }
     ],

@@ -165,7 +165,8 @@ class PhotoManager:
 
     async def clear_storage(self,
                             user_id: int,
-                            appeal_id: Union[int, str] = CURRENT) -> None:
+                            appeal_id: Union[int, str] = CURRENT,
+                            with_files=True) -> None:
         user_stash: dict = self.storage.get(user_id, {})
         appeal_stash: dict = user_stash.get(appeal_id, {})
 
@@ -178,8 +179,9 @@ class PhotoManager:
         if not user_stash:
             self.storage.pop(user_id, None)
 
-        shutil.rmtree(self._get_user_dir(user_id, appeal_id),
-                      ignore_errors=True)
+        if with_files:
+            shutil.rmtree(self._get_user_dir(user_id, appeal_id),
+                          ignore_errors=True)
 
     async def _upload_photo(self, file_path: str, temp_url: str) -> str:
         file_id = await self._upload_file(file_path)

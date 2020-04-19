@@ -361,7 +361,10 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
                                                       ok_post.message_id,
                                                       post_url)
 
-        await delete_appeal_from_user_queue(data, user_id, appeal_id)
+        await delete_appeal_from_user_queue(data,
+                                            user_id,
+                                            appeal_id,
+                                            with_files=False)
 
 
 async def add_channel_post_to_success_message(language: str,
@@ -809,13 +812,14 @@ def get_appeal_from_user_queue(data: FSMContextProxy,
 
 async def delete_appeal_from_user_queue(data: FSMContextProxy,
                                         user_id: int,
-                                        appeal_id: int) -> None:
+                                        appeal_id: int,
+                                        with_files=True) -> None:
     appeals: dict = get_value(data, 'appeals')
     appeals.pop(str(appeal_id), 'default_value')
     data['appeals'] = appeals
 
-    # также удалим временные файлы картинок нарушений
-    await photo_manager.clear_storage(user_id, appeal_id)
+    # clear photos storage except files on disk
+    await photo_manager.clear_storage(user_id, appeal_id, with_files)
 
 
 def delete_old_appeals(appeals: dict,
