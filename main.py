@@ -338,7 +338,7 @@ async def compose_appeal(data: FSMContextProxy,
 
 
 async def send_success_sending(user_id: int, appeal_id: int) -> None:
-    logger.info(f'Успешно отправлено - {str(user_id)}')
+    logger.info(f'Успешно отправлено - {str(user_id)}:{str(appeal_id)}')
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
     text = locales.text(language, 'successful_sending')
@@ -352,19 +352,53 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
 
     async with state.proxy() as data:
         appeal = get_appeal_from_user_queue(data, appeal_id)
+        delete_files = True
 
         if appeal:
-            post_url = await postsending_operations(language, user_id, appeal)
+            await send_appeal_textfile_to_user(appeal['text'],
+                                               language,
+                                               user_id)
+
+            post_url = await send_violation_to_channel(
+                language,
+                appeal['violation_datetime'],
+                appeal['violation_address'],
+                appeal['violation_vehicle_number'],
+                appeal['violation_photo_ids'])
+
+            logger.info(f'Отправили в канал - {str(user_id)}:{str(appeal_id)}')
 
             await add_channel_post_to_success_message(language,
                                                       user_id,
                                                       ok_post.message_id,
                                                       post_url)
 
+            delete_files = await share_violation_post(language, appeal)
+
         await delete_appeal_from_user_queue(data,
                                             user_id,
                                             appeal_id,
-                                            with_files=False)
+                                            delete_files)
+
+
+async def share_violation_post(language: str, appeal: dict):
+    caption = get_violation_caption(language,
+                                    appeal['violation_datetime'],
+                                    appeal['violation_address'],
+                                    appeal['violation_vehicle_number'])
+    data = {
+        'caption': caption,
+        'photo_paths': appeal['violation_photo_files_paths'],
+        'coordinates': appeal['violation_location'],
+    }
+
+    await http_rabbit.send_sharing(data)
+
+    logger.info(f'Отправили шариться по сетям - '
+                f'{str(appeal["user_id"])}:{str(appeal["appeal_id"])}')
+
+    # files will be deleted during sharing in broadcast service
+    return False
 
 
 async def add_channel_post_to_success_message(language: str,
@@ -388,32 +422,6 @@ async def add_channel_post_to_success_message(language: str,
                                 message_id,
                                 reply_markup=keyboard,
                                 parse_mode='HTML')
-
-
-async def postsending_operations(language: str,
-                                 user_id: int,
-                                 appeal: dict) -> str:
-    await send_appeal_textfile_to_user(appeal['text'], language, user_id)
-
-    post_url = await send_violation_to_channel(
-        language,
-        appeal['violation_datetime'],
-        appeal['violation_address'],
-        appeal['violation_vehicle_number'],
-        appeal['violation_photo_ids'])
-
-    logger.info(f'Отправили в канал - {str(user_id)}')
-
-    await broadcaster.share(language,
-                            appeal['violation_photo_files_paths'],
-                            appeal['violation_location'],
-                            appeal['violation_datetime'],
-                            appeal['violation_vehicle_number'],
-                            appeal['violation_address'])
-
-    logger.info(f'Отправили в остальное - {str(user_id)}')
-
-    return post_url
 
 
 async def ask_to_enter_captcha(user_id: int,
