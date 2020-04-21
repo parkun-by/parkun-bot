@@ -90,6 +90,7 @@ ADDRESS_FAIL = 'no_address'
 CHANNEL = '@channel_name'
 TRASH_CHANNEL = '@channel_name'
 RESPONSE_HASHTAG = '#ответГАИ'
+RESPONSE_EXAMPLE = 'https://t.me/parkun/24390'
 
 # email verifier url
 MAIL_VERIFIER_URL = 'http://localhost:18080/validate'  # response 111

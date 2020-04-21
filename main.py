@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 from aiogram import Bot, types
@@ -1595,6 +1595,23 @@ async def ask_for_police_response(state: FSMContext,
     await Form.police_response.set()
 
 
+def too_early_police_button(message_date: datetime) -> bool:
+    MINIMUM_AGE = timedelta(days=2)
+    now = datetime.now()
+
+    return now - message_date < MINIMUM_AGE
+
+
+async def tell_that_too_early(user_id: int, language: str):
+    text = locales.text(language, "too_early_for_police_responce").format(
+        config.RESPONSE_EXAMPLE
+    )
+
+    await bot.send_message(user_id,
+                           text,
+                           parse_mode='HTML')
+
+
 async def show_personal_info(message: types.Message, state: FSMContext):
     logger.info('Показ инфы отправителя - ' + str(message.from_user.username))
 
@@ -1917,6 +1934,12 @@ async def police_response_click(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
+
+    if too_early_police_button(call.message.date):
+        language = await get_ui_lang(state=state)
+        await tell_that_too_early(call.message.chat.id, language)
+        return
+
     violation_post_url: str = call.data.replace('/police_response', '')
 
     await ask_for_police_response(state,
