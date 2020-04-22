@@ -1585,6 +1585,8 @@ async def police_response_sending(message: types.Message, state: FSMContext):
 async def ask_for_police_response(state: FSMContext,
                                   user_id: int,
                                   violation_post_url: str):
+    logger.info(f'Просим прислать ответГАИ - {str(user_id)}')
+
     async with state.proxy() as data:
         data['responsed_post_url'] = violation_post_url
         language = await get_ui_lang(data=data)
@@ -1936,6 +1938,9 @@ async def police_response_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     if too_early_police_button(call.message.date):
+        logger.info('Слишком рано нажата кнопка ответГАИ - ' +
+                    str(call.from_user.username))
+
         language = await get_ui_lang(state=state)
         await tell_that_too_early(call.message.chat.id, language)
         return
