@@ -1570,8 +1570,6 @@ async def get_statistic() -> dict:
 
 
 def post_from_channel(message: types.Message) -> bool:
-    logger.info('Фотка из канала - ' + str(message.from_user.username))
-
     if not message.forward_from_chat:
         return False
 
@@ -2967,6 +2965,7 @@ async def initial_violation_photo(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     if post_from_channel(message):
+        logger.info('Фотка из канала - ' + str(message.from_user.username))
         await police_response_sending(message, state)
     else:
         await photo_manager.clear_storage(message.chat.id)
