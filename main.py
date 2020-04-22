@@ -708,21 +708,16 @@ async def get_prepared_photos(data: FSMContextProxy,
         return False
 
     for image_url in photos_data['urls']:
-        image_url = remove_http(image_url)
         data['violation_attachments'].append(image_url)
 
     for image_path in photos_data['file_paths']:
         data['violation_photo_files_paths'].append(image_path)
 
-    page_url = remove_http(photos_data['page_url'])
+    page_url = photos_data['page_url']
     data['violation_photo_page'] = page_url
 
     logger.info('Вгрузили фоточки - ' + str(user_id))
     return True
-
-
-def remove_http(url: str) -> str:
-    return url.replace('https://', '').replace('http://', '')
 
 
 def delete_prepared_violation(data: FSMContextProxy) -> None:
