@@ -306,11 +306,11 @@ async def send_violation_to_channel(language: str,
 
 
 async def compose_appeal(data: FSMContextProxy,
-                         chat_id: int,
+                         user_id: int,
                          appeal_id: int) -> dict:
     appeal = {
         'type': config.APPEAL,
-        'text': get_appeal_text(data),
+        'text': get_appeal_text(data, user_id, appeal_id),
         'police_department': get_value(data, 'recipient'),
         'sender_first_name': get_value(data, 'sender_first_name'),
         'sender_last_name': get_value(data, 'sender_last_name'),
@@ -323,7 +323,7 @@ async def compose_appeal(data: FSMContextProxy,
         'sender_zipcode': get_value(data, 'sender_zipcode'),
         'sender_email': get_appeal_email(data),
         'sender_email_password': get_value(data, 'sender_email_password'),
-        'user_id': chat_id,
+        'user_id': user_id,
         'appeal_id': appeal_id,
     }
 
@@ -772,7 +772,7 @@ def get_default_value(key):
         'violation_photos_amount': 0,
         'violation_location': [],
         'states_stack': [],
-        'violation_date': datetime_parser.get_current_datetime(),
+        'violation_date': datetime_parser.get_current_datetime_str(),
         'previous_violation_addresses': [],
         'appeal_id': 0,
     }
@@ -889,7 +889,9 @@ def get_photos_links(data):
     return text.strip()
 
 
-def get_appeal_text(data: FSMContextProxy) -> str:
+def get_appeal_text(data: FSMContextProxy,
+                    user_id: int,
+                    appeal_id: int) -> str:
     violation_data = {
         'photos': get_photos_links(data),
         'photos_post_url': get_value(data, 'violation_photo_page'),
@@ -900,6 +902,9 @@ def get_appeal_text(data: FSMContextProxy) -> str:
         'sender_name': get_sender_full_name(data),
         'sender_email': get_value(data, 'sender_email'),
         'sender_phone': get_value(data, 'sender_phone'),
+        'appeal_number': f'{str(user_id)}-{str(appeal_id)}',
+        'appeal_datetime': datetime_parser.get_current_datetime().strftime(
+            "%d-%m-%Y %H:%M"),
     }
 
     return AppealText.get(get_value(data, 'letter_lang'), violation_data)
@@ -1233,7 +1238,7 @@ async def save_violation_address(address: str,
 async def ask_for_violation_time(chat_id, language):
     text, keyboard = compose_violation_time_asking(
         language,
-        datetime_parser.get_current_datetime())
+        datetime_parser.get_current_datetime_str())
 
     await bot.send_message(chat_id,
                            text,
@@ -1445,7 +1450,7 @@ async def react_to_time_button(user_id: int,
                                day_to_shift: int = 0) -> None:
     async with state.proxy() as data:
         data['violation_date'] = violation_date = \
-            datetime_parser.get_current_datetime(day_to_shift)
+            datetime_parser.get_current_datetime_str(day_to_shift)
 
         language = await get_ui_lang(data=data)
 

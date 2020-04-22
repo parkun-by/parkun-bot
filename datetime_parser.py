@@ -22,10 +22,14 @@ FULL_DATETIME = r"^\s*(?:" + \
 datetime_regexp = re.compile(FULL_DATETIME)
 
 
-def get_current_datetime(shift_days=0) -> str:
+def get_current_datetime(shift_days=0) -> datetime:
     tz_minsk = pytz.timezone('Europe/Minsk')
     current_datetime = datetime.now(tz_minsk) + timedelta(days=shift_days)
-    return current_datetime.isoformat()
+    return current_datetime
+
+
+def get_current_datetime_str(shift_days=0) -> str:
+    return get_current_datetime(shift_days).isoformat()
 
 
 def get_today(shift_days=0) -> str:
@@ -59,7 +63,7 @@ def get_violation_datetime(saved_datetime: str,
         year = int(splitted[3])
     except Exception:
         day, month, year = parse_datetime(saved_datetime or
-                                          get_current_datetime())
+                                          get_current_datetime_str())
 
     day = str(day).rjust(2, '0')
     month = str(month).rjust(2, '0')
