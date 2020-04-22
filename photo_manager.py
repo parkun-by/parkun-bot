@@ -47,7 +47,7 @@ class PhotoManager:
         tasks: list = appeal_stash.setdefault('photo_tasks', [])
 
         storing_task = asyncio.create_task(
-            self._store_photo(user_id, temp_url)
+            self.store_photo(user_id, temp_url)
         )
 
         tasks.append(storing_task)
@@ -55,11 +55,14 @@ class PhotoManager:
         user_stash[CURRENT] = appeal_stash
         self.storage[user_id] = user_stash
 
-    async def _store_photo(self, user_id: int, temp_url: str):
+    async def store_photo(self,
+                          user_id: int,
+                          temp_url: str,
+                          stash_id: Union[int, str] = CURRENT) -> str:
         user_stash: dict = self.storage.get(user_id, {})
-        appeal_stash: dict = user_stash.get(CURRENT, {})
+        appeal_stash: dict = user_stash.get(stash_id, {})
 
-        folder_path = self._get_user_dir(user_id, CURRENT)
+        folder_path = self._get_user_dir(user_id, stash_id)
         file_name = temp_url.split('/')[-1]
         file_path = os.path.join(folder_path, file_name)
 
@@ -73,8 +76,9 @@ class PhotoManager:
 
         appeal_stash['file_paths'] = file_pathes
         appeal_stash['urls'] = permanent_urls
-        user_stash[CURRENT] = appeal_stash
+        user_stash[stash_id] = appeal_stash
         self.storage[user_id] = user_stash
+        return file_path
 
     def stash_page(self, user_id: int, title: str):
         user_stash: dict = self.storage.get(user_id, {})

@@ -399,6 +399,27 @@ async def share_violation_post(language: str, appeal: dict):
     return False
 
 
+async def share_response_post(violation_url: str,
+                              photo_path: str,
+                              user_id: int,
+                              post_id: int):
+    caption = config.RESPONSE_HASHTAG + '\n' + violation_url
+    data = {
+        'caption': caption,
+        'photo_paths': [photo_path],
+        'user_id': user_id,
+        'appeal_id': post_id,
+    }
+
+    await http_rabbit.send_sharing(data)
+
+    logger.info(f'Отправили шариться по сетям ответ ГАИ - '
+                f'{str(user_id)}:{str(post_id)}')
+
+    # files will be deleted during sharing in broadcast service
+    return False
+
+
 async def add_channel_post_to_success_message(language: str,
                                               user_id: int,
                                               message_id: int,
@@ -2903,6 +2924,15 @@ async def police_response_photo(message: types.Message, state: FSMContext):
     post_url = await send_photos_group_with_caption([photo_id],
                                                     config.CHANNEL,
                                                     caption)
+    photo_url = await get_temp_photo_url(photo_id)
+
+    photo_path = await photo_manager.store_photo(message.chat.id,
+                                                 photo_url,
+                                                 message.message_id)
+    await share_response_post(response_violation_post_url,
+                              photo_path,
+                              message.chat.id,
+                              message.message_id)
 
     text = locales.text(language, 'response_sended').format(post_url)
     await bot.send_message(message.chat.id, text, parse_mode='HTML')
