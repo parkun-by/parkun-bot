@@ -400,15 +400,18 @@ async def share_violation_post(language: str, appeal: dict):
 
 
 async def share_response_post(violation_url: str,
-                              photo_path: str,
+                              photo_path: Optional[str],
                               user_id: int,
-                              post_id: int):
-    caption = config.RESPONSE_HASHTAG + '\n' + violation_url
+                              post_id: int,
+                              text: str = ''):
+    title = config.RESPONSE_HASHTAG + '\n' + violation_url
+
     data = {
-        'caption': caption,
-        'photo_paths': [photo_path],
+        'title': title,
+        'photo_paths': [photo_path] if photo_path else [],
         'user_id': user_id,
         'appeal_id': post_id,
+        'text': text,
     }
 
     await http_rabbit.send_sharing(data)
@@ -2922,6 +2925,7 @@ async def police_response_photo(message: types.Message, state: FSMContext):
     post_url = await send_photos_group_with_caption([photo_id],
                                                     config.CHANNEL,
                                                     caption)
+
     photo_url = await get_temp_photo_url(photo_id)
 
     photo_path = await photo_manager.store_photo(message.chat.id,
@@ -2939,7 +2943,7 @@ async def police_response_photo(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentTypes.TEXT,
                     state=Form.police_response)
-async def police_response_photo(message: types.Message, state: FSMContext):
+async def police_response_text(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку текста ответа ГАИ - ' +
                 str(message.from_user.username))
 
@@ -2951,6 +2955,12 @@ async def police_response_photo(message: types.Message, state: FSMContext):
     response = f'<pre>{message.text}</pre>'
     text = caption + '\n\n' + response
     post = await bot.send_message(config.CHANNEL, text, parse_mode='HTML')
+
+    await share_response_post(response_violation_post_url,
+                              photo_path=None,
+                              user_id=message.chat.id,
+                              post_id=message.message_id,
+                              text=message.text)
 
     post_url = get_channel_post_url_by_id(post.message_id)
     text = locales.text(language, 'response_sended').format(post_url)
