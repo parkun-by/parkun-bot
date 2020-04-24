@@ -2574,7 +2574,7 @@ async def cmd_help(message: types.Message, state: FSMContext):
 
     changelog = types.InlineKeyboardButton(
         text='Changelog',
-        url='https://github.com/dziaineka/parkun-bot/blob/master/README.md')
+        url='https://github.com/parkun-by/parkun-bot/blob/master/README.md')
 
     keyboard.add(privacy_policy, letter_template, changelog)
 

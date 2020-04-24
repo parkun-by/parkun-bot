@@ -10,8 +10,8 @@ Disclaimer
 
 В данный момент бот состоит из двух репозиториев:
 
-- [сам бот](https://github.com/dziaineka/parkun-bot)
-- [отправитель обращений](https://github.com/dziaineka/appeal_sender)
+- [сам бот](https://github.com/parkun-by/parkun-bot)
+- [отправитель обращений](https://github.com/parkun-by/appeal_sender)
 
 Подробнее про архитектуру паркуна можно почитать [здесь](./parkun_arch.md).
 
@@ -33,7 +33,7 @@ Disclaimer
 Для начала нужно клонировать бота себе на компьютер:
 
 ```sh
-git clone https://github.com/dziaineka/parkun-bot.git
+git clone https://github.com/parkun-by/parkun-bot.git
 ```
 
 В репозитории две ветки: master и develop. Для разработки какой-то фичи или исправления ошибки вам нужно создать собственную ветку на основе ветки develop:
@@ -86,7 +86,7 @@ python main.py
 Клонируем репозиторий отправителя:
 
 ```sh
-git clone https://github.com/dziaineka/appeal_sender.git
+git clone https://github.com/parkun-by/appeal_sender.git
 ```
 
 В репозитории две ветки: master и develop. Для разработки какой-то фичи или исправления ошибки вам нужно создать собственную ветку на основе ветки develop:
@@ -109,7 +109,7 @@ make py_env
 source .venv/bin/activate
 ```
 
-Далее нужно задать свой тестовый адрес email и пароль в [конфиге](https://github.com/dziaineka/appeal_sender/blob/master/config.py), который лежит в корне проекта. Пока что почта должна хоститься на [outlook.com](outlook.com).
+Далее нужно задать свой тестовый адрес email и пароль в [конфиге](https://github.com/parkun-by/appeal_sender/blob/master/config.py), который лежит в корне проекта. Пока что почта должна хоститься на [outlook.com](outlook.com).
 
 Отправителей запустится столько, сколько указано адресов в `EMAILS`. Пароль на них всех общий в поле `EMAIL_PWD`. Для разработки хватает одного, как правило.
 
