@@ -202,6 +202,7 @@ REVERSED_SENDER_INFO.reverse()
 
 ADDITIONAL_MESSAGE = {
     Form.sender_email.state: 'nonexistent_email_warning',
+    Form.sender_phone.state: 'phone_helps_to_police',
 }
 
 VIOLATION_INFO_KEYS = [
@@ -1105,7 +1106,7 @@ def get_remark(form: str, language: str) -> str:
     text = ""
 
     if text_key:
-        text = locales.text(language, text_key) + '\n'
+        text = '\n' + locales.text(language, text_key) + '\n'
 
     return text
 
