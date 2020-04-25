@@ -378,19 +378,16 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
 
 
 async def share_violation_post(language: str, appeal: dict):
-    caption = get_violation_caption(language,
-                                    appeal['violation_datetime'],
-                                    appeal['violation_address'],
-                                    appeal['violation_vehicle_number'])
-    data = {
-        'caption': caption,
-        'photo_paths': appeal['violation_photo_files_paths'],
-        'coordinates': appeal['violation_location'],
-        'user_id': appeal['user_id'],
-        'appeal_id': appeal['appeal_id'],
-    }
+    title = get_violation_caption(language,
+                                  appeal['violation_datetime'],
+                                  appeal['violation_address'],
+                                  appeal['violation_vehicle_number'])
 
-    await http_rabbit.send_sharing(data)
+    await share_post(appeal['user_id'],
+                     appeal['appeal_id'],
+                     title,
+                     photo_paths=appeal['violation_photo_files_paths'],
+                     coordinates=appeal['violation_location'])
 
     logger.info(f'Отправили шариться по сетям - '
                 f'{str(appeal["user_id"])}:{str(appeal["appeal_id"])}')
@@ -403,24 +400,34 @@ async def share_response_post(violation_url: str,
                               photo_path: Optional[str],
                               user_id: int,
                               post_id: int,
-                              text: str = ''):
+                              text: str = '') -> bool:
     title = config.RESPONSE_HASHTAG + '\n' + violation_url
-
-    data = {
-        'title': title,
-        'photo_paths': [photo_path] if photo_path else [],
-        'user_id': user_id,
-        'appeal_id': post_id,
-        'text': text,
-    }
-
-    await http_rabbit.send_sharing(data)
+    photo_paths = [photo_path] if photo_path else []
+    await share_post(user_id, post_id, title, text, photo_paths)
 
     logger.info(f'Отправили шариться по сетям ответ ГАИ - '
                 f'{str(user_id)}:{str(post_id)}')
 
     # files will be deleted during sharing in broadcast service
     return False
+
+
+async def share_post(user_id: int,
+                     appeal_id: int,
+                     title: str,
+                     text: str = '',
+                     photo_paths: list = [],
+                     coordinates: list = [None, None]):
+    data = {
+        'title': title,
+        'text': text,
+        'photo_paths': photo_paths,
+        'coordinates': coordinates,
+        'user_id': user_id,
+        'appeal_id': appeal_id,
+    }
+
+    await http_rabbit.send_sharing(data)
 
 
 async def add_channel_post_to_success_message(language: str,
