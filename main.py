@@ -2231,9 +2231,7 @@ async def answer_feedback_click(call, state: FSMContext):
     await states_stack.add(call.message.chat.id)
 
     async with state.proxy() as data:
-
-        # сохраняем адресата
-        data['feedback_post'] = call.message.text
+        data['user_to_reply'] = call.message.text
 
         language = await get_ui_lang(data=data)
         text = locales.text(language, Form.feedback_answering.state)
@@ -2602,7 +2600,7 @@ async def write_feedback(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
         text = locales.text(language, Form.feedback.state)
         keyboard = await get_cancel_keyboard(data)
-        data_to_save = {'feedback_post': get_value(data, 'feedback_post')}
+        data_to_save = {'user_to_reply': get_value(data, 'user_to_reply')}
 
     if current_state != Form.feedback.state:
         await states_stack.add(message.chat.id, data_to_save)
@@ -2649,7 +2647,7 @@ async def use_saved_address_command(message: types.Message, state: FSMContext):
         await ask_for_violation_time(message.chat.id, language)
 
 
-@dp.message_handler(state=Form.feedback)
+@dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.feedback)
 async def catch_feedback(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод фидбэка - ' +
                 str(message.from_user.username))
@@ -2662,7 +2660,8 @@ async def catch_feedback(message: types.Message, state: FSMContext):
         message_id=message.message_id,
         disable_notification=True)
 
-    text = str(message.from_user.id) + ' ' + str(message.message_id)
+    text = f'{str(message.from_user.username)} ' + \
+        f'{str(message.from_user.id)} {str(message.message_id)}'
 
     # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -2680,20 +2679,20 @@ async def catch_feedback(message: types.Message, state: FSMContext):
     await pop_saved_state(message.chat.id, message.from_user.id)
 
 
-@dp.message_handler(content_types=types.ContentType.TEXT,
+@dp.message_handler(content_types=types.ContentType.ANY,
                     state=Form.feedback_answering)
 async def catch_feedback(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ответ на фидбэк - ' +
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        feedback = get_value(data, 'feedback_post').split(' ')
-        feedback_chat_id = feedback[0]
-        feedback_message_id = feedback[1]
+        feedback = get_value(data, 'user_to_reply').split(' ')
+        # feedback_username = feedback[0]
+        feedback_chat_id = feedback[1]
+        feedback_message_id = feedback[2]
 
-        await bot.send_message(feedback_chat_id,
-                               message.text,
-                               reply_to_message_id=feedback_message_id)
+    await message.send_copy(feedback_chat_id,
+                            reply_to_message_id=feedback_message_id)
 
     await pop_saved_state(message.chat.id, message.from_user.id)
 
