@@ -16,7 +16,7 @@ from aiogram.dispatcher.storage import FSMContextProxy
 from aiogram.types.photo_size import PhotoSize
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
-from aiogram.utils.exceptions import MessageNotModified
+from aiogram.utils.exceptions import MessageNotModified, ChatNotFound
 from dateutil import tz
 from disposable_email_domains import blocklist
 
@@ -807,6 +807,7 @@ def get_default_value(key):
         'violation_date': datetime_parser.get_current_datetime_str(),
         'previous_violation_addresses': [],
         'appeal_id': 0,
+        'message_to_reply': None,
     }
 
     try:
@@ -1150,7 +1151,6 @@ async def ask_for_violation_address(chat_id, data):
                      f'{Form.violation_address.state}_example') + '\n' +\
         '\n'
 
-    # настроим клавиатуру
     keyboard = await get_cancel_keyboard(data)
 
     if get_value(data, 'previous_violation_addresses'):
@@ -2221,20 +2221,22 @@ async def add_caption_click(call, state: FSMContext):
     await Form.caption.set()
 
 
-@dp.callback_query_handler(lambda call: call.data == '/answer_feedback',
+@dp.callback_query_handler(lambda call: '/reply_to_user' in call.data,
                            state='*')
-async def answer_feedback_click(call, state: FSMContext):
-    logger.info('Обрабатываем нажатие кнопки ответа на фидбэк - ' +
+async def reply_to_user_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки ответа на сообщение - ' +
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
     await states_stack.add(call.message.chat.id)
 
     async with state.proxy() as data:
-        data['user_to_reply'] = call.message.text
+        reply_data = call.data.replace('/reply_to_user', '').split()
+        data['user_to_reply'] = reply_data[0]
+        data['message_to_reply'] = reply_data[1]
 
         language = await get_ui_lang(data=data)
-        text = locales.text(language, Form.feedback_answering.state)
+        text = locales.text(language, Form.message_to_user.state)
 
         # настроим клавиатуру
         keyboard = await get_cancel_keyboard(data)
@@ -2244,7 +2246,7 @@ async def answer_feedback_click(call, state: FSMContext):
                            reply_markup=keyboard,
                            reply_to_message_id=call.message.message_id)
 
-    await Form.feedback_answering.set()
+    await Form.message_to_user.set()
 
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
@@ -2274,7 +2276,7 @@ async def cancel_violation_input(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
                            state=[Form.feedback,
-                                  Form.feedback_answering,
+                                  Form.message_to_user,
                                   Form.caption,
                                   Form.email_password,
                                   Form.police_response])
@@ -2450,6 +2452,27 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await invite_to_fill_credentials(message.chat.id, state)
 
 
+@dp.message_handler(commands=['message'], state=Form.operational_mode)
+async def cmd_admin_message(message: types.Message, state: FSMContext):
+    """
+    Send message to user
+    """
+    logger.info('Админ пишет - ' + str(message.from_user.username))
+    user_id_or_name = message.text.replace('/message', '').strip()
+
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        data['user_to_reply'] = user_id_or_name
+
+    text = locales.text(language, Form.message_to_user.state) + '\n' + \
+        '\n' + user_id_or_name
+
+    keyboard = await get_cancel_keyboard(data)
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await Form.message_to_user.set()
+
+
 @dp.message_handler(commands=['stats'], state='*')
 async def cmd_statistic(message: types.Message, state: FSMContext):
     """
@@ -2600,7 +2623,10 @@ async def write_feedback(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
         text = locales.text(language, Form.feedback.state)
         keyboard = await get_cancel_keyboard(data)
-        data_to_save = {'user_to_reply': get_value(data, 'user_to_reply')}
+        data_to_save = {
+            'user_to_reply': get_value(data, 'user_to_reply'),
+            'message_to_reply': get_value(data, 'message_to_reply'),
+        }
 
     if current_state != Form.feedback.state:
         await states_stack.add(message.chat.id, data_to_save)
@@ -2654,45 +2680,55 @@ async def catch_feedback(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
 
-    await bot.forward_message(
-        chat_id=config.ADMIN_ID,
-        from_chat_id=message.from_user.id,
-        message_id=message.message_id,
-        disable_notification=True)
-
     text = f'{str(message.from_user.username)} ' + \
         f'{str(message.from_user.id)} {str(message.message_id)}'
 
-    # настроим клавиатуру
+    await bot.send_message(config.ADMIN_ID, text)
+
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
-    give_feedback_button = types.InlineKeyboardButton(
+    reply_button = types.InlineKeyboardButton(
         text=locales.text(language, 'reply_button'),
-        callback_data='/answer_feedback')
+        callback_data=f'/reply_to_user ' +
+        f'{str(message.from_user.id)} {message.message_id}')
 
-    keyboard.add(give_feedback_button)
-
-    await bot.send_message(config.ADMIN_ID, text, reply_markup=keyboard)
-
+    keyboard.add(reply_button)
+    await message.send_copy(chat_id=config.ADMIN_ID, reply_markup=keyboard)
     text = locales.text(language, 'thanks_for_feedback')
     await bot.send_message(message.chat.id, text)
     await pop_saved_state(message.chat.id, message.from_user.id)
 
 
 @dp.message_handler(content_types=types.ContentType.ANY,
-                    state=Form.feedback_answering)
-async def catch_feedback(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ответ на фидбэк - ' +
+                    state=Form.message_to_user)
+async def catch_message_to_user(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем сообщение для пользователя - ' +
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        feedback = get_value(data, 'user_to_reply').split(' ')
-        # feedback_username = feedback[0]
-        feedback_chat_id = feedback[1]
-        feedback_message_id = feedback[2]
+        feedback_chat_id = get_value(data, 'user_to_reply')
+        feedback_message_id = get_value(data, 'message_to_reply')
+        data.pop('user_to_reply')
+        data.pop('message_to_reply')
+        language = await get_ui_lang(data=data)
 
-    await message.send_copy(feedback_chat_id,
-                            reply_to_message_id=feedback_message_id)
+    keyboard = types.InlineKeyboardMarkup()
+
+    reply_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'reply_button'),
+        callback_data=f'/reply_to_user ' +
+        f'{str(message.from_user.id)} {message.message_id}')
+
+    keyboard.add(reply_button)
+
+    try:
+        await message.send_copy(feedback_chat_id,
+                                reply_to_message_id=feedback_message_id,
+                                reply_markup=keyboard)
+    except ChatNotFound:
+        text = locales.text(language,
+                            'cant_find_user').format(feedback_chat_id)
+        await bot.send_message(message.from_user.id, text)
 
     await pop_saved_state(message.chat.id, message.from_user.id)
 

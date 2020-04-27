@@ -23,7 +23,7 @@ class Form(StatesGroup):
     violation_datetime = State()
     sending_approvement = State()
     feedback = State()
-    feedback_answering = State()
+    message_to_user = State()
     caption = State()
     email_verifying = State()
     appeal_sending = State()
