@@ -2458,6 +2458,11 @@ async def cmd_admin_message(message: types.Message, state: FSMContext):
     Send message to user
     """
     logger.info('Админ пишет - ' + str(message.from_user.username))
+
+    if message.from_user.id != config.ADMIN_ID:
+        logger.info('A нет, не пишет - ' + str(message.from_user.id))
+        return
+
     user_id_or_name = message.text.replace('/message', '').strip()
 
     async with state.proxy() as data:
