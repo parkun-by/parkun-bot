@@ -31,3 +31,4 @@ class Form(StatesGroup):
     email_password = State()
     short_address_check = State()
     police_response = State()
+    broadcasting = State()

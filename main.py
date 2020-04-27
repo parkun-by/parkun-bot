@@ -205,6 +205,12 @@ ADDITIONAL_MESSAGE = {
     Form.sender_phone.state: 'phone_helps_to_police',
 }
 
+BROADCAST_RECEIVERS = [
+    'social_networks',
+    'users',
+    'all_together',
+]
+
 VIOLATION_INFO_KEYS = [
     'violation_attachments',
     'violation_photo_ids',
@@ -1280,6 +1286,29 @@ async def ask_for_violation_time(chat_id, language):
     await Form.violation_datetime.set()
 
 
+def get_broadcast_invitation(language: str, receiver_id: str) -> str:
+    text = locales.text(language, 'send_message_to_broadcast')
+    pre_receiver_text = locales.text(language, 'receiver')
+    receiver_text = locales.text(language, receiver_id)
+    return text + f'\n\n{pre_receiver_text}: {receiver_text}'
+
+
+def get_broadcast_keyboard(language: str,
+                           receiver_id: str) -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup()
+
+    mode_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'receiver'),
+        callback_data=f'/change_receiver {receiver_id}')
+
+    cancel_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(mode_button, cancel_button)
+    return keyboard
+
+
 def get_violation_datetime_keyboard(
         language: str) -> types.InlineKeyboardMarkup:
     # настроим клавиатуру
@@ -1542,7 +1571,7 @@ async def show_settings(message, state):
                            parse_mode='HTML')
 
 
-def get_next_form(items: list, current: Any) -> Any:
+def get_next_item(items: list, current: Any) -> Any:
     return_next = False
 
     while True:
@@ -1778,6 +1807,26 @@ async def address_is_full_click(call, state: FSMContext):
     await ask_for_violation_time(call.message.chat.id, language)
 
 
+@dp.callback_query_handler(lambda call: '/change_receiver' in call.data,
+                           state=Form.broadcasting)
+async def settings_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки выбора получателя броадкаста - ' +
+                str(call.from_user.username))
+
+    await bot.answer_callback_query(call.id)
+    current_receiver = call.data.replace('/change_receiver', '').strip()
+    next_receiver = get_next_item(BROADCAST_RECEIVERS, current_receiver)
+    language = await get_ui_lang(state=state)
+    text = get_broadcast_invitation(language, next_receiver)
+    keyboard = get_broadcast_keyboard(language, next_receiver)
+
+    await bot.edit_message_text(text,
+                                call.message.chat.id,
+                                call.message.message_id,
+                                reply_markup=keyboard,
+                                parse_mode='HTML')
+
+
 @dp.callback_query_handler(lambda call: call.data == '/settings',
                            state='*')
 async def settings_click(call, state: FSMContext):
@@ -1914,7 +1963,7 @@ async def sender_info_forward(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    next_form = get_next_form(SENDER_INFO, current_form)
+    next_form = get_next_item(SENDER_INFO, current_form)
     await ask_for_sender_info(call.message, state, next_form, edit=True)
 
 
@@ -1927,7 +1976,7 @@ async def sender_info_forward(call, state: FSMContext):
                 str(call.from_user.username))
 
     await bot.answer_callback_query(call.id)
-    next_form = get_next_form(REVERSED_SENDER_INFO, current_form)
+    next_form = get_next_item(REVERSED_SENDER_INFO, current_form)
     await ask_for_sender_info(call.message, state, next_form, edit=True)
 
 
@@ -2277,6 +2326,7 @@ async def cancel_violation_input(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
                            state=[Form.feedback,
                                   Form.message_to_user,
+                                  Form.broadcasting,
                                   Form.caption,
                                   Form.email_password,
                                   Form.police_response])
@@ -2450,6 +2500,26 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, text)
     await Form.initial.set()
     await invite_to_fill_credentials(message.chat.id, state)
+
+
+@dp.message_handler(commands=['broadcast'], state=Form.operational_mode)
+async def cmd_broadcast(message: types.Message, state: FSMContext):
+    """
+    Send message to all users and social networks
+    """
+    logger.info('Сообщение широковещательное - ' +
+                str(message.from_user.username))
+
+    if message.from_user.id != config.ADMIN_ID:
+        logger.info('A нет, не сообщение - ' + str(message.from_user.id))
+        return
+
+    language = await get_ui_lang(state=state)
+    receiver_id = BROADCAST_RECEIVERS[0]
+    text = get_broadcast_invitation(language, receiver_id)
+    keyboard = get_broadcast_keyboard(language, receiver_id)
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    await Form.broadcasting.set()
 
 
 @dp.message_handler(commands=['message'], state=Form.operational_mode)
