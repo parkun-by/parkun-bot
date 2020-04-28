@@ -6,6 +6,7 @@ import aioredis
 
 from bot_storage import BotStorage
 import config
+import users
 
 
 class Statistic():
@@ -57,26 +58,11 @@ class Statistic():
             return None
 
     async def _count_users(self):
-        redis = await aioredis.create_redis(
-            f'redis://{config.REDIS_HOST}:{config.REDIS_PORT}',
-            password=config.REDIS_PASSWORD)
-
-        keys = []
-        cur = b'0'  # set initial cursor to 0
         verified_users = 0
 
-        while cur:
-            cur, keys = await redis.scan(cur, match='fsm:*:*:data')
+        async for _ in users.verified():
+            verified_users += 1
 
-            for key in keys:
-                val = await redis.get(key)
-                user_data: dict = json.loads(val)
-                user_verified = user_data.get('verified', False)
-
-                if user_verified:
-                    verified_users += 1
-
-        redis.close()
         self._storage['verified_users'] = verified_users
         self._storage['verified_users_timestamp'] = datetime.now()
         return verified_users

@@ -16,7 +16,8 @@ from aiogram.dispatcher.storage import FSMContextProxy
 from aiogram.types.photo_size import PhotoSize
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
-from aiogram.utils.exceptions import MessageNotModified, ChatNotFound
+from aiogram.utils.exceptions import \
+    MessageNotModified, ChatNotFound, CantTalkWithBots
 from dateutil import tz
 from disposable_email_domains import blocklist
 
@@ -38,6 +39,7 @@ from states import Form
 from states_stack import StatesStack
 from statistic import Statistic
 from validator import Validator
+import users
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -80,6 +82,15 @@ def get_value(data: Union[FSMContextProxy, dict],
             return placeholder
 
         return data[key]
+
+
+def pop_value(data: Union[FSMContextProxy, dict],
+              key: str,
+              placeholder: Any = None,
+              read_only=False) -> Any:
+    value = get_value(data, key, placeholder, read_only)
+    data.pop(key)
+    return value
 
 
 def get_sender_address(data):
@@ -205,10 +216,12 @@ ADDITIONAL_MESSAGE = {
     Form.sender_phone.state: 'phone_helps_to_police',
 }
 
+SOCIAL_NETWORKS = 'social_networks'
+USERS = 'users'
+
 BROADCAST_RECEIVERS = [
-    'social_networks',
-    'users',
-    'all_together',
+    SOCIAL_NETWORKS,
+    USERS,
 ]
 
 VIOLATION_INFO_KEYS = [
@@ -421,7 +434,7 @@ async def share_response_post(violation_url: str,
 
 async def share_post(user_id: int,
                      appeal_id: int,
-                     title: str,
+                     title: str = '',
                      text: str = '',
                      photo_paths: list = [],
                      coordinates: list = [None, None]):
@@ -1534,7 +1547,47 @@ async def send_form_message(form: str, user_id: int, language: str) -> None:
     await bot.send_message(user_id, text)
 
 
-async def show_settings(message, state):
+async def share_to_social_networks(message: types.Message,
+                                   post_type: str):
+    await message.send_copy(config.CHANNEL)
+
+    text, photo_paths = await get_social_data_from_post(message, post_type)
+
+    await share_post(message.chat.id,
+                     message.message_id,
+                     text=text,
+                     photo_paths=photo_paths)
+
+
+async def get_social_data_from_post(message: types.Message,
+                                    post_type: str) -> Tuple[str, List[str]]:
+    text = message.text
+    photos = []
+
+    if post_type == str(types.ContentType.PHOTO):
+        photo_id = message.photo[-1]['file_id']
+        photo_url = await get_temp_photo_url(photo_id)
+
+        photo_path = await photo_manager.store_photo(message.chat.id,
+                                                     photo_url,
+                                                     message.message_id)
+
+        photos.append(photo_path)
+
+    return text, photos
+
+
+async def share_to_users(message: types.Message):
+    async for user_id in users.every():
+        try:
+            await message.send_copy(user_id, disable_notification=True)
+        except CantTalkWithBots:
+            pass
+        except Exception:
+            logger.exception("Ошибка при отправке всем пользователям")
+
+
+async def show_settings(message: types.Message, state: FSMContext):
     logger.info('Настройки - ' + str(message.from_user.username))
 
     async with state.proxy() as data:
@@ -1816,6 +1869,10 @@ async def settings_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     current_receiver = call.data.replace('/change_receiver', '').strip()
     next_receiver = get_next_item(BROADCAST_RECEIVERS, current_receiver)
+
+    async with state.proxy() as data:
+        data['broadcast_receiver'] = next_receiver
+
     language = await get_ui_lang(state=state)
     text = get_broadcast_invitation(language, next_receiver)
     keyboard = get_broadcast_keyboard(language, next_receiver)
@@ -2515,7 +2572,11 @@ async def cmd_broadcast(message: types.Message, state: FSMContext):
         return
 
     language = await get_ui_lang(state=state)
-    receiver_id = BROADCAST_RECEIVERS[0]
+    receiver_id = SOCIAL_NETWORKS
+
+    async with state.proxy() as data:
+        data['broadcast_receiver'] = receiver_id
+
     text = get_broadcast_invitation(language, receiver_id)
     keyboard = get_broadcast_keyboard(language, receiver_id)
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
@@ -2781,10 +2842,8 @@ async def catch_message_to_user(message: types.Message, state: FSMContext):
                 str(message.from_user.username))
 
     async with state.proxy() as data:
-        feedback_chat_id = get_value(data, 'user_to_reply')
-        feedback_message_id = get_value(data, 'message_to_reply')
-        data.pop('user_to_reply')
-        data.pop('message_to_reply')
+        feedback_chat_id = pop_value(data, 'user_to_reply')
+        feedback_message_id = pop_value(data, 'message_to_reply')
         language = await get_ui_lang(data=data)
 
     keyboard = types.InlineKeyboardMarkup()
@@ -3084,6 +3143,73 @@ async def police_response_text(message: types.Message, state: FSMContext):
     text = locales.text(language, 'response_sended').format(post_url)
     await bot.send_message(message.chat.id, text, parse_mode='HTML')
     await Form.operational_mode.set()
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.broadcasting)
+async def message_to_broadcast(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем широковещательный текстопост - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        receiver = pop_value(data, 'broadcast_receiver')
+        language = await get_ui_lang(data=data)
+
+    if receiver == SOCIAL_NETWORKS:
+        await share_to_social_networks(message, types.ContentType.TEXT)
+    elif receiver == USERS:
+        await share_to_users(message)
+
+    await Form.operational_mode.set()
+
+    await send_form_message(Form.operational_mode.state,
+                            message.from_user.id,
+                            language)
+
+
+@dp.message_handler(content_types=types.ContentType.PHOTO,
+                    state=Form.broadcasting)
+async def message_to_broadcast(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем широковещательный фотопост - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        receiver = pop_value(data, 'broadcast_receiver')
+        language = await get_ui_lang(data=data)
+
+    if receiver == SOCIAL_NETWORKS:
+        await share_to_social_networks(message, types.ContentType.PHOTO)
+    elif receiver == USERS:
+        await share_to_users(message)
+
+    await Form.operational_mode.set()
+
+    await send_form_message(Form.operational_mode.state,
+                            message.from_user.id,
+                            language)
+
+
+@dp.message_handler(content_types=types.ContentType.ANY,
+                    state=Form.broadcasting)
+async def message_to_broadcast(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем широковещательный ANY - ' +
+                str(message.from_user.username))
+
+    async with state.proxy() as data:
+        receiver = pop_value(data, 'broadcast_receiver')
+        language = await get_ui_lang(data=data)
+
+    if receiver == SOCIAL_NETWORKS:
+        text = locales.text(language, 'simple_post_only')
+        await bot.send_message(message.chat.id, text)
+    elif receiver == USERS:
+        await share_to_users(message)
+
+    await Form.operational_mode.set()
+
+    await send_form_message(Form.operational_mode.state,
+                            message.from_user.id,
+                            language)
 
 
 @dp.message_handler(content_types=types.ContentTypes.PHOTO,
