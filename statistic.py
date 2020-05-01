@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta
+from typing import Optional
 import json
 
 import aiohttp
-import aioredis
 
 from bot_storage import BotStorage
 import config
 import users
+
+VERIFIED = 'verified_users'
+TOTAL = 'total_users'
 
 
 class Statistic():
@@ -37,35 +40,50 @@ class Statistic():
     async def get_appeals_sent_yesterday_count(self) -> int:
         return await self._bot_storage.get_appeals_yesterday_count()
 
-    async def get_registered_users_count(self) -> int:
-        return await self._get_cached_users_count() or \
-            await self._count_users()
+    async def get_total_users_count(self) -> int:
+        return await self._get_cached_users_count(TOTAL) or \
+            await self._count_users(TOTAL)
 
-    async def _get_cached_users_count(self):
+    async def get_registered_users_count(self) -> int:
+        return await self._get_cached_users_count(VERIFIED) or \
+            await self._count_users(VERIFIED)
+
+    async def _get_cached_users_count(self, users_type: str) -> Optional[int]:
         EXPIRATION_TIME = timedelta(hours=1)
         current_time = datetime.now()
 
-        verified_users = self._storage.get('verified_users', None)
+        users_count: Optional[int] = self._storage.get(users_type, None)
 
-        if not verified_users:
+        if not users_count:
             return None
 
-        timestamp = self._storage.get('verified_users_timestamp', current_time)
+        timestamp = self._storage.get(f'{users_type}_timestamp', current_time)
 
         if current_time - timestamp < EXPIRATION_TIME:
-            return verified_users
+            return users_count
         else:
             return None
 
-    async def _count_users(self):
-        verified_users = 0
+    async def _count_users(self, users_type: str) -> int:
+        total_users_count = 0
+        registered_users_count = 0
 
-        async for _ in users.verified():
-            verified_users += 1
+        async for user_data in users.every(id_only=False):
+            total_users_count += 1
+            user_verified = user_data.get('verified', False)
 
-        self._storage['verified_users'] = verified_users
-        self._storage['verified_users_timestamp'] = datetime.now()
-        return verified_users
+            if user_verified:
+                registered_users_count += 1
+
+        self._storage[VERIFIED] = registered_users_count
+        self._storage[f'{VERIFIED}_timestamp'] = datetime.now()
+        self._storage[TOTAL] = total_users_count
+        self._storage[f'{TOTAL}_timestamp'] = datetime.now()
+
+        if users_type == VERIFIED:
+            return registered_users_count
+        else:
+            return total_users_count
 
     async def count_sent_appeal(self, amount=1):
         await self._bot_storage.update_appeals_count(amount)

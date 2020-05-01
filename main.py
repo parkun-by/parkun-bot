@@ -1647,14 +1647,16 @@ def get_input_name_invite_text(language, name, invitation, example):
 
 
 async def get_statistic() -> dict:
-    users_count = await statistic.get_registered_users_count()
+    total_users_count = await statistic.get_total_users_count()
+    registered_users_count = await statistic.get_registered_users_count()
     appeals_sent = await statistic.get_appeals_sent_count()
     appeals_sent_today = await statistic.get_appeals_sent_today_count()
     appeals_sent_yesterday = await statistic.get_appeals_sent_yesterday_count()
     appeals_queue_size = await statistic.get_appeal_queue_size()
 
     return {
-        'registered_users': str(users_count),
+        'total_users': str(total_users_count),
+        'registered_users': str(registered_users_count),
         'appeals_sent': str(appeals_sent),
         'appeals_sent_today': str(appeals_sent_today),
         'appeals_sent_yesterday': str(appeals_sent_yesterday),
@@ -2617,6 +2619,7 @@ async def cmd_statistic(message: types.Message, state: FSMContext):
     logger.info('Показ статистики - ' + str(message.from_user.id))
     statistic = await get_statistic()
     language = await get_ui_lang(state)
+    total_users_count_text = locales.text(language, 'total_users')
     registered_users_count_text = locales.text(language, 'registered_users')
     appeals_sent_text = locales.text(language, 'appeals_sent')
     appeals_sent_today_text = locales.text(language, 'appeals_sent_today')
@@ -2626,7 +2629,9 @@ async def cmd_statistic(message: types.Message, state: FSMContext):
 
     appeal_queue_size_text = locales.text(language, 'appeal_queue_size')
 
-    text = registered_users_count_text.format(statistic['registered_users']) +\
+    text = total_users_count_text.format(statistic['total_users']) +\
+        '\n' +\
+        registered_users_count_text.format(statistic['registered_users']) +\
         '\n' +\
         appeals_sent_text.format('~' + statistic['appeals_sent']) +\
         '\n' +\
