@@ -1,6 +1,6 @@
 from aiogram.dispatcher.storage import FSMContextProxy
 from aiogram.dispatcher import Dispatcher, FSMContext
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime_parser import get_today
 
 
@@ -9,7 +9,7 @@ class BotStorage():
         self._dp = dispatcher
         self._bot_id: Optional[int] = None
 
-    async def get_bans(self) -> dict:
+    async def get_bans(self) -> Dict[int, Any]:
         async with self._dp.current_state(chat=self._bot_id,
                                           user=self._bot_id).proxy() as data:
             return data.get('banned_users', dict())

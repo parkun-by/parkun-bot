@@ -1797,14 +1797,16 @@ async def get_language_text_and_keyboard(data):
     return text, keyboard
 
 
-async def user_banned(*args):
+async def user_banned(language: str, user_id: int) -> bool:
     bans = await bot_storage.get_bans()
+    key = str(user_id)
 
-    for name in args:
-        if name in bans:
-            return True, bans[name]
+    if key in bans:
+        text = locales.text(language, 'you_are_banned') + ' ' + bans[key]
+        await bot.send_message(user_id, text)
+        return True
 
-    return False, ''
+    return False
 
 
 async def invite_to_enter_email_password(user_id: int,
@@ -2695,7 +2697,11 @@ async def banlist_user_command(message: types.Message):
 
     logger.info('Банлист - ' + str(message.from_user.id))
     bans = await bot_storage.get_bans()
-    await bot.send_message(message.chat.id, str(bans))
+
+    await bot.send_message(message.chat.id,
+                           json.dumps(bans,
+                                      ensure_ascii=False,
+                                      indent='    '))
 
 
 @dp.message_handler(commands=['unban'], state='*')
@@ -2704,20 +2710,20 @@ async def unban_user_command(message: types.Message, state: FSMContext):
         return
 
     language = await get_ui_lang(state)
-    logger.info('Забанил человека - ' + str(message.from_user.id))
+    logger.info('Разбанил человека - ' + str(message.from_user.id))
 
-    user = message.text.replace('/unban', '', 1).strip()
+    user_id = message.text.replace('/unban', '', 1).strip()
 
-    if not user:
-        text = locales.text(language, 'banned_name_expected')
+    if not user_id:
+        text = locales.text(language, 'banned_id_expected')
         await bot.send_message(message.chat.id, text)
         return
 
     bans = await bot_storage.get_bans()
-    bans.pop(user, None)
+    bans.pop(user_id, None)
     await bot_storage.set_bans(bans)
 
-    text = f'{user} {locales.text(language, "unbanned_succesfully")}'
+    text = f'{user_id} {locales.text(language, "unbanned_succesfully")}'
     await bot.send_message(message.chat.id, text)
 
 
@@ -2730,17 +2736,17 @@ async def ban_user_command(message: types.Message, state: FSMContext):
     logger.info('Забанил человека - ' + str(message.from_user.id))
 
     try:
-        user, caption = message.text.replace('/ban ', '', 1).split(' ', 1)
+        user_id, caption = message.text.replace('/ban ', '', 1).split(' ', 1)
     except ValueError:
-        text = locales.text(language, 'name_and_caption_expected')
+        text = locales.text(language, 'id_and_caption_expected')
         await bot.send_message(message.chat.id, text)
         return
 
     bans = await bot_storage.get_bans()
-    bans[user] = caption
+    bans[user_id] = caption
     await bot_storage.set_bans(bans)
 
-    text = f'{user} {locales.text(language, "banned_succesfully")}'
+    text = f'{user_id} {locales.text(language, "banned_succesfully")}'
     await bot.send_message(message.chat.id, text)
 
 
@@ -3255,6 +3261,11 @@ async def initial_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку первой фотки - ' +
                 str(message.from_user.id))
 
+    language = await get_ui_lang(state)
+
+    if await user_banned(language, message.from_user.id):
+        return
+
     if post_from_channel(message):
         logger.info('Фотка из канала - ' + str(message.from_user.id))
         await police_response_sending(message, state)
@@ -3270,16 +3281,6 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     language = await get_ui_lang(state)
-
-    # check if user banned
-    banned, reason = await user_banned(message.from_user.username,
-                                       str(message.chat.id))
-
-    if banned:
-        text = locales.text(language, 'you_are_banned') + ' ' + reason
-
-        await bot.send_message(message.chat.id, text)
-        return
 
     # Проверим есть ли место под еще одно фото нарушения
     if await violation_storage_full(state):
