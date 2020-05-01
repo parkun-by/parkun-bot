@@ -1837,6 +1837,43 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
 
 
 @dp.callback_query_handler(
+    lambda call: call.data == '/appeal_template',
+    state='*')
+async def show_appel_text_template(call, state: FSMContext):
+    await bot.answer_callback_query(call.id)
+    user_id = call.from_user.id
+    logger.info('Показать шаблон обращения - ' + str(user_id))
+
+    async with state.proxy() as data:
+        appeal_data = {
+            'violation_photo_page': 'https://page_with_all_violation_photos',
+            'violation_vehicle_number': '1111 AA-1',
+            'violation_address': 'г. Мінск, вул. Васіля Быкава 42',
+            'violation_datetime': '01.05.2020 18.04',
+            'violation_caption': 'Примечание по желанию отправителя.',
+            'violation_attachments': [
+                'https://violation_photo_1',
+                'https://violation_photo_2',
+                'https://violation_photo_3',
+                'https://violation_photo_4',
+            ],
+            'sender_email': data['sender_email'],
+            'sender_phone': data['sender_phone'],
+            'sender_first_name': data['sender_first_name'],
+            'sender_last_name': data['sender_last_name'],
+            'sender_patronymic': data['sender_patronymic'],
+        }
+
+        appeal_text = get_appeal_text(appeal_data, user_id, 12345),
+        language = await get_ui_lang(data=data)
+
+        # idk why appeal_text becomes tuple, some kind of magic
+        await send_appeal_textfile_to_user(appeal_text[0],
+                                           language,
+                                           user_id)
+
+
+@dp.callback_query_handler(
     lambda call: call.data == '/user_city_as_violations',
     state=Form.short_address_check)
 async def choose_users_city(call, state: FSMContext):
@@ -2725,28 +2762,23 @@ async def cmd_help(message: types.Message, state: FSMContext):
     logger.info('Вызов помощи - ' + str(message.from_user.id))
 
     language = await get_ui_lang(state)
+    changelog = "https://github.com/parkun-by/parkun-bot/blob/master/README.md"
 
     text = locales.text(language, 'manual_help') + '\n' +\
         '\n' +\
+        locales.text(language, 'privacy_policy') + '\n' +\
+        '\n' +\
+        f'<a href="{changelog}">Changelog.</a>' + '\n' +\
+        '\n' +\
         locales.text(language, 'feedback_help')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    privacy_policy = types.InlineKeyboardButton(
-        text=locales.text(language, 'privacy_policy_button'),
-        url='https://telegra.ph/Politika-konfidencialnosti-01-09')
 
     letter_template = types.InlineKeyboardButton(
         text=locales.text(language, 'letter_template_button'),
-        url='https://docs.google.com/document/d/' +
-            '11kigeRPEdqbYcMcFVmg1lv66Fy-eOyf5i1PIQpSqcII/edit?usp=sharing')
+        callback_data='/appeal_template')
 
-    changelog = types.InlineKeyboardButton(
-        text='Changelog',
-        url='https://github.com/parkun-by/parkun-bot/blob/master/README.md')
-
-    keyboard.add(privacy_policy, letter_template, changelog)
+    keyboard.add(letter_template)
 
     await bot.send_message(message.chat.id,
                            text,
