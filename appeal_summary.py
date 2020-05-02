@@ -38,11 +38,13 @@ class AppealSummary():
 
     def get_violation_caption(self, language: str) -> str:
         caption_str = self.locales.text(language, 'caption')
+        channel_url = config.CHANNEL.replace('@', 'https://t.me/')
 
         channel_warning_str = \
             self.locales.text(language,
-                              'channel_warning').format(config.CHANNEL,
-                                                        config.TWI_URL)[:15]
+                              'channel_warning').format(channel_url,
+                                                        config.TWI_URL,
+                                                        config.VK_URL)[:15]
 
         violation_caption = \
             rf"(?:\s*{caption_str}\s*)(?P<caption>(.|\s)+?)" + \
@@ -63,11 +65,13 @@ class AppealSummary():
     def get_violation_datetime(self, language: str) -> str:
         datetime_str = self.locales.text(language, 'violation_datetime')
         caption_str = self.locales.text(language, 'caption')
+        channel_url = config.CHANNEL.replace('@', 'https://t.me/')
 
         channel_warning_str = \
             self.locales.text(language,
-                              'channel_warning').format(config.CHANNEL,
-                                                        config.TWI_URL)
+                              'channel_warning').format(channel_url,
+                                                        config.TWI_URL,
+                                                        config.VK_URL)[:15]
 
         violation_datetime = \
             rf"(?:\s*{datetime_str}\s*)(?P<datetime>.+?)" + \
@@ -128,6 +132,8 @@ class AppealSummary():
         recipient_name = self.locales.text(
             language, self.get_value(data, 'recipient'))
 
+        channel_url = config.CHANNEL.replace('@', 'https://t.me/')
+
         text = self.locales.text(language, 'check_please') + '\n' +\
             '\n' +\
             self.locales.text(language, 'recipient') +\
@@ -162,8 +168,9 @@ class AppealSummary():
             '\n' +\
             self.get_caption_text(data, language) +\
             self.locales.text(language,
-                              'channel_warning').format(config.CHANNEL,
-                                                        config.TWI_URL)
+                              'channel_warning').format(channel_url,
+                                                        config.TWI_URL,
+                                                        config.VK_URL)
 
         return text
 

@@ -96,8 +96,11 @@ RESPONSE_EXAMPLE = 'https://t.me/parkun/24390'
 MAIL_VERIFIER_URL = 'http://localhost:18080/validate'  # response 111
 VERIFYING_FAIL = '42'
 
-# Twitter twitter unnecessary for general development
+# Twitter
 TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
+
+# VK
+VK_URL = 'vk.com/SOME_VK_ACCOUNT'
 
 # RabbitMQ
 RABBIT_HOST = 'localhost'
