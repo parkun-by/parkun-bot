@@ -1561,7 +1561,7 @@ async def share_to_social_networks(message: types.Message,
 
 async def get_social_data_from_post(message: types.Message,
                                     post_type: str) -> Tuple[str, List[str]]:
-    text = message.text
+    text = message.text or message.caption
     photos = []
 
     if post_type == str(types.ContentType.PHOTO):
