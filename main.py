@@ -1847,27 +1847,44 @@ async def show_appel_text_template(call, state: FSMContext):
     logger.info('Показать шаблон обращения - ' + str(user_id))
 
     async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        empty_input = locales.text(language, 'empty_input')
+
         appeal_data = {
             'violation_photo_page': 'https://page_with_all_violation_photos',
             'violation_vehicle_number': '1111 AA-1',
             'violation_address': 'г. Мінск, вул. Васіля Быкава 42',
             'violation_datetime': '01.05.2020 18.04',
             'violation_caption': 'Примечание по желанию отправителя.',
+
             'violation_attachments': [
                 'https://violation_photo_1',
                 'https://violation_photo_2',
                 'https://violation_photo_3',
                 'https://violation_photo_4',
             ],
-            'sender_email': data['sender_email'],
-            'sender_phone': data['sender_phone'],
-            'sender_first_name': data['sender_first_name'],
-            'sender_last_name': data['sender_last_name'],
-            'sender_patronymic': data['sender_patronymic'],
+
+            'sender_email': get_value(data,
+                                      'sender_email',
+                                      placeholder='example@example.com'),
+
+            'sender_phone': get_value(data, 'sender_phone'),
+
+            'sender_first_name': get_value(data,
+                                           'sender_first_name',
+                                           placeholder=empty_input),
+
+            'sender_last_name': get_value(data,
+                                          'sender_last_name',
+                                          placeholder=empty_input),
+
+            'sender_patronymic': get_value(data,
+                                           'sender_patronymic',
+                                           placeholder=empty_input),
+
         }
 
         appeal_text = get_appeal_text(appeal_data, user_id, 12345),
-        language = await get_ui_lang(data=data)
 
         # idk why appeal_text becomes tuple, some kind of magic
         await send_appeal_textfile_to_user(appeal_text[0],
