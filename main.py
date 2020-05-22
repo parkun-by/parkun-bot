@@ -1460,9 +1460,11 @@ async def set_violation_address(chat_id: int,
 
 def maybe_no_city_in_address(address: str) -> bool:
     address = address.lower()
+    locality_indicators = ['аг.', 'г.', 'в.']
 
-    if 'г.' in address:
-        return False
+    for indicator in locality_indicators:
+        if indicator in address:
+            return False
 
     unneeded = ['вул.', 'зав.', 'пер.', 'д.', 'ул.', 'пр.', 'пр-т.', 'пр-т']
 
@@ -1832,7 +1834,12 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
     async with state.proxy() as data:
         entered_address = get_value(data, "violation_address")
         delete_saved_address(data, entered_address)
-        violation_address = f'{city}, {entered_address}'
+
+        if city in entered_address:
+            violation_address = entered_address
+        else:
+            violation_address = f'{city}, {entered_address}'
+
         language = await get_ui_lang(data=data)
 
     await set_violation_address(user_id, violation_address, state)
