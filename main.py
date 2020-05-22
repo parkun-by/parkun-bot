@@ -775,9 +775,9 @@ async def get_prepared_photos(data: FSMContextProxy,
 
 def delete_prepared_violation(data: FSMContextProxy) -> None:
     for key in VIOLATION_INFO_KEYS:
-        set_default(data, key, force=True)
+        pop_value(data, key)
 
-    data['appeal_response_queue'] = ''
+    pop_value(data, 'appeal_response_queue')
 
 
 def save_entered_address(data: FSMContextProxy, address: str):
