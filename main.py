@@ -728,7 +728,9 @@ async def violation_storage_full(state):
     async with semaphore, state.proxy() as data:
         ensure_attachments_availability(data)
 
-        if data['violation_photos_amount'] < config.MAX_VIOLATION_PHOTOS:
+        violation_photos_amount = get_value(data, 'violation_photos_amount')
+
+        if violation_photos_amount < config.MAX_VIOLATION_PHOTOS:
             data['violation_photos_amount'] += 1
             return False
         else:
