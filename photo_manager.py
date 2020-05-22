@@ -103,9 +103,8 @@ class PhotoManager:
 
         user_stash: dict = self.storage.get(user_id, {})
         appeal_stash: dict = user_stash.get(CURRENT, {})
-
-        page_url = await self.telegraph.create_page(appeal_stash['urls'],
-                                                    title)
+        urls = appeal_stash.get('urls', [])
+        page_url = await self.telegraph.create_page(urls, title)
         appeal_stash['page_url'] = page_url
 
         user_stash[CURRENT] = appeal_stash
