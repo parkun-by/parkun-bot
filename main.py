@@ -2755,6 +2755,8 @@ async def ban_user_command(message: types.Message, state: FSMContext):
     logger.info('Забанил человека - ' + str(message.from_user.id))
 
     try:
+        user_id: str
+        caption: str
         user_id, caption = message.text.replace('/ban ', '', 1).split(' ', 1)
     except ValueError:
         text = locales.text(language, 'id_and_caption_expected')
