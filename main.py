@@ -16,14 +16,15 @@ from aiogram.dispatcher.storage import FSMContextProxy
 from aiogram.types.photo_size import PhotoSize
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
-from aiogram.utils.exceptions import \
-    MessageNotModified, ChatNotFound, CantTalkWithBots
+from aiogram.utils.exceptions import (CantTalkWithBots, ChatNotFound,
+                                      MessageNotModified)
 from dateutil import tz
 from disposable_email_domains import blocklist
 
 import config
 import datetime_parser
 import territory
+import users
 from amqp_rabbit import Rabbit as AMQPRabbit
 from appeal_summary import AppealSummary
 from appeal_text import AppealText
@@ -35,11 +36,11 @@ from locator import Locator
 from mail_verifier import MailVerifier
 from photo_manager import PhotoManager
 from photoitem import PhotoItem
+from scheduler import Scheduler
 from states import Form
 from states_stack import StatesStack
 from statistic import Statistic
 from validator import Validator
-import users
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -139,6 +140,31 @@ async def get_ui_lang(state=None,
 
 
 states_stack = StatesStack(dp, get_value, get_ui_lang, locales.text)
+
+
+async def maybe_return_to_state(expected_state: str,
+                                state_to_set: str,
+                                user_id: int):
+    state = dp.current_state(chat=user_id, user=user_id)
+    current_state = await state.get_state()
+
+    if current_state == expected_state:
+        await state.set_state(state_to_set)
+    else:
+        return
+
+    language = await get_ui_lang(state)
+    text = locales.text(language, state_to_set)
+    await bot.send_message(user_id, text, disable_notification=True)
+
+
+CANCEL_ON_IDLE = 'cancel_on_idle'
+
+executors = {
+    CANCEL_ON_IDLE: maybe_return_to_state,
+}
+
+scheduler = Scheduler(bot_storage, executors, loop)
 
 
 def commer(text: str) -> str:
@@ -1713,6 +1739,23 @@ async def ask_for_police_response(state: FSMContext,
     text = locales.text(language, 'send_police_response')
     await bot.send_message(user_id, text, reply_markup=keyboard)
     await Form.police_response.set()
+    await schedule_auto_cancel(user_id, state)
+
+
+async def schedule_auto_cancel(user_id: int, state: FSMContext):
+    task_to_cancel = {
+        'user_id': user_id,
+        'executor': CANCEL_ON_IDLE,
+        'kvargs': {
+            'expected_state': await state.get_state(),
+            'state_to_set': Form.operational_mode.state,
+            'user_id': user_id,
+        },
+        'execute_time': datetime_parser.get_current_datetime_str(
+            shift_hours=config.AUTO_CANCEL_AFTER_HOURS)
+    }
+
+    await bot_storage.add_scheduled_task(task_to_cancel)
 
 
 def too_early_police_button(message_date: datetime) -> bool:
@@ -3590,6 +3633,7 @@ async def startup(dispatcher: Dispatcher):
     asyncio.create_task(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
     bot_storage.set_bot_id((await bot.get_me()).id)
+    asyncio.create_task(scheduler.start())
 
 
 async def shutdown(dispatcher: Dispatcher):

@@ -149,3 +149,6 @@ TPH_AUTHOR_NAME = "author_name"
 TPH_AUTHOR_URL = "author_url"
 
 TPH_AUTH_URL = "author_auth_url"
+
+# Auto cancel task starts after this amount of time
+AUTO_CANCEL_AFTER_HOURS = 1

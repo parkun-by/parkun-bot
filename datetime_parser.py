@@ -1,8 +1,8 @@
-import pytz
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
-import re
 
+import pytz
 
 FULL_DATETIME = r"^\s*(?:" + \
     r"(1[0-9]|2[0-9]|3[01]|0?[1-9])" + \
@@ -22,14 +22,21 @@ FULL_DATETIME = r"^\s*(?:" + \
 datetime_regexp = re.compile(FULL_DATETIME)
 
 
-def get_current_datetime(shift_days=0) -> datetime:
+def get_current_datetime(shift_days=0, shift_hours=0) -> datetime:
     tz_minsk = pytz.timezone('Europe/Minsk')
-    current_datetime = datetime.now(tz_minsk) + timedelta(days=shift_days)
+
+    current_datetime = datetime.now(tz_minsk) + \
+        timedelta(days=shift_days, hours=shift_hours)
+
     return current_datetime
 
 
-def get_current_datetime_str(shift_days=0) -> str:
-    return get_current_datetime(shift_days).isoformat()
+def get_current_datetime_str(shift_days=0, shift_hours=0) -> str:
+    return get_current_datetime(shift_days, shift_hours).isoformat()
+
+
+def datetime_from_string(dt: str) -> datetime:
+    return datetime.fromisoformat(dt)
 
 
 def get_today(shift_days=0) -> str:
