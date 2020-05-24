@@ -149,6 +149,7 @@ async def maybe_return_to_state(expected_state: str,
     current_state = await state.get_state()
 
     if current_state == expected_state:
+        logger.info(f'Возврат в начальное состояние - {user_id}')
         await state.set_state(state_to_set)
     else:
         return
@@ -3630,10 +3631,10 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Загружаем границы регионов.')
     await locator.download_boundaries()
     logger.info('Подключаемся к очереди статусов обращений.')
-    asyncio.create_task(amqp_rabbit.start(loop, status_received))
+    asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
     bot_storage.set_bot_id((await bot.get_me()).id)
-    asyncio.create_task(scheduler.start())
+    asyncio.ensure_future(scheduler.start())
 
 
 async def shutdown(dispatcher: Dispatcher):
