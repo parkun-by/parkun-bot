@@ -36,8 +36,10 @@ class Scheduler():
                     executor = self.executors[task['executor']]
                     kvargs = task['kvargs']
 
-                    asyncio.run_coroutine_threadsafe(executor(**kvargs),
-                                                     self.loop)
+                    try:
+                        await executor(**kvargs)
+                    except Exception:
+                        logger.exception('Задание упало')
 
                     await self.storage.delete_scheduled_task(user_id)
 
