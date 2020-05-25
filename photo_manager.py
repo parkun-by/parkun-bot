@@ -123,7 +123,7 @@ class PhotoManager:
         # rename folder_name in file paths
         appeal_stash['file_paths'] = list(map(
             lambda path: path.replace(CURRENT, str(appeal_id)),
-            appeal_stash['file_paths']
+            appeal_stash.get('file_paths', [])
         ))
 
         # rename key in storage
