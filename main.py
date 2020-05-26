@@ -3640,8 +3640,7 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, text)
 
 
-@dp.message_handler(content_types=types.ContentTypes.ANY,
-                    state=None)
+@dp.message_handler(content_types=types.ContentTypes.ANY, state=None)
 async def ask_for_button_press(message: types.Message, state: FSMContext):
     logger.info('Нет стейта - ' + str(message.from_user.id))
     await cmd_start(message, state)
@@ -3650,7 +3649,7 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
 async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
     logger.info('Загружаем границы регионов.')
-    await locator.download_boundaries()
+    asyncio.ensure_future(locator.download_boundaries())
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
