@@ -2892,12 +2892,33 @@ async def use_saved_address_command(message: types.Message, state: FSMContext):
     logger.info('Команда предыдущего адреса - ' +
                 str(message.from_user.id))
 
-    address_index = int(
-        message.text.replace(config.PREVIOUS_ADDRESS_PREFIX, ''))
+    language = await get_ui_lang(state)
+
+    # бывает, что пользователь вместо того, чтобы нажать на команду рядом с
+    # адресом копирует прямо все сообщение и присылает его боту
+    # в таком случае мы отругаемся на это и попросим прислать адрес еще раз
+
+    try:
+        address_index = int(
+            message.text.replace(config.PREVIOUS_ADDRESS_PREFIX, ''))
+    except ValueError:
+        # сказать, что что-то пошло не так
+        logger.info(f'Какая-то хрень вместо предыдущего адреса: ' +
+                    f'{message.text} - {str(message.from_user.id)}')
+
+        text = locales.text(language, 'invalid_address')
+
+        await bot.send_message(message.from_user.id,
+                               text,
+                               reply_to_message_id=message.message_id)
+
+        async with state.proxy() as data:
+            await ask_for_violation_address(message.from_user.id, data)
+
+        return
 
     async with state.proxy() as data:
         addresses = get_value(data, 'previous_violation_addresses')
-        language = await get_ui_lang(data=data)
 
         try:
             previous_address = addresses[int(address_index)]
