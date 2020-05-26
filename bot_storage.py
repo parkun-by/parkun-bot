@@ -83,22 +83,12 @@ class BotStorage():
     def set_bot_id(self, bot_id: int):
         self._bot_id = bot_id
 
-    async def get_scheduled_tasks(self) -> Dict[int, Dict]:
+    async def get_scheduled_tasks(self) -> Dict[int, list]:
         async with self._dp.current_state(chat=self._bot_id,
                                           user=self._bot_id).proxy() as data:
             return data.get('scheduled_tasks', dict())
 
-    async def add_scheduled_task(self, task: dict):
-        tasks = await self.get_scheduled_tasks()
-        tasks[task['user_id']] = task
-        await self.set_scheduled_tasks(tasks)
-
-    async def delete_scheduled_task(self, task_id: int):
-        tasks = await self.get_scheduled_tasks()
-        tasks.pop(task_id, dict())
-        await self.set_scheduled_tasks(tasks)
-
-    async def set_scheduled_tasks(self, tasks: Dict[int, dict]):
+    async def set_scheduled_tasks(self, tasks: Dict[int, list]):
         async with self._dp.current_state(chat=self._bot_id,
                                           user=self._bot_id).proxy() as data:
             data['scheduled_tasks'] = tasks

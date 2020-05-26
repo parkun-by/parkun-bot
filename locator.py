@@ -5,7 +5,9 @@ import config
 import json
 import territory
 import logging
+from scheduler import Scheduler, RELOAD_BOUNDARY
 from random import randint
+import datetime_parser
 
 
 logger = logging.getLogger(__name__)
@@ -16,10 +18,12 @@ class Locator:
         self._timeout = aiohttp.ClientTimeout(connect=5)
         self._boundaries = {}
         self.loop = loop
+        self.scheduler: Scheduler
+        self.bot_id: int = 0
 
-    async def __get_boundary(self,
-                             region: str,
-                             try_counter=30) -> None:
+    async def get_boundary(self,
+                           region: str,
+                           try_counter=30) -> None:
         region_name = config.OSM_REGIONS[region]
         url = 'http://nominatim.openstreetmap.org/search?'
 
@@ -61,22 +65,36 @@ class Locator:
 
             if try_counter >= 0:
                 logger.info(f"Еще одна попытка для региона {region}")
-                await self.__get_boundary(region, try_counter - 1)
+                await self.get_boundary(region, try_counter - 1)
             else:
                 logger.warning(f"Закончились попытки для региона {region}")
+                await self.download_boundary_later(region)
                 self._boundaries[region] = []
 
         else:
             logger.info(f"Загружены границы региона {region}")
             self._boundaries[region] = boundary
 
+    async def download_boundary_later(self, region: str):
+        task = {
+            'user_id': self.bot_id,
+            'executor': RELOAD_BOUNDARY,
+            'kvargs': {
+                'region': region,
+            },
+            'execute_time': datetime_parser.get_current_datetime_str(
+                shift_hours=config.DEFAULT_SCHEDULER_PAUSE)
+        }
+
+        await self.scheduler.add_task(task)
+
     async def download_boundaries(self):
         tasks = []
 
         for region in config.OSM_REGIONS:
-            task = asyncio.ensure_future(self.__get_boundary(region))
+            task = asyncio.ensure_future(self.get_boundary(region))
             tasks.append(task)
-            await asyncio.sleep(randint(1, 10))
+            await asyncio.sleep(1)
 
         asyncio.gather(*tasks)
 

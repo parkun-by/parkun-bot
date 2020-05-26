@@ -36,7 +36,7 @@ from locator import Locator
 from mail_verifier import MailVerifier
 from photo_manager import PhotoManager
 from photoitem import PhotoItem
-from scheduler import Scheduler
+from scheduler import Scheduler, CANCEL_ON_IDLE, RELOAD_BOUNDARY
 from states import Form
 from states_stack import StatesStack
 from statistic import Statistic
@@ -149,7 +149,7 @@ async def maybe_return_to_state(expected_state: str,
     current_state = await state.get_state()
 
     if current_state == expected_state:
-        logger.info(f'Возврат в начальное состояние - {user_id}')
+        logger.info(f'Автовозврат в начальное состояние - {user_id}')
         await state.set_state(state_to_set)
     else:
         return
@@ -158,14 +158,13 @@ async def maybe_return_to_state(expected_state: str,
     text = locales.text(language, state_to_set)
     await bot.send_message(user_id, text, disable_notification=True)
 
-
-CANCEL_ON_IDLE = 'cancel_on_idle'
-
 executors = {
     CANCEL_ON_IDLE: maybe_return_to_state,
+    RELOAD_BOUNDARY: locator.get_boundary,
 }
 
 scheduler = Scheduler(bot_storage, executors, loop)
+locator.scheduler = scheduler
 
 
 def commer(text: str) -> str:
@@ -1753,10 +1752,10 @@ async def schedule_auto_cancel(user_id: int, state: FSMContext):
             'user_id': user_id,
         },
         'execute_time': datetime_parser.get_current_datetime_str(
-            shift_hours=config.AUTO_CANCEL_AFTER_HOURS)
+            shift_hours=config.DEFAULT_SCHEDULER_PAUSE)
     }
 
-    await bot_storage.add_scheduled_task(task_to_cancel)
+    await scheduler.add_task(task_to_cancel)
 
 
 def too_early_police_button(message_date: datetime) -> bool:

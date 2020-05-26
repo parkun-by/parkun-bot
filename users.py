@@ -1,7 +1,6 @@
 import aioredis
 import config
 import json
-from typing import Union, Iterator
 
 
 async def verified():
