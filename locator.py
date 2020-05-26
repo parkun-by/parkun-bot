@@ -4,6 +4,10 @@ import aiohttp
 import config
 import json
 import territory
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class Locator:
@@ -51,11 +55,14 @@ class Locator:
             await asyncio.sleep(5)
 
             if try_counter >= 0:
+                logger.info(f"Еще одна попытка для региона {region}")
                 await self.__get_boundary(region, try_counter - 1)
             else:
+                logger.warning(f"Закончились попытки для региона {region}")
                 self._boundaries[region] = []
 
         else:
+            logger.info(f"Загружены границы региона {region}")
             self._boundaries[region] = boundary
 
     async def download_boundaries(self):
