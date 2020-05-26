@@ -62,7 +62,7 @@ class Locator:
         tasks = []
 
         for region in config.OSM_REGIONS:
-            task = asyncio.create_task(self.__get_boundary(region))
+            task = asyncio.ensure_future(self.__get_boundary(region))
             tasks.append(task)
 
         asyncio.gather(*tasks)
