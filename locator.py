@@ -5,6 +5,7 @@ import config
 import json
 import territory
 import logging
+from random import randint
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,10 @@ class Locator:
         except IndexError:
             boundary = []
 
+        except Exception:
+            logger.exception(f"Ошибка при загрузке региона")
+            boundary = []
+
         if not boundary:
             await asyncio.sleep(5)
 
@@ -71,6 +76,7 @@ class Locator:
         for region in config.OSM_REGIONS:
             task = asyncio.ensure_future(self.__get_boundary(region))
             tasks.append(task)
+            await asyncio.sleep(randint(1, 10))
 
         asyncio.gather(*tasks)
 
