@@ -65,7 +65,7 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
 photo_manager = PhotoManager(loop)
-bot_storage = BotStorage(dp)
+bot_storage = BotStorage()
 statistic = Statistic(bot_storage)
 
 
@@ -3652,7 +3652,7 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
-    bot_storage.set_bot_id((await bot.get_me()).id)
+    await bot_storage.start()
     asyncio.ensure_future(scheduler.start())
 
 

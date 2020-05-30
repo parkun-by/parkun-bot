@@ -1,94 +1,86 @@
-from typing import Any, Dict, Optional
+import json
+from typing import Any, Dict
 
-from aiogram.dispatcher import Dispatcher
-from aiogram.dispatcher.storage import FSMContextProxy
+import aioredis
 
+import config
 from datetime_parser import get_today
+
+PREFIX = "BotStorage:"
 
 
 class BotStorage():
-    def __init__(self, dispatcher: Dispatcher):
-        self._dp = dispatcher
-        self._bot_id: Optional[int] = None
+    def __init__(self):
+        self._redis = None
+
+    async def start(self):
+        self._redis = await aioredis.create_redis(
+            f'redis://{config.REDIS_HOST}:{config.REDIS_PORT}',
+            password=config.REDIS_PASSWORD)
+
+    async def _get_value(self, key: str, default: Any = dict()) -> Any:
+        key = PREFIX + key
+
+        if await self._redis.exists(key):
+            raw_value = await self._redis.get(key)
+            value: dict = json.loads(raw_value)
+            return value
+        else:
+            return default
+
+    async def _set_value(self, key: str, value: Any):
+        key = PREFIX + key
+        raw_value = json.dumps(value)
+        await self._redis.set(key, raw_value)
 
     async def get_bans(self) -> Dict[str, Any]:
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            return data.get('banned_users', dict())
+        return await self._get_value('banned_users')
 
     async def set_bans(self, bans: dict):
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            data['banned_users'] = bans
+        await self._set_value('banned_users', bans)
 
     async def get_appeals_count(self) -> int:
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            count = data.get('appeals_sent_count', None)
-
-            if count is None:
-                data['appeals_sent_count'] = 0
-                return 0
-
-            return count
+        count = await self._get_value('appeals_sent_count', 0)
+        return int(count)
 
     async def get_appeals_today_count(self) -> int:
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            self._update_today_count(data, 0)
-            return data.get('appeals_sent_today_count', None)
+        return await self._get_value('appeals_sent_today_count', 0)
 
     async def get_appeals_yesterday_count(self) -> int:
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            self._update_today_count(data, 0)
-            return data.get('appeals_sent_yesterday_count', None)
+        return await self._get_value('appeals_sent_yesterday_count', 0)
 
     async def update_appeals_count(self, amount=1):
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            self._update_whole_count(data, amount)
-            self._update_today_count(data, amount)
+        await self._update_whole_count(amount)
+        await self._update_today_count(amount)
 
-    def _update_whole_count(self, data: FSMContextProxy, amount: int):
-        count = data.get('appeals_sent_count', None)
+    async def _update_whole_count(self, amount: int):
+        count = await self._get_value('appeals_sent_count', 0)
+        await self._set_value('appeals_sent_count', int(count) + amount)
 
-        if count is None:
-            data['appeals_sent_count'] = amount
-        else:
-            data['appeals_sent_count'] += amount
-
-    def _update_today_count(self, data: FSMContextProxy, amount: int):
-        count = data.get('appeals_sent_today_count', None)
-        date = data.get('appeals_sent_today_date', None)
+    async def _update_today_count(self, amount: int):
+        count = await self._get_value('appeals_sent_today_count', None)
+        date = await self._get_value('appeals_sent_today_date', None)
         today = get_today()
 
         if count is None or date is None:
-            self._save_yesterday(data, 0)
-            data['appeals_sent_today_count'] = amount
-            data['appeals_sent_today_date'] = today
+            await self._save_yesterday(0)
+            await self._set_value('appeals_sent_today_count', amount)
+            await self._set_value('appeals_sent_today_date', today)
             return
 
         if today != date:
-            self._save_yesterday(data, count)
-            data['appeals_sent_today_count'] = amount
-            data['appeals_sent_today_date'] = today
+            await self._save_yesterday(count)
+            await self._set_value('appeals_sent_today_count', amount)
+            await self._set_value('appeals_sent_today_date', today)
             return
 
-        data['appeals_sent_today_count'] += amount
+        await self._set_value('appeals_sent_today_count', int(count) + amount)
 
-    def _save_yesterday(self, data: FSMContextProxy, amount: int):
-        data['appeals_sent_yesterday_count'] = amount
-
-    def set_bot_id(self, bot_id: int):
-        self._bot_id = bot_id
+    async def _save_yesterday(self, amount: int):
+        await self._set_value('appeals_sent_yesterday_count', amount)
 
     async def get_scheduled_tasks(self) -> Dict[int, list]:
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            return data.get('scheduled_tasks', dict())
+        return await self._get_value('scheduled_tasks')
 
     async def set_scheduled_tasks(self, tasks: Dict[int, list]):
-        async with self._dp.current_state(chat=self._bot_id,
-                                          user=self._bot_id).proxy() as data:
-            data['scheduled_tasks'] = tasks
+        await self._set_value('scheduled_tasks', tasks)
