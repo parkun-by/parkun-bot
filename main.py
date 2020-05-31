@@ -367,7 +367,7 @@ async def compose_appeal(data: FSMContextProxy,
         'sender_block': get_value(data, 'sender_block'),
         'sender_flat': get_value(data, 'sender_flat'),
         'sender_zipcode': get_value(data, 'sender_zipcode'),
-        'sender_email': get_appeal_email(data),
+        'sender_email': await get_appeal_email(data, user_id),
         'sender_email_password': get_value(data, 'sender_email_password'),
         'user_id': user_id,
         'appeal_id': appeal_id,
@@ -706,33 +706,49 @@ async def reply_that_captcha_ok(user_id: int, appeal_id: int) -> None:
                            disable_notification=True)
 
 
-def get_appeal_email(data) -> Optional[str]:
-    if get_value(data, 'sender_email_password', ''):
-        return get_value(data, 'sender_email', '')
+async def get_appeal_email(data, user_id) -> Optional[str]:
+    password = get_value(data, 'sender_email_password', '')
+
+    if not password:
+        return None
+
+    email = get_value(data, 'sender_email', '')
+
+    if await Email(loop).check_connection(email, password):
+        return email
+
+    language = await get_ui_lang(data=data)
+    text = locales.text(language, "email_unavailable").format(email)
+
+    await bot.send_message(user_id,
+                           text,
+                           disable_notification=True,
+                           parse_mode='HTML')
+    return None
 
 
 async def send_captcha_text(state: FSMContext,
-                            chat_id: int,
+                            user_id: int,
                             captcha_text: str,
                             appeal_id: int) -> None:
-    logger.info(f'Посылаем текст капчи - {chat_id}')
+    logger.info(f'Посылаем текст капчи - {user_id}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
-        appeal_email = get_appeal_email(data)
+        appeal_email = await get_appeal_email(data, user_id)
 
     try:
         await http_rabbit.send_captcha_text(
             captcha_text,
-            chat_id,
+            user_id,
             appeal_id,
             appeal_email,
             get_value(data, 'appeal_response_queue'))
 
     except Exception as exc:
         text = locales.text(language, 'sending_failed') + '\n' + str(exc)
-        logger.error('Неудачка - ' + str(chat_id) + '\n' + str(exc))
-        await bot.send_message(chat_id, text)
+        logger.error('Неудачка - ' + str(user_id) + '\n' + str(exc))
+        await bot.send_message(user_id, text)
 
 
 def ensure_attachments_availability(data: FSMContextProxy):
