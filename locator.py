@@ -23,7 +23,7 @@ class Locator:
 
     async def get_boundary(self,
                            region: str,
-                           try_counter=30) -> None:
+                           try_counter=5) -> None:
         region_name = config.OSM_REGIONS[region]
         url = 'http://nominatim.openstreetmap.org/search?'
 
@@ -63,12 +63,12 @@ class Locator:
         if not boundary:
             await asyncio.sleep(5)
 
-            if try_counter >= 0:
+            if try_counter > 0:
                 logger.info(f"Еще одна попытка для региона {region}")
                 await self.get_boundary(region, try_counter - 1)
             else:
                 logger.warning(f"Закончились попытки для региона {region}")
-                await self.download_boundary_later(region)
+                asyncio.ensure_future(self.download_boundary_later(region))
                 self._boundaries[region] = []
 
         else:
