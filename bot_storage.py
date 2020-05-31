@@ -1,12 +1,15 @@
 import json
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 import aioredis
 
 import config
 from datetime_parser import get_today
+from asyncio import Semaphore
 
-PREFIX = "BotStorage:"
+PREFIX = "bot_storage:"
+semaphore = Semaphore()
 
 
 class BotStorage():
@@ -79,8 +82,18 @@ class BotStorage():
     async def _save_yesterday(self, amount: int):
         await self._set_value('appeals_sent_yesterday_count', amount)
 
-    async def get_scheduled_tasks(self) -> Dict[int, list]:
+    @asynccontextmanager
+    async def tasks(self):
+        async with semaphore:
+            tasks = await self.get_scheduled_tasks()
+
+            try:
+                yield tasks
+            finally:
+                await self.set_scheduled_tasks(tasks)
+
+    async def get_scheduled_tasks(self) -> Dict[str, list]:
         return await self._get_value('scheduled_tasks')
 
-    async def set_scheduled_tasks(self, tasks: Dict[int, list]):
+    async def set_scheduled_tasks(self, tasks: Dict[str, list]):
         await self._set_value('scheduled_tasks', tasks)
