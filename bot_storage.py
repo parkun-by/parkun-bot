@@ -1,15 +1,31 @@
 import json
+import logging
+from asyncio import Semaphore
 from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 import aioredis
 
 import config
 from datetime_parser import get_today
-from asyncio import Semaphore
 
 PREFIX = "bot_storage:"
 semaphore = Semaphore()
+logger = logging.getLogger(__name__)
+
+
+def safe_redis(func: Callable) -> Callable:
+    async def try_function(*args, default=None):
+        try:
+            return await func(*args)
+        except aioredis.errors.ReplyError:
+            logger.error("Redis еще не готов")
+        except Exception:
+            logger.exception("Что-то не так с хранилищем")
+
+        return default
+
+    return try_function
 
 
 class BotStorage():
@@ -21,16 +37,18 @@ class BotStorage():
             f'redis://{config.REDIS_HOST}:{config.REDIS_PORT}',
             password=config.REDIS_PASSWORD)
 
+    @safe_redis
     async def _get_value(self, key: str, default: Any = dict()) -> Any:
         key = PREFIX + key
 
         if await self._redis.exists(key):
             raw_value = await self._redis.get(key)
             value: dict = json.loads(raw_value)
-            return value
+            return value or default
         else:
             return default
 
+    @safe_redis
     async def _set_value(self, key: str, value: Any):
         key = PREFIX + key
         raw_value = json.dumps(value)
