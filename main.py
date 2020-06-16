@@ -2897,8 +2897,10 @@ async def write_feedback(message: types.Message, state: FSMContext):
     if current_state != Form.feedback.state:
         await states_stack.add(message.chat.id, data_to_save)
 
-    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
+    user_id = message.chat.id
+    await bot.send_message(user_id, text, reply_markup=keyboard)
     await Form.feedback.set()
+    await schedule_auto_cancel(user_id, state)
 
 
 @dp.message_handler(regexp=config.PREVIOUS_ADDRESS_REGEX,
