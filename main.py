@@ -1752,7 +1752,7 @@ async def ask_for_police_response(state: FSMContext,
         language = await get_ui_lang(data=data)
         keyboard = await get_cancel_keyboard(data)
 
-    text = locales.text(language, 'send_police_response')
+    text = locales.text(language, Form.police_response.state)
     await bot.send_message(user_id, text, reply_markup=keyboard)
     await Form.police_response.set()
     await schedule_auto_cancel(user_id, state)
@@ -2116,7 +2116,7 @@ async def verify_email_click(call, state: FSMContext):
 
         await Form.operational_mode.set()
     else:
-        text = locales.text(language, 'enter_secret_code') + '\n' +\
+        text = locales.text(language, Form.email_verifying.state) + '\n' +\
             locales.text(language, 'spam_folder')
 
         async with state.proxy() as data:
@@ -2667,6 +2667,8 @@ async def reject_button_click(call, state: FSMContext):
     language = await get_ui_lang(state)
 
     text = locales.text(language, 'irrelevant_action')
+    current_state = await state.get_state()
+    text += "\n\n" + locales.text(language, current_state)
 
     await bot.send_message(call.message.chat.id, text)
 
@@ -3404,7 +3406,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
                                            data,
                                            message.chat.id)
 
-        text = locales.text(language, 'photo_or_info') + '\n' +\
+        text = locales.text(language, Form.violation_photo.state) + '\n' +\
             '\n' +\
             '👮🏻‍♂️' + ' ' + locales.text(language, 'photo_quality_warning')
 
@@ -3590,7 +3592,7 @@ async def reject_wrong_input(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     language = await get_ui_lang(state)
-    text = locales.text(language, 'great_expectations')
+    text = locales.text(language, Form.operational_mode.state)
 
     await bot.send_message(message.chat.id, text)
 
@@ -3613,7 +3615,7 @@ async def reject_wrong_police_response_input(message: types.Message,
 async def reject_wrong_violation_photo_input(message: types.Message,
                                              state: FSMContext):
     language = await get_ui_lang(state)
-    text = locales.text(language, 'photo_or_info')
+    text = locales.text(language, Form.violation_photo.state)
     keyboard = get_photo_step_keyboard(language)
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
