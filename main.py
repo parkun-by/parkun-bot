@@ -57,7 +57,6 @@ storage = RedisStorage2(host=config.REDIS_HOST,
                         password=config.REDIS_PASSWORD)
 
 dp = Dispatcher(bot, storage=storage)
-locator = Locator(loop)
 mail_verifier = MailVerifier()
 semaphore = asyncio.Semaphore()
 locales = Locales()
@@ -65,8 +64,10 @@ validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
 photo_manager = PhotoManager(loop)
-bot_storage = BotStorage()
-statistic = Statistic(bot_storage)
+bot_storage: BotStorage
+statistic: Statistic
+scheduler: Scheduler
+locator: Locator
 
 
 def get_value(data: Union[FSMContextProxy, dict],
@@ -157,14 +158,6 @@ async def maybe_return_to_state(expected_state: str,
     language = await get_ui_lang(state)
     text = locales.text(language, state_to_set)
     await bot.send_message(user_id, text, disable_notification=True)
-
-executors = {
-    CANCEL_ON_IDLE: maybe_return_to_state,
-    RELOAD_BOUNDARY: locator.get_boundary,
-}
-
-scheduler = Scheduler(bot_storage, executors, loop)
-locator.scheduler = scheduler
 
 
 def commer(text: str) -> str:
@@ -3665,14 +3658,36 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
     await cmd_start(message, state)
 
 
+async def create_global_objects():
+    global bot_storage
+    bot_storage = await BotStorage.create()
+
+    global locator
+    locator = Locator(loop)
+
+    executors = {
+        CANCEL_ON_IDLE: maybe_return_to_state,
+        RELOAD_BOUNDARY: locator.get_boundary,
+    }
+
+    global scheduler
+    scheduler = Scheduler(bot_storage, executors, loop)
+
+    locator.scheduler = scheduler
+
+    global statistic
+    statistic = Statistic(bot_storage)
+
+
 async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
-    logger.info('Загружаем границы регионов.')
-    asyncio.ensure_future(locator.download_boundaries())
+    await create_global_objects()
     logger.info('Подключаемся к очереди статусов обращений.')
     asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
     logger.info('Подключились.')
-    await bot_storage.start()
+    logger.info('Загружаем границы регионов.')
+    asyncio.ensure_future(locator.download_boundaries())
+    logger.info('Запускаем планировщик.')
     asyncio.ensure_future(scheduler.start())
 
 
