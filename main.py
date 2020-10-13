@@ -372,7 +372,9 @@ async def compose_appeal(data: FSMContextProxy,
     return appeal
 
 
-async def send_success_sending(user_id: int, appeal_id: int) -> None:
+async def send_success_sending(user_id: int,
+                               appeal_id: int,
+                               appeal: dict) -> None:
     logger.info(f'Успешно отправлено - {str(user_id)}:{str(appeal_id)}')
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
@@ -386,7 +388,6 @@ async def send_success_sending(user_id: int, appeal_id: int) -> None:
     await statistic.count_sent_appeal()
 
     async with state.proxy() as data:
-        appeal = get_appeal_from_user_queue(data, appeal_id)
         delete_files = True
 
         if appeal:
@@ -552,6 +553,13 @@ async def send_appeal(user_id: int, appeal_id: int) -> None:
                     f'поставлено в очередь - {str(user_id)}')
 
         await bot.send_message(user_id, text)
+
+        # leave files on disk because we need them to share later
+        await delete_appeal_from_user_queue(data,
+                                            user_id,
+                                            appeal_id,
+                                            with_files=False)
+
         await Form.operational_mode.set()
 
 
@@ -654,7 +662,7 @@ async def fill_text_violation_data(data: FSMContextProxy,
 
 
 async def status_received(status: str) -> None:
-    sender_data = json.loads(status)
+    sender_data: dict = json.loads(status)
     queue_id = str(get_value(sender_data, 'answer_queue', 'undefined'))
 
     logger.info(f'Прилетел статус: ' +
@@ -663,10 +671,11 @@ async def status_received(status: str) -> None:
 
     user_id = int(sender_data['user_id'])
     appeal_id = int(sender_data['appeal_id'])
+    appeal = sender_data.get('appeal', dict())
 
     if sender_data['type'] == config.OK:
         asyncio.run_coroutine_threadsafe(
-            send_success_sending(user_id, appeal_id),
+            send_success_sending(user_id, appeal_id, appeal),
             loop)
     elif sender_data['type'] == config.CAPTCHA_URL:
         asyncio.run_coroutine_threadsafe(
