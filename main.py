@@ -63,7 +63,7 @@ locales = Locales()
 validator = Validator()
 http_rabbit = HTTPRabbit()
 amqp_rabbit = AMQPRabbit()
-photo_manager = PhotoManager(loop)
+photo_manager: PhotoManager
 bot_storage: BotStorage
 statistic: Statistic
 scheduler: Scheduler
@@ -586,8 +586,10 @@ async def process_entered_violation(data: FSMContextProxy,
                                     user_id: int,
                                     appeal_id: int):
     await photo_manager.set_id_to_current_photos(user_id, appeal_id)
+    await photo_manager.clear_storage(user_id)
 
     if not await get_prepared_photos(data, user_id, appeal_id):
+        await photo_manager.clear_storage(user_id, appeal_id)
         return
 
     appeal = await compose_appeal(data, user_id, appeal_id)
@@ -2501,6 +2503,8 @@ async def cancel_violation_input(call, state: FSMContext):
         language = await get_ui_lang(data=data)
 
         delete_prepared_violation(data)
+        await photo_manager.clear_storage(call.message.chat.id,
+                                          with_files=True)
 
     await Form.operational_mode.set()
     await send_form_message(Form.operational_mode.state,
@@ -3243,7 +3247,7 @@ async def catch_sender_zipcode(message: types.Message, state: FSMContext):
     await show_private_info_summary(message.chat.id, state)
 
 
-@dp.message_handler(content_types=types.ContentTypes.PHOTO,
+@dp.message_handler(content_types=types.ContentType.PHOTO,
                     state=Form.police_response)
 async def police_response_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки ответа ГАИ - ' +
@@ -3369,7 +3373,7 @@ async def message_to_broadcast(message: types.Message, state: FSMContext):
                             language)
 
 
-@dp.message_handler(content_types=types.ContentTypes.PHOTO,
+@dp.message_handler(content_types=types.ContentType.PHOTO,
                     state=Form.operational_mode)
 async def initial_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку первой фотки - ' +
@@ -3388,7 +3392,7 @@ async def initial_violation_photo(message: types.Message, state: FSMContext):
         await process_violation_photo(message, state)
 
 
-@dp.message_handler(content_types=types.ContentTypes.PHOTO,
+@dp.message_handler(content_types=types.ContentType.PHOTO,
                     state=Form.violation_photo)
 async def process_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку еще фотки нарушения - ' +
@@ -3686,6 +3690,9 @@ async def create_global_objects():
 
     global statistic
     statistic = Statistic(bot_storage)
+
+    global photo_manager
+    photo_manager = await PhotoManager.create(loop)
 
 
 async def startup(dispatcher: Dispatcher):

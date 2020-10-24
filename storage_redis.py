@@ -57,3 +57,41 @@ class StorageRedis:
         key = self.PREFIX + key
         raw_value = json.dumps(value)
         await self._redis.set(key, raw_value)
+
+    @safe_redis
+    async def add_set_member(self, key: str, value: Any, *values):
+        key = self.PREFIX + key
+        values = (value, *values)
+        await self._redis.sadd(key, *values)
+
+    @safe_redis
+    async def get_set(self, key: str, default: Any = ()) -> Any:
+        key = self.PREFIX + key
+
+        if await self._redis.exists(key):
+            raw_values = await self._redis.smembers(key)
+
+            value = list(map(lambda raw_value: raw_value.decode('utf8'),
+                             raw_values))
+
+            return value or default
+        else:
+            return default
+
+    @safe_redis
+    async def delete(self, key: str, *keys):
+        keys = (*keys, key)
+        keys = map(lambda key: self.PREFIX + key, keys)
+        await self._redis.delete(*keys)
+
+    @safe_redis
+    async def keys(self, pattern: str):
+        pattern = self.PREFIX + pattern
+        return await self._redis.keys(pattern)
+
+    @safe_redis
+    async def delete_by_pattern(self, pattern: str):
+        keys = await self.keys(pattern)
+
+        if keys:
+            await self._redis.delete(*keys)
