@@ -308,11 +308,15 @@ async def invite_to_confirm_email(data, chat_id):
                            parse_mode='HTML')
 
 
-async def send_appeal_textfile_to_user(appeal_text, language, chat_id):
+async def send_appeal_textfile_to_user(appeal_text: str,
+                                       language: str,
+                                       user_id: int,
+                                       appeal_id: int):
     appeal_text = convert_for_windows(appeal_text)
     file = io.StringIO(appeal_text)
-    file.name = locales.text(language, 'letter_html')
-    await bot.send_document(chat_id, file)
+    appeal_number = f'{str(appeal_id)}'
+    file.name = locales.text(language, 'letter_html').format(appeal_number)
+    await bot.send_document(user_id, file)
 
 
 def convert_for_windows(appeal_text: str) -> str:
@@ -393,7 +397,8 @@ async def send_success_sending(user_id: int,
         if appeal:
             await send_appeal_textfile_to_user(appeal['text'],
                                                language,
-                                               user_id)
+                                               user_id,
+                                               appeal_id)
 
             post_url = await send_violation_to_channel(
                 language,
@@ -1956,12 +1961,14 @@ async def show_appel_text_template(call, state: FSMContext):
 
         }
 
-        appeal_text = get_appeal_text(appeal_data, user_id, 12345),
+        fake_appeal_id = 12345
+        appeal_text = get_appeal_text(appeal_data, user_id, fake_appeal_id),
 
         # idk why appeal_text becomes tuple, some kind of magic
         await send_appeal_textfile_to_user(appeal_text[0],
                                            language,
-                                           user_id)
+                                           user_id,
+                                           fake_appeal_id)
 
 
 @dp.callback_query_handler(
