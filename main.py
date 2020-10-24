@@ -3257,7 +3257,11 @@ async def police_response_photo(message: types.Message, state: FSMContext):
         response_violation_post_url = get_value(data, 'responsed_post_url')
         language = await get_ui_lang(data=data)
 
-    caption = f'{config.RESPONSE_HASHTAG}\n{response_violation_post_url}'
+    violation_title = locales.text(language, 'violator')
+
+    caption = f'{config.RESPONSE_HASHTAG}\n' \
+        f'{violation_title} {response_violation_post_url}'
+
     photo_id = message.photo[-1]['file_id']
 
     post_url = await send_photos_group_with_caption([photo_id],
@@ -3289,7 +3293,11 @@ async def police_response_text(message: types.Message, state: FSMContext):
         response_violation_post_url = get_value(data, 'responsed_post_url')
         language = await get_ui_lang(data=data)
 
-    caption = f'{config.RESPONSE_HASHTAG}\n{response_violation_post_url}'
+    violation_title = locales.text(language, 'violator')
+
+    caption = f'{config.RESPONSE_HASHTAG}\n' \
+        f'{violation_title} {response_violation_post_url}'
+
     response = f'<pre>{message.text}</pre>'
     text = caption + '\n\n' + response
     post = await bot.send_message(config.CHANNEL, text, parse_mode='HTML')
