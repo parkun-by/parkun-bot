@@ -1250,16 +1250,16 @@ def get_saved_addresses_list(addresses: list) -> str:
     return addresses_list
 
 
-async def send_language_info(chat_id: int, data: FSMContextProxy) -> None:
+async def send_language_info(user_id: int, data: FSMContextProxy) -> None:
     text, keyboard = await get_language_text_and_keyboard(data)
 
-    await bot.send_message(chat_id,
+    await bot.send_message(user_id,
                            text,
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
 
-async def send_appeal_email_info(chat_id: int, data: FSMContextProxy) -> None:
+async def send_appeal_email_info(user_id: int, data: FSMContextProxy) -> None:
     language = await get_ui_lang(data=data)
     email = get_value(data, 'sender_email')
     text = locales.text(language, 'email_password').format(email)
@@ -1283,7 +1283,7 @@ async def send_appeal_email_info(chat_id: int, data: FSMContextProxy) -> None:
                  enter_password_button,
                  delete_password_button)
 
-    await bot.send_message(chat_id,
+    await bot.send_message(user_id,
                            text,
                            reply_markup=keyboard,
                            parse_mode='HTML')
@@ -1297,7 +1297,7 @@ def save_recipient(data: FSMContextProxy, recipient: Optional[str]) -> None:
 
 
 async def print_violation_address_info(state: FSMContext,
-                                       chat_id: int) -> None:
+                                       user_id: int) -> None:
     async with state.proxy() as data:
         address = get_value(data, 'violation_address')
         region = get_value(data, 'recipient')
@@ -1322,7 +1322,7 @@ async def print_violation_address_info(state: FSMContext,
 
     keyboard.add(enter_violation_addr_button, enter_recipient_button)
 
-    await bot.send_message(chat_id,
+    await bot.send_message(user_id,
                            text,
                            reply_markup=keyboard,
                            parse_mode='HTML')
@@ -1339,12 +1339,12 @@ async def save_violation_address(address: str,
     save_entered_address(data, address)
 
 
-async def ask_for_violation_time(chat_id, language):
+async def ask_for_violation_time(user_id: int, language: str):
     text, keyboard = compose_violation_time_asking(
         language,
         datetime_parser.get_current_datetime_str())
 
-    await bot.send_message(chat_id,
+    await bot.send_message(user_id,
                            text,
                            reply_markup=keyboard,
                            parse_mode='HTML')
@@ -1649,6 +1649,9 @@ async def show_settings(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
         email = get_value(data, 'sender_email')
 
+        saved_violation_addresses = get_value(data,
+                                              'previous_violation_addresses')
+
     text = locales.text(language, 'select_section')
 
     # настроим клавиатуру
@@ -1666,12 +1669,17 @@ async def show_settings(message: types.Message, state: FSMContext):
         text=locales.text(language, 'language_settings'),
         callback_data='/language_settings')
 
+    clear_saved_violation_addresses_button = types.InlineKeyboardButton(
+        text=locales.text(language, 'clear_saved_violation_addresses'),
+        callback_data='/clear_saved_violation_addresses')
+
+    keyboard.add(personal_info_button, language_settings_button)
+
     if email:
-        keyboard.add(personal_info_button,
-                     appeal_email_button,
-                     language_settings_button)
-    else:
-        keyboard.add(personal_info_button, language_settings_button)
+        keyboard.add(appeal_email_button)
+
+    if saved_violation_addresses:
+        keyboard.add(clear_saved_violation_addresses_button)
 
     await bot.send_message(message.chat.id,
                            text,
@@ -2077,6 +2085,20 @@ async def language_settings_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         await send_language_info(call.message.chat.id, data)
+
+
+@dp.callback_query_handler(
+    lambda call: call.data == '/clear_saved_violation_addresses',
+    state='*')
+async def clear_saved_violation_addresses_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки очистки предыдущих адресов - ' +
+                str(call.from_user.id))
+    async with state.proxy() as data:
+        language = await get_ui_lang(data=data)
+        data.pop('previous_violation_addresses', None)
+
+    text = locales.text(language, 'saved_violation_addresses_deleted')
+    await bot.answer_callback_query(call.id, text)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/appeal_email',
