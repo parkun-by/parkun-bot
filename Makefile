@@ -10,10 +10,10 @@ py_env:
 		pip install -r requirements.txt; \
 	)
 
-start_dev_env:
+start_dev:
 	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-dev-env.yml up -d --build
 
-stop_dev_env:
+stop_dev:
 	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-dev-env.yml down
 
 start_prod:
