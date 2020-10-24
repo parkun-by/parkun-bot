@@ -37,12 +37,24 @@ class Scheduler():
 
         while True:
             async with self.storage.tasks() as tasks:
+                empty_users = list()
+
                 for user_id in tasks:
-                    user_tasks = tasks[user_id]
+                    user_tasks: list = tasks[user_id]
                     user_tasks = await self.handle_tasks(user_tasks)
                     tasks[user_id] = user_tasks
 
+                    if not user_tasks:
+                        empty_users.append(user_id)
+
+                if empty_users:
+                    self._delete_user_queue(tasks, *empty_users)
+
             await asyncio.sleep(60)
+
+    def _delete_user_queue(self, tasks: dict, user: int, *users):
+        for user_id in (user, *users):
+            tasks.pop(user_id, None)
 
     async def handle_tasks(self, user_tasks: list) -> list:
         current_time_str = datetime_parser.get_current_datetime_str()
