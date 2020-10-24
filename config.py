@@ -127,19 +127,14 @@ RABBIT_QUEUE_APPEALS = 'appeal'
 # sender messages types
 CAPTCHA_TEXT = 'captcha_text'
 CAPTCHA_URL = 'captcha_url'
-CAPTCHA_FAIL = 'captcha_fail'
-GET_CAPTCHA = 'get_captcha'
 APPEAL = 'appeal'
 CANCEL = 'cancel'
 CAPTCHA_OK = 'captcha_ok'
 SENDING_CANCELLED = 'sending_cancelled'
-FREE_WORKER = 'free_worker'
-BUSY_WORKER = 'busy_worker'
 
 # status codes
 OK = 'ok'
-FAIL = 'fail'
-WRONG_INPUT = 'wrong_input'
+BAD_EMAIL = 'bad_email'
 
 # Telegra.ph
 TPH_ACCESS_TOKEN = "put_token_here"

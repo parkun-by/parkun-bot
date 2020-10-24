@@ -702,12 +702,27 @@ async def status_received(status: str) -> None:
             cancel_sending(user_id, appeal_id, sender_data['message']),
             loop
         )
+    elif sender_data['type'] == config.BAD_EMAIL:
+        asyncio.run_coroutine_threadsafe(
+            tell_about_bad_email(user_id, appeal_id),
+            loop
+        )
+
+
+async def tell_about_bad_email(user_id: int, appeal_id: int):
+    state = dp.current_state(chat=user_id, user=user_id)
+    language = await get_ui_lang(state)
+    text = locales.text(language, 'bad_email')
+
+    await bot.send_message(user_id,
+                           text,
+                           reply_to_message_id=appeal_id)
 
 
 async def reply_that_captcha_ok(user_id: int, appeal_id: int) -> None:
     state = dp.current_state(chat=user_id, user=user_id)
     language = await get_ui_lang(state)
-    text = text = locales.text(language, 'captcha_ok')
+    text = locales.text(language, 'captcha_ok')
 
     await bot.send_message(user_id,
                            text,
