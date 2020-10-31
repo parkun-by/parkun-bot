@@ -121,7 +121,7 @@ RABBIT_EXCHANGE_SENDING = 'sending'
 RABBIT_EXCHANGE_SHARING = 'sharing'
 RABBIT_ROUTING_VIOLATION = 'violation'
 RABBIT_ROUTING_APPEAL_TO_QUEUE = 'appeal_to_queue'
-RABBIT_QUEUE_STATUS = 'sending_status'
+RABBIT_QUEUE_STATUS = 'status_to_bot'
 RABBIT_QUEUE_APPEALS = 'appeal'
 
 # sender messages types
@@ -131,6 +131,7 @@ APPEAL = 'appeal'
 CANCEL = 'cancel'
 CAPTCHA_OK = 'captcha_ok'
 SENDING_CANCELLED = 'sending_cancelled'
+POST_URL = 'post_url'
 
 # status codes
 OK = 'ok'
@@ -147,3 +148,13 @@ TPH_AUTH_URL = "author_auth_url"
 
 # Pause before task execution
 DEFAULT_SCHEDULER_PAUSE = 1  # hours
+
+# text styles
+BOLD = 'bold'
+ITALIC = 'italic'
+MONO = 'mono'
+STRIKE = 'strike'
+
+# broadcaster reply messages types
+VIOLATION = 'violation'
+POLICE_RESPONSE = 'police_response'

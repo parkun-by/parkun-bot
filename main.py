@@ -6,7 +6,7 @@ import logging
 import re
 import sys
 from datetime import datetime, timedelta
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
@@ -335,19 +335,6 @@ def get_violation_caption(language: str,
         ' {}'.format(plate)
 
 
-async def send_violation_to_channel(language: str,
-                                    date_time: str,
-                                    location: str,
-                                    plate: str,
-                                    photos_id: list) -> str:
-    caption = get_violation_caption(language, date_time, location, plate)
-
-    # в канал
-    return await send_photos_group_with_caption(photos_id,
-                                                config.CHANNEL,
-                                                caption)
-
-
 async def compose_appeal(data: FSMContextProxy,
                          user_id: int,
                          appeal_id: int) -> dict:
@@ -400,21 +387,10 @@ async def send_success_sending(user_id: int,
                                                user_id,
                                                appeal_id)
 
-            post_url = await send_violation_to_channel(
+            delete_files = await share_violation_post(
                 language,
-                appeal['violation_datetime'],
-                appeal['violation_address'],
-                appeal['violation_vehicle_number'],
-                appeal['violation_photo_ids'])
-
-            logger.info(f'Отправили в канал - {str(user_id)}:{str(appeal_id)}')
-
-            await add_channel_post_to_success_message(language,
-                                                      user_id,
-                                                      ok_post.message_id,
-                                                      post_url)
-
-            delete_files = await share_violation_post(language, appeal)
+                appeal,
+                reply_id=ok_post.message_id)
 
         await delete_appeal_from_user_queue(data,
                                             user_id,
@@ -422,16 +398,19 @@ async def send_success_sending(user_id: int,
                                             delete_files)
 
 
-async def share_violation_post(language: str, appeal: dict):
+async def share_violation_post(language: str, appeal: dict, reply_id: int):
     title = get_violation_caption(language,
                                   appeal['violation_datetime'],
                                   appeal['violation_address'],
                                   appeal['violation_vehicle_number'])
 
-    await share_post(appeal['user_id'],
-                     appeal['appeal_id'],
-                     title,
+    await share_post(user_id=appeal['user_id'],
+                     appeal_id=appeal['appeal_id'],
+                     reply_id=reply_id,
+                     reply_type=config.VIOLATION,
+                     title_text=title,
                      photo_paths=appeal['violation_photo_files_paths'],
+                     photo_ids=appeal['violation_photo_ids'],
                      coordinates=appeal['violation_location'])
 
     logger.info(f'Отправили шариться по сетям - '
@@ -441,14 +420,31 @@ async def share_violation_post(language: str, appeal: dict):
     return False
 
 
-async def share_response_post(violation_url: str,
+async def share_response_post(language: str,
+                              violation_url: str,
                               photo_path: Optional[str],
+                              photo_id: Optional[str],
                               user_id: int,
                               post_id: int,
+                              reply_id: int,
                               text: str = '') -> bool:
-    title = config.RESPONSE_HASHTAG + '\n' + violation_url
+    violation_title = locales.text(language, 'violator')
+
+    title = f'{config.RESPONSE_HASHTAG}\n' \
+        f'{violation_title} {violation_url}'
+
     photo_paths = [photo_path] if photo_path else []
-    await share_post(user_id, post_id, title, text, photo_paths)
+    photo_ids = [photo_id] if photo_id else []
+
+    await share_post(user_id,
+                     post_id,
+                     reply_id,
+                     reply_type=config.POLICE_RESPONSE,
+                     title_text=title,
+                     body_text=text,
+                     body_formatting=[config.ITALIC],
+                     photo_paths=photo_paths,
+                     photo_ids=photo_ids)
 
     logger.info(f'Отправили шариться по сетям ответ ГАИ - '
                 f'{str(user_id)}:{str(post_id)}')
@@ -459,26 +455,56 @@ async def share_response_post(violation_url: str,
 
 async def share_post(user_id: int,
                      appeal_id: int,
-                     title: str = '',
-                     text: str = '',
+                     reply_id: int,
+                     reply_type: str = '',
+                     title_text: str = '',
+                     title_formatting: list = [],
+                     body_text: str = '',
+                     body_formatting: list = [],
                      photo_paths: list = [],
+                     photo_ids: list = [],
                      coordinates: list = [None, None]):
+    title = {
+        'text': title_text,
+        'formatting': title_formatting,
+    }
+
+    body = {
+        'text': body_text,
+        'formatting': body_formatting,
+    }
+
     data = {
         'title': title,
-        'text': text,
+        'body': body,
         'photo_paths': photo_paths,
+        'tg_photo_ids': photo_ids,
         'coordinates': coordinates,
         'user_id': user_id,
         'appeal_id': appeal_id,
+        'reply_id': reply_id,
+        'reply_type': reply_type,
     }
 
     await http_rabbit.send_sharing(data)
 
 
-async def add_channel_post_to_success_message(language: str,
-                                              user_id: int,
-                                              message_id: int,
-                                              url: str):
+async def add_channel_post_to_success_police_response(language: str,
+                                                      user_id: int,
+                                                      message_id: int,
+                                                      url: str):
+    text = locales.text(language, 'response_sended_full').format(url)
+
+    await bot.edit_message_text(text,
+                                user_id,
+                                message_id,
+                                parse_mode='HTML')
+
+
+async def add_channel_post_to_success_violation(language: str,
+                                                user_id: int,
+                                                message_id: int,
+                                                url: str):
     text0 = locales.text(language, 'successful_sending') + '\n'
     channel_name = config.CHANNEL.replace('@', 'https://t.me/')
     text1 = locales.text(language, 'police_response').format(url, channel_name)
@@ -707,6 +733,41 @@ async def status_received(status: str) -> None:
             tell_about_bad_email(user_id, appeal_id),
             loop
         )
+    elif sender_data['type'] == config.POST_URL:
+        message_id = sender_data.get('reply_id', 0)
+        message_type = sender_data.get('reply_type', '')
+        post_url = sender_data.get('post_url', '')
+
+        asyncio.run_coroutine_threadsafe(
+            add_url_to_message(user_id,
+                               appeal_id,
+                               message_id,
+                               message_type,
+                               post_url),
+            loop
+        )
+
+
+async def add_url_to_message(user_id: int,
+                             appeal_id: int,
+                             message_id: int,
+                             message_type: str,
+                             post_url: str):
+    state = dp.current_state(chat=user_id, user=user_id)
+    language = await get_ui_lang(state)
+
+    if message_type == config.VIOLATION:
+        logger.info(f'Отправили в канал - {str(user_id)}:{str(appeal_id)}')
+
+        await add_channel_post_to_success_violation(language,
+                                                    user_id,
+                                                    message_id,
+                                                    post_url)
+    elif message_type == config.POLICE_RESPONSE:
+        await add_channel_post_to_success_police_response(language,
+                                                          user_id,
+                                                          message_id,
+                                                          post_url)
 
 
 async def tell_about_bad_email(user_id: int, appeal_id: int):
@@ -1619,20 +1680,23 @@ async def send_form_message(form: str, user_id: int, language: str) -> None:
 
 async def share_to_social_networks(message: types.Message,
                                    post_type: str):
-    await message.send_copy(config.CHANNEL)
+    text, photo_paths, photo_ids = await get_social_data_from_post(message,
+                                                                   post_type)
 
-    text, photo_paths = await get_social_data_from_post(message, post_type)
+    await share_post(user_id=message.chat.id,
+                     appeal_id=message.message_id,
+                     reply_id=message.message_id,
+                     body_text=text,
+                     photo_paths=photo_paths,
+                     photo_ids=photo_ids)
 
-    await share_post(message.chat.id,
-                     message.message_id,
-                     text=text,
-                     photo_paths=photo_paths)
 
-
-async def get_social_data_from_post(message: types.Message,
-                                    post_type: str) -> Tuple[str, List[str]]:
+async def get_social_data_from_post(
+        message: types.Message,
+        post_type: str) -> Tuple[str, List[str], List[str]]:
     text = message.text or message.caption
-    photos = []
+    photo_pathes = list()
+    photo_ids = list()
 
     if post_type == str(types.ContentType.PHOTO):
         photo_id = message.photo[-1]['file_id']
@@ -1642,9 +1706,10 @@ async def get_social_data_from_post(message: types.Message,
                                                      photo_url,
                                                      message.message_id)
 
-        photos.append(photo_path)
+        photo_ids.append(photo_id)
+        photo_pathes.append(photo_path)
 
-    return text, photos
+    return text, photo_pathes, photo_ids
 
 
 async def share_to_users(message: types.Message):
@@ -3301,29 +3366,27 @@ async def police_response_photo(message: types.Message, state: FSMContext):
         response_violation_post_url = get_value(data, 'responsed_post_url')
         language = await get_ui_lang(data=data)
 
-    violation_title = locales.text(language, 'violator')
-
-    caption = f'{config.RESPONSE_HASHTAG}\n' \
-        f'{violation_title} {response_violation_post_url}'
-
     photo_id = message.photo[-1]['file_id']
-
-    post_url = await send_photos_group_with_caption([photo_id],
-                                                    config.CHANNEL,
-                                                    caption)
-
     photo_url = await get_temp_photo_url(photo_id)
 
     photo_path = await photo_manager.store_photo(message.chat.id,
                                                  photo_url,
                                                  message.message_id)
-    await share_response_post(response_violation_post_url,
-                              photo_path,
-                              message.chat.id,
-                              message.message_id)
 
-    text = locales.text(language, 'response_sended').format(post_url)
-    await bot.send_message(message.chat.id, text, parse_mode='HTML')
+    text = locales.text(language, 'response_sended').format(config.CHANNEL)
+
+    success_message = await bot.send_message(message.chat.id,
+                                             text,
+                                             parse_mode='HTML')
+
+    await share_response_post(language,
+                              response_violation_post_url,
+                              photo_path,
+                              photo_id,
+                              message.chat.id,
+                              message.message_id,
+                              success_message.message_id)
+
     await Form.operational_mode.set()
 
 
@@ -3337,24 +3400,21 @@ async def police_response_text(message: types.Message, state: FSMContext):
         response_violation_post_url = get_value(data, 'responsed_post_url')
         language = await get_ui_lang(data=data)
 
-    violation_title = locales.text(language, 'violator')
+    text = locales.text(language, 'response_sended').format(config.CHANNEL)
 
-    caption = f'{config.RESPONSE_HASHTAG}\n' \
-        f'{violation_title} {response_violation_post_url}'
+    success_message = await bot.send_message(message.chat.id,
+                                             text,
+                                             parse_mode='HTML')
 
-    response = f'<pre>{message.text}</pre>'
-    text = caption + '\n\n' + response
-    post = await bot.send_message(config.CHANNEL, text, parse_mode='HTML')
-
-    await share_response_post(response_violation_post_url,
+    await share_response_post(language,
+                              response_violation_post_url,
                               photo_path=None,
+                              photo_id=None,
                               user_id=message.chat.id,
                               post_id=message.message_id,
+                              reply_id=success_message.message_id,
                               text=message.text)
 
-    post_url = get_channel_post_url_by_id(post.message_id)
-    text = locales.text(language, 'response_sended').format(post_url)
-    await bot.send_message(message.chat.id, text, parse_mode='HTML')
     await Form.operational_mode.set()
 
 

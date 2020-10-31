@@ -87,7 +87,7 @@
     ],
     "queues": [
         {
-            "name": "sending_status",
+            "name": "status_to_bot",
             "vhost": "/",
             "durable": true,
             "auto_delete": false,
@@ -118,9 +118,17 @@
         {
             "source": "sending",
             "vhost": "/",
-            "destination": "sending_status",
+            "destination": "status_to_bot",
             "destination_type": "queue",
             "routing_key": "appeal_sending_status",
+            "arguments": {}
+        },
+        {
+            "source": "sharing",
+            "vhost": "/",
+            "destination": "status_to_bot",
+            "destination_type": "queue",
+            "routing_key": "sharing_status",
             "arguments": {}
         },
         {
