@@ -158,3 +158,7 @@ STRIKE = 'strike'
 # broadcaster reply messages types
 VIOLATION = 'violation'
 POLICE_RESPONSE = 'police_response'
+
+# numberplates recognizer
+NUMBERPLATES_RECOGNIZER_ENABLED = True
+NUMBERPLATES_RECOGNIZER_URL = 'http://localhost:5001/recognize'

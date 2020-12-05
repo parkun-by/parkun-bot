@@ -6,7 +6,6 @@ import json
 import territory
 import logging
 from scheduler import Scheduler, RELOAD_BOUNDARY
-from random import randint
 import datetime_parser
 
 
@@ -44,10 +43,10 @@ class Locator:
                     resp_json = await response.json(content_type=None)
                     boundary = resp_json[0]['geojson']['coordinates'][0]
 
-        except aiohttp.client_exceptions.ServerTimeoutError:
+        except aiohttp.ServerTimeoutError:
             boundary = []
 
-        except aiohttp.client_exceptions.ClientOSError:
+        except aiohttp.ClientOSError:
             boundary = []
 
         except json.JSONDecodeError:

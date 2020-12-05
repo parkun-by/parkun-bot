@@ -6,13 +6,14 @@ import shutil
 import time
 from asyncio.events import AbstractEventLoop
 from contextlib import contextmanager
-from typing import Any, Union
+from typing import Any, List, Union
 
 import aiohttp
 
-from config import TEMP_FILES_PATH
+import config
 from telegraph import Telegraph
 from user_storage import UserStorage
+from numberplates import recognize_numberplates
 
 logger = logging.getLogger(__name__)
 CURRENT = "current"
@@ -21,7 +22,7 @@ STORAGE_PREFIX = "photo_manager"
 
 class PhotoManager:
     def __init__(self, loop: AbstractEventLoop):
-        self.files_dir = TEMP_FILES_PATH
+        self.files_dir = config.TEMP_FILES_PATH
         self.task_storage = dict()
         self.data_storage: UserStorage
         self.telegraph = Telegraph(loop)
@@ -57,7 +58,9 @@ class PhotoManager:
 
         with self.tasks(self.task_storage,
                         list(),
-                        user_id, CURRENT, 'photo_tasks') as tasks:
+                        user_id,
+                        CURRENT,
+                        'photo_tasks') as tasks:
             storing_task = asyncio.create_task(
                 self.store_photo(user_id, temp_url)
             )
@@ -77,6 +80,12 @@ class PhotoManager:
         await self.data_storage.add_set_member(user_id,
                                                key=f'{stash_id}:file_paths',
                                                value=file_path)
+
+        recognized_numbers = await recognize_numberplates(file_path)
+
+        await self.data_storage.add_set_member(user_id,
+                                               key=f'{stash_id}:numberplates',
+                                               *recognized_numbers)
 
         permanent_url = await self._upload_photo(file_path, temp_url)
 
@@ -136,6 +145,21 @@ class PhotoManager:
             f'{appeal_id}:file_paths',
             *file_paths)
 
+        # rename folder_name in numberplates
+        old_numberplates_path: list = await self.data_storage.get_full_set(
+            user_id,
+            key=f'{CURRENT}:numberplates')
+
+        numberplates = list(map(
+            lambda path: path.replace(CURRENT, str(appeal_id)),
+            old_numberplates_path
+        ))
+
+        await self.data_storage.add_set_member(
+            user_id,
+            f'{appeal_id}:numberplates',
+            *numberplates)
+
         # rename folder_name in urls
         old_urls: list = await self.data_storage.get_full_set(
             user_id,
@@ -189,6 +213,17 @@ class PhotoManager:
             f'{appeal_id}:page_url')
 
         return appeal_stash
+
+    async def get_numberplates(
+            self,
+            user_id: int,
+            appeal_id: Union[int, str] = CURRENT) -> List[str]:
+        await self._wait_for_done(user_id, appeal_id, 'photo_tasks')
+
+        numberplates = await self.data_storage.get_full_set(
+            user_id, f'{appeal_id}:numberplates')
+
+        return numberplates
 
     async def _wait_for_done(self,
                              user_id: int,
