@@ -81,11 +81,10 @@ class PhotoManager:
                                                key=f'{stash_id}:file_paths',
                                                value=file_path)
 
-        recognized_numbers = await recognize_numberplates(file_path)
-
-        await self.data_storage.add_set_member(user_id,
-                                               key=f'{stash_id}:numberplates',
-                                               *recognized_numbers)
+        if recognized_numbers := await recognize_numberplates(file_path):
+            await self.data_storage.add_set_member(user_id,
+                                                   f'{stash_id}:numberplates',
+                                                   *recognized_numbers)
 
         permanent_url = await self._upload_photo(file_path, temp_url)
 
