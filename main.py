@@ -1928,7 +1928,8 @@ async def show_personal_info(message: types.Message, state: FSMContext):
                            parse_mode='HTML')
 
 
-async def get_language_text_and_keyboard(data):
+async def get_language_text_and_keyboard(
+        data: FSMContextProxy) -> Tuple[str, types.InlineKeyboardMarkup]:
     language = await get_ui_lang(data=data)
 
     ui_lang_name = locales.text(language, 'lang' + language)
@@ -1955,6 +1956,27 @@ async def get_language_text_and_keyboard(data):
     keyboard.add(change_ui_language_button, change_letter_language_button)
 
     return text, keyboard
+
+
+async def ask_for_numberplate(user_id: int, data: FSMContextProxy):
+    """
+    Send bot invitation to enter numberplate
+    """
+    language = await get_ui_lang(data=data)
+
+    text = locales.text(language, Form.vehicle_number.state) + '\n' +\
+        '\n' +\
+        locales.text(language, f'{Form.vehicle_number.state}_example')
+
+    # настроим клавиатуру
+    keyboard = await get_cancel_keyboard(data)
+
+    await bot.send_message(user_id,
+                           text,
+                           reply_markup=keyboard,
+                           parse_mode='HTML')
+
+    await Form.vehicle_number.set()
 
 
 async def user_banned(language: str, user_id: int) -> bool:
@@ -2521,25 +2543,10 @@ async def enter_violation_info_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
 
     async with state.proxy() as data:
-        language = await get_ui_lang(data=data)
-
         # зададим сразу пустое примечание
         set_default(data, 'violation_caption')
 
-    text = locales.text(language, Form.vehicle_number.state) + '\n' +\
-        '\n' +\
-        locales.text(language, f'{Form.vehicle_number.state}_example')
-
-    # настроим клавиатуру
-    async with state.proxy() as data:
-        keyboard = await get_cancel_keyboard(data)
-
-    await bot.send_message(call.message.chat.id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
-
-    await Form.vehicle_number.set()
+        await ask_for_numberplate(call.from_user.id, data)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/add_caption',
