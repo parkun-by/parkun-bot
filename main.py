@@ -609,8 +609,7 @@ async def parse_appeal_from_message(data: FSMContextProxy,
         await bot.send_message(user_id, text)
         return
 
-    await Form.sending_approvement.set()
-    await approve_sending(user_id, data)
+    await ask_for_sending_approvement(user_id, data)
 
 
 async def process_entered_violation(data: FSMContextProxy,
@@ -1091,7 +1090,9 @@ def get_appeal_text(data: FSMContextProxy,
     return AppealText.get(get_value(data, 'letter_lang'), violation_data)
 
 
-async def approve_sending(user_id: int, data: FSMContextProxy) -> int:
+async def ask_for_sending_approvement(user_id: int,
+                                      data: FSMContextProxy) -> int:
+    await Form.sending_approvement.set()
     language = await get_ui_lang(data=data)
 
     caption_button_text = locales.text(language, 'add_caption_button')
@@ -2545,8 +2546,7 @@ async def enter_violation_info_click(call, state: FSMContext):
     async with state.proxy() as data:
         # зададим сразу пустое примечание
         set_default(data, 'violation_caption')
-
-        await ask_for_numberplate(call.from_user.id, data)
+        await ask_for_violation_address(call.message.chat.id, data)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/add_caption',
@@ -3552,9 +3552,10 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        data['violation_vehicle_number'] = prepare_registration_number(
-            message.text)
-        await ask_for_violation_address(message.chat.id, data)
+        data['violation_vehicle_number'] = \
+            prepare_registration_number(message.text)
+
+        await ask_for_sending_approvement(message.chat.id, data)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3564,11 +3565,10 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     await pop_saved_state(message.chat.id, message.from_user.id)
-    await Form.sending_approvement.set()
 
     async with state.proxy() as data:
         data['violation_caption'] = message.text.strip()
-        await approve_sending(message.chat.id, data)
+        await ask_for_sending_approvement(message.chat.id, data)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3666,8 +3666,6 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод даты и времени нарушения - ' +
                 str(message.from_user.id))
 
-    await Form.sending_approvement.set()
-
     async with state.proxy() as data:
         datetime = datetime_parser.get_violation_datetime(
             get_value(data, 'violation_date'),
@@ -3684,7 +3682,7 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
             return
 
         data['violation_datetime'] = datetime
-        await approve_sending(message.chat.id, data)
+        await ask_for_numberplate(message.chat.id, data)
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
