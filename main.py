@@ -269,7 +269,6 @@ async def invite_to_fill_credentials(chat_id, state):
     language = await get_ui_lang(state)
     text = locales.text(language, 'first_steps')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     personal_info_button = types.InlineKeyboardButton(
@@ -293,7 +292,6 @@ async def invite_to_confirm_email(data, chat_id):
         get_value(data, 'sender_email')
     )
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     verify_email_button = types.InlineKeyboardButton(
@@ -1107,7 +1105,6 @@ async def ask_for_sending_approvement(user_id: int,
         caption_button_text = locales.text(language,
                                            'change_caption_button')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     approve_sending_button = types.InlineKeyboardButton(
@@ -1176,7 +1173,6 @@ async def verified_email(state):
 async def get_cancel_keyboard(data: FSMContextProxy):
     language = await get_ui_lang(data=data)
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup()
 
     cancel = types.InlineKeyboardButton(
@@ -1188,8 +1184,42 @@ async def get_cancel_keyboard(data: FSMContextProxy):
     return keyboard
 
 
+async def get_numberplates_keyboard(
+        data: FSMContextProxy,
+        numberplates: List[str]) -> types.InlineKeyboardMarkup:
+    language = await get_ui_lang(data=data)
+
+    keyboard = types.InlineKeyboardMarkup()
+    current_numberplates = get_value(data, 'violation_vehicle_number', '')
+
+    for numberplate in numberplates:
+        text = numberplate
+
+        if numberplate in current_numberplates:
+            text += ' ✅'
+
+        button = types.InlineKeyboardButton(
+            text=text,
+            callback_data=f'/numberplate{numberplate}')
+
+        keyboard.add(button)
+
+    all_selected = types.InlineKeyboardButton(
+        text=locales.text(language, 'all_selected_button'),
+        callback_data='/all_selected')
+
+    keyboard.add(all_selected)
+
+    cancel = types.InlineKeyboardButton(
+        text=locales.text(language, 'cancel_button'),
+        callback_data='/cancel')
+
+    keyboard.add(cancel)
+
+    return keyboard
+
+
 async def get_sender_param_keyboard(language):
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     backward = types.InlineKeyboardButton(
@@ -1266,7 +1296,6 @@ async def show_private_info_summary(chat_id, state):
 
     if await invalid_credentials(state):
         text = locales.text(language, 'no_info_warning')
-        # настроим клавиатуру
         keyboard = types.InlineKeyboardMarkup()
 
         personal_info_button = types.InlineKeyboardButton(
@@ -1341,7 +1370,6 @@ async def send_appeal_email_info(user_id: int, data: FSMContextProxy) -> None:
     email = get_value(data, 'sender_email')
     text = locales.text(language, 'email_password').format(email)
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=3)
 
     personal_info_button = types.InlineKeyboardButton(
@@ -1386,7 +1414,6 @@ async def print_violation_address_info(state: FSMContext,
         locales.text(language, 'violation_address') + \
         ' <b>{}</b>'.format(address)
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_violation_addr_button = types.InlineKeyboardButton(
@@ -1454,7 +1481,6 @@ def get_broadcast_keyboard(language: str,
 
 def get_violation_datetime_keyboard(
         language: str) -> types.InlineKeyboardMarkup:
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     yesterday_button = types.InlineKeyboardButton(
@@ -1541,7 +1567,6 @@ async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
 
     question = locales.text(language, 'short_address_check')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     confirm_button = types.InlineKeyboardButton(
@@ -1584,6 +1609,34 @@ async def set_violation_address(chat_id: int,
     async with state.proxy() as data:
         await save_violation_address(address, coordinates, data)
         save_recipient(data, recipient)
+
+
+def add_numberplate_to_user_data(data: FSMContextProxy,
+                                 numberplate: str) -> FSMContextProxy:
+    def remove_prefix(text, prefix):
+        if text.startswith(prefix):
+            return text[len(prefix):]
+
+        return text
+
+    data['violation_vehicle_number'] += f', {numberplate}'
+
+    data['violation_vehicle_number'] = remove_prefix(
+        data['violation_vehicle_number'],
+        ', '
+    )
+
+    return data
+
+
+def delete_numberplate_from_user_data(data: FSMContextProxy,
+                                      numberplate: str) -> FSMContextProxy:
+    numberplates: str = data['violation_vehicle_number']
+    numberplates = numberplates.replace(f', {numberplate}', '')
+    numberplates = numberplates.replace(f'{numberplate}, ', '')
+    numberplates = numberplates.replace(numberplate, '')
+    data['violation_vehicle_number'] = numberplates
+    return data
 
 
 def maybe_no_city_in_address(address: str) -> bool:
@@ -1735,7 +1788,6 @@ async def show_settings(message: types.Message, state: FSMContext):
 
     text = locales.text(language, 'select_section')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     personal_info_button = types.InlineKeyboardButton(
@@ -1910,7 +1962,6 @@ async def show_personal_info(message: types.Message, state: FSMContext):
             '\n' +\
             locales.text(language, 'sender_address') + f' <b>{address}</b>'
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     enter_personal_info_button = types.InlineKeyboardButton(
@@ -1943,7 +1994,6 @@ async def get_language_text_and_keyboard(
         locales.text(language, 'current_letter_lang') +\
         ' <b>{}</b>.'.format(letter_lang_name)
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     change_ui_language_button = types.InlineKeyboardButton(
@@ -1959,25 +2009,78 @@ async def get_language_text_and_keyboard(
     return text, keyboard
 
 
-async def ask_for_numberplate(user_id: int, data: FSMContextProxy):
+async def ask_for_numberplate(user_id: int,
+                              data: FSMContextProxy,
+                              message_id: int = None):
     """
     Send bot invitation to enter numberplate
     """
+    if initial_asking_for_numberplate(message_id):
+        data['violation_vehicle_number'] = ''
+
+    recognized_numberplates = await photo_manager.get_numberplates(user_id)
+
+    if recognized_numberplates:
+        await ask_to_choose_numberplates(user_id,
+                                         data,
+                                         recognized_numberplates,
+                                         message_id)
+    else:
+        await ask_to_enter_numberplates(user_id, data)
+
+    await Form.vehicle_number.set()
+
+
+def initial_asking_for_numberplate(existed_message_id: Optional[int]) -> bool:
+    return not existed_message_id
+
+
+async def ask_to_choose_numberplates(user_id: int,
+                                     data: FSMContextProxy,
+                                     numberplates: List[str],
+                                     message_id: Optional[int]):
+    language = await get_ui_lang(data=data)
+
+    button_name = locales.text(language, 'all_selected_button')
+
+    invitation_text = locales.text(
+        language,
+        f'{Form.vehicle_number.state}_choose'
+    ).format(button_name)
+
+    text = \
+        invitation_text + '\n' +\
+        '\n' +\
+        locales.text(language, f'{Form.vehicle_number.state}_example')
+
+    keyboard = await get_numberplates_keyboard(data, numberplates)
+
+    if message_id:
+        await bot.edit_message_text(text,
+                                    user_id,
+                                    message_id,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML')
+    else:
+        await bot.send_message(user_id,
+                               text,
+                               reply_markup=keyboard,
+                               parse_mode='HTML')
+
+
+async def ask_to_enter_numberplates(user_id: int, data: FSMContextProxy):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, Form.vehicle_number.state) + '\n' +\
         '\n' +\
         locales.text(language, f'{Form.vehicle_number.state}_example')
 
-    # настроим клавиатуру
     keyboard = await get_cancel_keyboard(data)
 
     await bot.send_message(user_id,
                            text,
                            reply_markup=keyboard,
                            parse_mode='HTML')
-
-    await Form.vehicle_number.set()
 
 
 async def user_banned(language: str, user_id: int) -> bool:
@@ -2464,7 +2567,6 @@ async def recipient_click(call, state: FSMContext):
     # этот текст не менять или менять по всему файлу
     text = locales.text(language, 'choose_recipient')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     for region in territory.regions():
@@ -2497,7 +2599,6 @@ async def recipient_minsk_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     button = types.InlineKeyboardButton(
@@ -2565,12 +2666,32 @@ async def add_caption_click(call, state: FSMContext):
     await states_stack.add(call.message.chat.id)
     text = locales.text(language, Form.caption.state)
 
-    # настроим клавиатуру
     async with state.proxy() as data:
         keyboard = await get_cancel_keyboard(data)
 
     await bot.send_message(call.message.chat.id, text, reply_markup=keyboard)
     await Form.caption.set()
+
+
+@dp.callback_query_handler(lambda call: call.data == '/all_selected',
+                           state=Form.vehicle_number)
+async def numberplates_entered_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки завершения ввода гос. номера - ' +
+                str(call.from_user.id))
+
+    async with state.proxy() as data:
+        current_numberplates: str = \
+            get_value(data, 'violation_vehicle_number', '')
+
+        current_numberplates = current_numberplates.strip()
+        language = await get_ui_lang(data=data)
+
+        if not current_numberplates:
+            text = locales.text(language, 'need_to_choose_number')
+            await bot.answer_callback_query(call.id, text)
+            return
+
+        await ask_for_sending_approvement(call.message.chat.id, data)
 
 
 @dp.callback_query_handler(lambda call: '/reply_to_user' in call.data,
@@ -2590,7 +2711,6 @@ async def reply_to_user_click(call, state: FSMContext):
         language = await get_ui_lang(data=data)
         text = locales.text(language, Form.message_to_user.state)
 
-        # настроим клавиатуру
         keyboard = await get_cancel_keyboard(data)
 
     await bot.send_message(call.message.chat.id,
@@ -2599,6 +2719,26 @@ async def reply_to_user_click(call, state: FSMContext):
                            reply_to_message_id=call.message.message_id)
 
     await Form.message_to_user.set()
+
+
+@dp.callback_query_handler(lambda call: '/numberplate' in call.data,
+                           state=Form.vehicle_number)
+async def select_numberplate(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки выбора распознанного номера - ' +
+                str(call.from_user.id))
+    await bot.answer_callback_query(call.id)
+    numberplate = call.data.replace('/numberplate', '')
+    numberplate = prepare_registration_number(numberplate)
+
+    async with state.proxy() as data:
+        if numberplate in data['violation_vehicle_number']:
+            data = delete_numberplate_from_user_data(data, numberplate)
+        else:
+            data = add_numberplate_to_user_data(data, numberplate)
+
+        await ask_for_numberplate(call.message.chat.id,
+                                  data,
+                                  call.message.message_id)
 
 
 @dp.callback_query_handler(lambda call: call.data == '/cancel',
@@ -2686,7 +2826,6 @@ async def send_appeal_again(call, state: FSMContext):
 
     text = locales.text(language, 'send_appeal_again')
 
-    # настроим клавиатуру
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
     approve_sending_button = types.InlineKeyboardButton(
@@ -3552,8 +3691,8 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        data['violation_vehicle_number'] = \
-            prepare_registration_number(message.text)
+        data['violation_vehicle_number'] += \
+            f', {prepare_registration_number(message.text)}'
 
         await ask_for_sending_approvement(message.chat.id, data)
 
