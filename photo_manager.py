@@ -6,7 +6,7 @@ import shutil
 import time
 from asyncio.events import AbstractEventLoop
 from contextlib import contextmanager
-from typing import Any, List, Union
+from typing import Any, Awaitable, List, Union
 
 import aiohttp
 
@@ -60,12 +60,34 @@ class PhotoManager:
                         list(),
                         user_id,
                         CURRENT,
-                        'photo_tasks') as tasks:
+                        'store_photo_tasks') as tasks:
             storing_task = asyncio.create_task(
                 self.store_photo(user_id, temp_url)
             )
 
             tasks.append(storing_task)
+
+        with self.tasks(self.task_storage,
+                        list(),
+                        user_id,
+                        CURRENT,
+                        'numberplate_tasks') as tasks:
+            numberplate_task = asyncio.create_task(
+                self.recognize_numberplate(user_id, storing_task)
+            )
+
+            tasks.append(numberplate_task)
+
+        with self.tasks(self.task_storage,
+                        list(),
+                        user_id,
+                        CURRENT,
+                        'upload_to_cloud_tasks') as tasks:
+            upload_to_cloud_task = asyncio.create_task(
+                self.upload_to_cloud(user_id, temp_url, storing_task)
+            )
+
+            tasks.append(upload_to_cloud_task)
 
     async def store_photo(self,
                           user_id: int,
@@ -80,19 +102,34 @@ class PhotoManager:
         await self.data_storage.add_set_member(user_id,
                                                key=f'{stash_id}:file_paths',
                                                value=file_path)
+        return file_path
+
+    async def upload_to_cloud(self,
+                              user_id: int,
+                              temp_url: str,
+                              photo_file_path: Awaitable,
+                              stash_id: Union[int, str] = CURRENT) -> str:
+        file_path = await photo_file_path
+        permanent_url = await self._upload_photo(file_path, temp_url)
+
+        await self.data_storage.add_set_member(user_id,
+                                               key=f'{stash_id}:urls',
+                                               value=permanent_url)
+        return permanent_url
+
+    async def recognize_numberplate(
+            self,
+            user_id: int,
+            photo_file_path: Awaitable,
+            stash_id: Union[int, str] = CURRENT) -> List[str]:
+        file_path = await photo_file_path
 
         if recognized_numbers := await recognize_numberplates(file_path):
             await self.data_storage.add_set_member(user_id,
                                                    f'{stash_id}:numberplates',
                                                    *recognized_numbers)
 
-        permanent_url = await self._upload_photo(file_path, temp_url)
-
-        await self.data_storage.add_set_member(user_id,
-                                               key=f'{stash_id}:urls',
-                                               value=permanent_url)
-
-        return file_path
+        return recognized_numbers
 
     def get_unique_file_path(self, folder_path: str, file_name: str) -> str:
         timestamp = str(time.time()).replace('.', '')
@@ -112,7 +149,8 @@ class PhotoManager:
             page_tasks.append(storing_task)
 
     async def _create_page(self, user_id: int, title: str):
-        await self._wait_for_done(user_id, CURRENT, 'photo_tasks')
+        await self._wait_for_done(user_id, CURRENT, 'store_photo_tasks')
+        await self._wait_for_done(user_id, CURRENT, 'upload_to_cloud_tasks')
 
         urls: list = await self.data_storage.get_full_set(
             user_id,
@@ -126,7 +164,9 @@ class PhotoManager:
 
     async def set_id_to_current_photos(self, user_id: int, appeal_id: int):
         await self.clear_storage(user_id, appeal_id)
-        await self._wait_for_done(user_id, CURRENT, 'photo_tasks')
+        await self._wait_for_done(user_id, CURRENT, 'store_photo_tasks')
+        await self._wait_for_done(user_id, CURRENT, 'numberplate_tasks')
+        await self._wait_for_done(user_id, CURRENT, 'upload_to_cloud_tasks')
         await self._wait_for_done(user_id, CURRENT, 'page_tasks')
 
         # rename folder_name in file paths
@@ -194,8 +234,9 @@ class PhotoManager:
         os.rename(current_path, new_path)
 
     async def get_photo_data(self, user_id: int, appeal_id: int) -> dict:
+        await self._wait_for_done(user_id, appeal_id, 'store_photo_tasks')
+        await self._wait_for_done(user_id, appeal_id, 'upload_to_cloud_tasks')
         await self._wait_for_done(user_id, appeal_id, 'page_tasks')
-        await self._wait_for_done(user_id, appeal_id, 'photo_tasks')
 
         appeal_stash = dict()
 
@@ -213,7 +254,7 @@ class PhotoManager:
 
         return appeal_stash
 
-    async def photo_tasks_in_progress(
+    async def numberplate_tasks_in_progress(
             self,
             user_id: int,
             appeal_id: Union[int, str] = CURRENT) -> bool:
@@ -221,7 +262,7 @@ class PhotoManager:
                         list(),
                         user_id,
                         appeal_id,
-                        'photo_tasks') as tasks:
+                        'numberplate_tasks') as tasks:
             for task in tasks:
                 if not task.done():
                     return True
@@ -232,7 +273,7 @@ class PhotoManager:
             self,
             user_id: int,
             appeal_id: Union[int, str] = CURRENT) -> List[str]:
-        await self._wait_for_done(user_id, appeal_id, 'photo_tasks')
+        await self._wait_for_done(user_id, appeal_id, 'numberplate_tasks')
 
         numberplates = await self.data_storage.get_full_set(
             user_id, f'{appeal_id}:numberplates')
@@ -290,8 +331,10 @@ class PhotoManager:
     async def _clear_task_storage(self,
                                   user_id: int,
                                   appeal_id: Union[int, str]):
+        await self._wait_for_done(user_id, appeal_id, 'store_photo_tasks')
         await self._wait_for_done(user_id, appeal_id, 'page_tasks')
-        await self._wait_for_done(user_id, appeal_id, 'photo_tasks')
+        await self._wait_for_done(user_id, appeal_id, 'numberplate_tasks')
+        await self._wait_for_done(user_id, appeal_id, 'upload_to_cloud_tasks')
 
         user_stash: dict = self.task_storage.get(user_id, {})
         user_stash.pop(appeal_id, None)

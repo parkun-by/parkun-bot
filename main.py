@@ -2039,7 +2039,7 @@ async def get_recognized_numberplates(
     counter = 0
     language = await get_ui_lang(data=data)
 
-    while await photo_manager.photo_tasks_in_progress(user_id):
+    while await photo_manager.numberplate_tasks_in_progress(user_id):
         counter += 1
 
         message_id = await show_magic_message(user_id,
