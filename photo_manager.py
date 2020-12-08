@@ -213,6 +213,21 @@ class PhotoManager:
 
         return appeal_stash
 
+    async def photo_tasks_in_progress(
+            self,
+            user_id: int,
+            appeal_id: Union[int, str] = CURRENT) -> bool:
+        with self.tasks(self.task_storage,
+                        list(),
+                        user_id,
+                        appeal_id,
+                        'photo_tasks') as tasks:
+            for task in tasks:
+                if not task.done():
+                    return True
+
+        return False
+
     async def get_numberplates(
             self,
             user_id: int,
@@ -343,16 +358,16 @@ class PhotoManager:
 
     @contextmanager
     def tasks(self, storage: dict, default: Any, path: str, *paths) -> Any:
-        tasks = self.get_tasks(storage, default, path, paths)
+        tasks = self.get_tasks(storage, default, path, *paths)
 
         try:
             yield tasks
         finally:
-            self.set_tasks(storage, tasks, path, paths)
+            self.set_tasks(storage, tasks, path, *paths)
 
     def set_tasks(self, storage: dict, value: Any, path: str, *paths):
         """
-        save valuee by path
+        save value by path
         """
         if paths:
             storage.setdefault(path, dict())
@@ -367,7 +382,7 @@ class PhotoManager:
         tasks = storage.get(path, dict())
 
         if paths:
-            tasks = self.get_tasks(storage, default, *paths)
+            tasks = self.get_tasks(tasks, default, *paths)
         elif not tasks:
             tasks = default
 

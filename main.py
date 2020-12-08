@@ -2011,14 +2011,15 @@ async def get_language_text_and_keyboard(
 
 async def ask_for_numberplate(user_id: int,
                               data: FSMContextProxy,
-                              message_id: int = None):
+                              message_id: Optional[int] = None):
     """
     Send bot invitation to enter numberplate
     """
     if initial_asking_for_numberplate(message_id):
         data['violation_vehicle_number'] = ''
 
-    recognized_numberplates = await photo_manager.get_numberplates(user_id)
+    recognized_numberplates, message_id = \
+        await get_recognized_numberplates(data, user_id, message_id)
 
     if recognized_numberplates:
         await ask_to_choose_numberplates(user_id,
@@ -2029,6 +2030,55 @@ async def ask_for_numberplate(user_id: int,
         await ask_to_enter_numberplates(user_id, data)
 
     await Form.vehicle_number.set()
+
+
+async def get_recognized_numberplates(
+        data: FSMContextProxy,
+        user_id: int,
+        message_id: Optional[int]) -> Tuple[List[str], Optional[int]]:
+    counter = 0
+    language = await get_ui_lang(data=data)
+
+    while await photo_manager.photo_tasks_in_progress(user_id):
+        counter += 1
+
+        message_id = await show_magic_message(user_id,
+                                              message_id,
+                                              language,
+                                              counter)
+        await asyncio.sleep(2)
+
+    recognized_numberplates = await photo_manager.get_numberplates(user_id)
+
+    return recognized_numberplates, message_id
+
+
+async def show_magic_message(user_id: int,
+                             message_id: Optional[int],
+                             language: str,
+                             counter: int) -> int:
+    text = locales.text(language, 'magical_recognition').format('🦄' * counter)
+    keyboard = types.InlineKeyboardMarkup()
+
+    button = types.InlineKeyboardButton(
+        text=locales.text(language, 'stop_magic_button'),
+        callback_data=f'/stop_recognition_magic')
+
+    keyboard.add(button)
+
+    if message_id:
+        message = await bot.edit_message_text(text,
+                                              user_id,
+                                              message_id,
+                                              reply_markup=keyboard,
+                                              parse_mode='HTML')
+    else:
+        message = await bot.send_message(user_id,
+                                         text,
+                                         reply_markup=keyboard,
+                                         parse_mode='HTML')
+
+    return message.message_id
 
 
 def initial_asking_for_numberplate(existed_message_id: Optional[int]) -> bool:
@@ -2679,6 +2729,8 @@ async def numberplates_entered_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки завершения ввода гос. номера - ' +
                 str(call.from_user.id))
 
+    await bot.answer_callback_query(call.id)
+
     async with state.proxy() as data:
         current_numberplates: str = \
             get_value(data, 'violation_vehicle_number', '')
@@ -2692,6 +2744,16 @@ async def numberplates_entered_click(call, state: FSMContext):
             return
 
         await ask_for_sending_approvement(call.message.chat.id, data)
+
+
+@dp.callback_query_handler(lambda call: call.data == '/stop_recognition_magic',
+                           state=Form.vehicle_number)
+async def stop_recognition_magic_click(call, state: FSMContext):
+    logger.info('Обрабатываем нажатие кнопки остановки распознавания - ' +
+                str(call.from_user.id))
+
+    await bot.answer_callback_query(call.id)
+    # await photo_manager.cancel_recognition_task(call.from_user.id)
 
 
 @dp.callback_query_handler(lambda call: '/reply_to_user' in call.data,
