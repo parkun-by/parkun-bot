@@ -2015,6 +2015,8 @@ async def ask_for_numberplate(user_id: int,
     """
     Send bot invitation to enter numberplate
     """
+    await Form.vehicle_number.set()
+
     if initial_asking_for_numberplate(message_id):
         data['violation_vehicle_number'] = ''
 
@@ -2028,8 +2030,6 @@ async def ask_for_numberplate(user_id: int,
                                          message_id)
     else:
         await ask_to_enter_numberplates(user_id, data)
-
-    await Form.vehicle_number.set()
 
 
 async def get_recognized_numberplates(
@@ -2753,7 +2753,7 @@ async def stop_recognition_magic_click(call, state: FSMContext):
                 str(call.from_user.id))
 
     await bot.answer_callback_query(call.id)
-    # await photo_manager.cancel_recognition_task(call.from_user.id)
+    await photo_manager.cancel_recognition_task(call.from_user.id)
 
 
 @dp.callback_query_handler(lambda call: '/reply_to_user' in call.data,
@@ -3753,8 +3753,12 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        data['violation_vehicle_number'] += \
-            f', {prepare_registration_number(message.text)}'
+        if get_value(data, 'violation_vehicle_number', ''):
+            data['violation_vehicle_number'] += \
+                f', {prepare_registration_number(message.text)}'
+        else:
+            data['violation_vehicle_number'] = \
+                prepare_registration_number(message.text)
 
         await ask_for_sending_approvement(message.chat.id, data)
 

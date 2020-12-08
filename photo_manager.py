@@ -269,6 +269,19 @@ class PhotoManager:
 
         return False
 
+    async def cancel_recognition_task(
+            self,
+            user_id: int,
+            appeal_id: Union[int, str] = CURRENT):
+        with self.tasks(self.task_storage,
+                        list(),
+                        user_id,
+                        appeal_id,
+                        'numberplate_tasks') as tasks:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+
     async def get_numberplates(
             self,
             user_id: int,
@@ -287,7 +300,10 @@ class PhotoManager:
         with self.tasks(self.task_storage,
                         list(),
                         user_id, appeal_id, tasks_group_name) as tasks:
-            await asyncio.gather(*tasks)
+            for task in tasks:
+                if not task.done():
+                    await task
+
             tasks = []
 
     async def _cancel_tasks(self,
