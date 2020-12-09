@@ -2029,7 +2029,7 @@ async def ask_for_numberplate(user_id: int,
                                          recognized_numberplates,
                                          message_id)
     else:
-        await ask_to_enter_numberplates(user_id, data)
+        await ask_to_enter_numberplates(user_id, data, message_id)
 
 
 async def get_recognized_numberplates(
@@ -2118,7 +2118,9 @@ async def ask_to_choose_numberplates(user_id: int,
                                parse_mode='HTML')
 
 
-async def ask_to_enter_numberplates(user_id: int, data: FSMContextProxy):
+async def ask_to_enter_numberplates(user_id: int,
+                                    data: FSMContextProxy,
+                                    message_id: int = None):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, Form.vehicle_number.state) + '\n' +\
@@ -2127,10 +2129,17 @@ async def ask_to_enter_numberplates(user_id: int, data: FSMContextProxy):
 
     keyboard = await get_cancel_keyboard(data)
 
-    await bot.send_message(user_id,
-                           text,
-                           reply_markup=keyboard,
-                           parse_mode='HTML')
+    if message_id:
+        await bot.edit_message_text(text,
+                                    user_id,
+                                    message_id,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML')
+    else:
+        await bot.send_message(user_id,
+                               text,
+                               reply_markup=keyboard,
+                               parse_mode='HTML')
 
 
 async def user_banned(language: str, user_id: int) -> bool:
