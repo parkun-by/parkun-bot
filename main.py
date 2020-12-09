@@ -2729,8 +2729,6 @@ async def numberplates_entered_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки завершения ввода гос. номера - ' +
                 str(call.from_user.id))
 
-    await bot.answer_callback_query(call.id)
-
     async with state.proxy() as data:
         current_numberplates: str = \
             get_value(data, 'violation_vehicle_number', '')
@@ -2743,6 +2741,7 @@ async def numberplates_entered_click(call, state: FSMContext):
             await bot.answer_callback_query(call.id, text)
             return
 
+        await bot.answer_callback_query(call.id)
         await ask_for_sending_approvement(call.message.chat.id, data)
 
 
