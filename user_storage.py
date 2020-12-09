@@ -34,8 +34,11 @@ class UserStorage:
     async def add_set_member(self,
                              user_id: int,
                              key: str,
-                             value: Any,
+                             value: Any = None,
                              *values):
+        if value is None:
+            return
+
         composite_key = f'{str(user_id)}:{key}'
         return await self._redis.add_set_member(composite_key, value, *values)
 
