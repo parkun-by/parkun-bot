@@ -3761,9 +3761,11 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                 str(message.from_user.id))
 
     async with state.proxy() as data:
-        if get_value(data, 'violation_vehicle_number', ''):
-            data['violation_vehicle_number'] += \
-                f', {prepare_registration_number(message.text)}'
+        if current_enter := get_value(data, 'violation_vehicle_number', ''):
+            entered_number = prepare_registration_number(message.text)
+
+            if entered_number not in current_enter:
+                data['violation_vehicle_number'] += f', {entered_number}'
         else:
             data['violation_vehicle_number'] = \
                 prepare_registration_number(message.text)
