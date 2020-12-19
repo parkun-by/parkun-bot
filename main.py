@@ -1170,6 +1170,15 @@ async def verified_email(state):
         return get_value(data, 'verified')
 
 
+def already_entered(entered_number: str, current_enter: str) -> bool:
+    entered_number = entered_number.replace(' ', '')
+    entered_number = entered_number.replace('-', '')
+    current_enter = current_enter.replace(' ', '')
+    current_enter = current_enter.replace('-', '')
+
+    return entered_number in current_enter
+
+
 async def get_cancel_keyboard(data: FSMContextProxy):
     language = await get_ui_lang(data=data)
 
@@ -3764,7 +3773,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
         if current_enter := get_value(data, 'violation_vehicle_number', ''):
             entered_number = prepare_registration_number(message.text)
 
-            if entered_number not in current_enter:
+            if not already_entered(entered_number, current_enter):
                 data['violation_vehicle_number'] += f', {entered_number}'
         else:
             data['violation_vehicle_number'] = \
