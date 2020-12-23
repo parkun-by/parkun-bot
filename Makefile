@@ -21,3 +21,6 @@ start_prod:
 
 stop_prod:
 	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-bot.yml down
+
+give_rights:
+	sudo chmod 777 /tmp/temp_files_parkun
