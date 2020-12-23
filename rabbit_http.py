@@ -16,8 +16,9 @@ class Rabbit:
             f'/api/exchanges/%2F/{exchange_name}/publish'
 
         data = {
-            'properties': {},
-            'delivery_mode': PERSISTENT,
+            'properties': {
+                'delivery_mode': PERSISTENT,
+            },
             'routing_key': routing_key,
             'payload': json.dumps(body),
             'payload_encoding': 'string'
