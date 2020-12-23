@@ -56,7 +56,7 @@ REGIONS = {
 
 OSM_REGIONS = {
     CENTRALNY: 'Centralny raion, Minsk',
-    FRUNZIENSKI: 'Frunzienski paion, Minsk',
+    FRUNZIENSKI: 'Frunzienski rajon, Minsk',
     KASTRYCNICKI: 'Kastryčnicki raion, Minsk',
     LENINSKI: 'Leninski raion, Minsk',
     MASKOUSKI: 'Maskoŭski raion, Minsk',
