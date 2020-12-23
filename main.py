@@ -25,11 +25,11 @@ import config
 import datetime_parser
 import territory
 import users
-from amqp_rabbit import Rabbit as AMQPRabbit
+from rabbit_amqp import Rabbit as AMQPRabbit
 from appeal_summary import AppealSummary
 from appeal_text import AppealText
 from bot_storage import BotStorage
-from http_rabbit import Rabbit as HTTPRabbit
+from rabbit_http import Rabbit as HTTPRabbit
 from imap_email import Email
 from locales import Locales
 from locator import Locator
@@ -61,8 +61,8 @@ mail_verifier = MailVerifier()
 semaphore = asyncio.Semaphore()
 locales = Locales()
 validator = Validator()
-http_rabbit = HTTPRabbit()
-amqp_rabbit = AMQPRabbit()
+rabbit_http = HTTPRabbit()
+rabbit_amqp = AMQPRabbit()
 photo_manager: PhotoManager
 bot_storage: BotStorage
 statistic: Statistic
@@ -484,7 +484,7 @@ async def share_post(user_id: int,
         'reply_type': reply_type,
     }
 
-    await http_rabbit.send_sharing(data)
+    await rabbit_http.send_sharing(data)
 
 
 async def add_channel_post_to_success_police_response(language: str,
@@ -573,7 +573,7 @@ async def send_appeal(user_id: int, appeal_id: int) -> None:
             await parse_appeal_from_message(data, user_id, appeal_id)
             return
 
-        await http_rabbit.send_appeal(appeal, user_id)
+        await rabbit_http.send_appeal(appeal, user_id)
 
         language = await get_ui_lang(data=data)
         text = locales.text(language, 'appeal_sent')
@@ -820,7 +820,7 @@ async def send_captcha_text(state: FSMContext,
         appeal_email = await get_appeal_email(data, user_id)
 
     try:
-        await http_rabbit.send_captcha_text(
+        await rabbit_http.send_captcha_text(
             captcha_text,
             user_id,
             appeal_id,
@@ -2872,7 +2872,7 @@ async def cancel_captcha_input(call, state: FSMContext):
 
     async with state.proxy() as data:
 
-        await http_rabbit.send_cancel(
+        await rabbit_http.send_cancel(
             get_value(data, 'appeal_id'),
             call.message.chat.id,
             get_value(data, 'appeal_response_queue'))
@@ -4040,7 +4040,7 @@ async def startup(dispatcher: Dispatcher):
     logger.info('Старт бота.')
     await create_global_objects()
     logger.info('Подключаемся к очереди статусов обращений.')
-    asyncio.ensure_future(amqp_rabbit.start(loop, status_received))
+    asyncio.ensure_future(rabbit_amqp.start(loop, status_received))
     logger.info('Подключились.')
     logger.info('Загружаем границы регионов.')
     asyncio.ensure_future(locator.download_boundaries())
