@@ -23,6 +23,7 @@ class Form(StatesGroup):
     violation_datetime = State()
     sending_approvement = State()
     feedback = State()
+    user_id_input = State()
     message_to_user = State()
     caption = State()
     email_verifying = State()

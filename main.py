@@ -2199,6 +2199,27 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
     await ask_for_violation_time(user_id, language)
 
 
+async def invite_to_send_message_to_user(
+        data: FSMContextProxy,
+        user_id: int,
+        to_user_id: str,
+        message_id: Optional[int] = None,
+        user_to_message_to_reply: Optional[str] = None):
+    data['user_to_reply'] = to_user_id
+    data['message_to_reply'] = user_to_message_to_reply
+
+    language = await get_ui_lang(data=data)
+    text = locales.text(language, Form.message_to_user.state)
+    keyboard = await get_cancel_keyboard(data)
+
+    await bot.send_message(user_id,
+                           text,
+                           reply_markup=keyboard,
+                           reply_to_message_id=message_id)
+
+    await Form.message_to_user.set()
+
+
 @dp.callback_query_handler(
     lambda call: call.data == '/appeal_template',
     state='*')
@@ -2790,20 +2811,13 @@ async def reply_to_user_click(call, state: FSMContext):
 
     async with state.proxy() as data:
         reply_data = call.data.replace('/reply_to_user', '').split()
-        data['user_to_reply'] = reply_data[0]
-        data['message_to_reply'] = reply_data[1]
 
-        language = await get_ui_lang(data=data)
-        text = locales.text(language, Form.message_to_user.state)
-
-        keyboard = await get_cancel_keyboard(data)
-
-    await bot.send_message(call.message.chat.id,
-                           text,
-                           reply_markup=keyboard,
-                           reply_to_message_id=call.message.message_id)
-
-    await Form.message_to_user.set()
+        await invite_to_send_message_to_user(
+            data,
+            user_id=call.from_user.id,
+            to_user_id=reply_data[0],
+            message_id=call.message.message_id,
+            user_to_message_to_reply=reply_data[1])
 
 
 @dp.callback_query_handler(lambda call: '/numberplate' in call.data,
@@ -3049,7 +3063,10 @@ async def cmd_broadcast(message: types.Message, state: FSMContext):
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
     if message.from_user.id != config.ADMIN_ID:
-        logger.info('A нет, не сообщение - ' + str(message.from_user.id))
+        logger.info(
+            'A нет, не сообщение - ' +
+            f'{str(message.from_user.id)}:{message.from_user.username}')
+
         return
 
     language = await get_ui_lang(state=state)
@@ -3062,6 +3079,27 @@ async def cmd_broadcast(message: types.Message, state: FSMContext):
     keyboard = get_broadcast_keyboard(language, receiver_id)
     await bot.send_message(message.chat.id, text, reply_markup=keyboard)
     await Form.broadcasting.set()
+
+
+@dp.message_handler(commands=['msg'], state=Form.operational_mode)
+async def cmd_message(message: types.Message, state: FSMContext):
+    """
+    Send message specific user
+    """
+    logger.info('Сообщение конкретному пользователю - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
+    if message.from_user.id != config.ADMIN_ID:
+        logger.info(
+            'A нет, не сообщение - ' +
+            f'{str(message.from_user.id)}:{message.from_user.username}')
+
+        return
+
+    language = await get_ui_lang(state=state)
+    text = locales.text(language, 'user_id_input')
+    await bot.send_message(message.chat.id, text)
+    await Form.user_id_input.set()
 
 
 @dp.message_handler(commands=['message'], state=Form.operational_mode)
@@ -3357,6 +3395,19 @@ async def catch_feedback(message: types.Message, state: FSMContext):
     text = locales.text(language, 'thanks_for_feedback')
     await bot.send_message(message.chat.id, text)
     await pop_saved_state(message.chat.id, message.from_user.id)
+
+
+@dp.message_handler(content_types=types.ContentType.TEXT,
+                    state=Form.user_id_input)
+async def catch_user_id(message: types.Message, state: FSMContext):
+    logger.info('Обрабатываем ввод id пользователя для сообщения - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
+    async with state.proxy() as data:
+        await invite_to_send_message_to_user(data,
+                                             user_id=message.from_user.id,
+                                             to_user_id=message.text,
+                                             message_id=message.message_id)
 
 
 @dp.message_handler(content_types=types.ContentType.ANY,
@@ -4027,7 +4078,8 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_zipcode,
                            Form.entering_captcha,
                            Form.email_password,
-                           Form.short_address_check])
+                           Form.short_address_check,
+                           Form.user_id_input])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
