@@ -1786,7 +1786,8 @@ async def share_to_users(message: types.Message):
 
 
 async def show_settings(message: types.Message, state: FSMContext):
-    logger.info('Настройки - ' + str(message.from_user.id))
+    logger.info('Настройки - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -1951,7 +1952,8 @@ async def tell_that_too_early(user_id: int, language: str):
 
 
 async def show_personal_info(message: types.Message, state: FSMContext):
-    logger.info('Показ инфы отправителя - ' + str(message.from_user.id))
+    logger.info('Показ инфы отправителя - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -2203,7 +2205,9 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
 async def show_appel_text_template(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     user_id = call.from_user.id
-    logger.info('Показать шаблон обращения - ' + str(user_id))
+
+    logger.info(f'Показать шаблон обращения - '
+                f'{str(user_id)}:{call.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -2258,8 +2262,8 @@ async def show_appel_text_template(call, state: FSMContext):
     state=Form.short_address_check)
 async def choose_users_city(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
-    logger.info('Нажал на кнопку своего города как города нарушения - ' +
-                str(call.from_user.id))
+    logger.info('Нажал на кнопку своего города как города нарушения - '
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     async with state.proxy() as data:
         user_city = get_value(data, 'sender_city')
@@ -2272,7 +2276,7 @@ async def choose_users_city(call, state: FSMContext):
 async def address_is_full_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     logger.info('Подтвердил, что адрес с городом - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     language = await get_ui_lang(state)
     await print_violation_address_info(state, call.message.chat.id)
@@ -2283,7 +2287,7 @@ async def address_is_full_click(call, state: FSMContext):
                            state=Form.broadcasting)
 async def settings_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки выбора получателя броадкаста - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     current_receiver = call.data.replace('/change_receiver', '').strip()
@@ -2307,7 +2311,7 @@ async def settings_click(call, state: FSMContext):
                            state='*')
 async def settings_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки настроек - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await show_settings(call.message, state)
@@ -2317,7 +2321,7 @@ async def settings_click(call, state: FSMContext):
                            state='*')
 async def personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки показа личных данных - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await show_personal_info(call.message, state)
@@ -2327,7 +2331,7 @@ async def personal_info_click(call, state: FSMContext):
                            state='*')
 async def personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода email пароля - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await invite_to_enter_email_password(call.message.chat.id, state)
@@ -2337,7 +2341,7 @@ async def personal_info_click(call, state: FSMContext):
                            state='*')
 async def personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки удаления email пароля - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2353,7 +2357,7 @@ async def personal_info_click(call, state: FSMContext):
                            state='*')
 async def language_settings_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки языковых настроек - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2366,7 +2370,8 @@ async def language_settings_click(call, state: FSMContext):
     state='*')
 async def clear_saved_violation_addresses_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки очистки предыдущих адресов - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
+
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
         data.pop('previous_violation_addresses', None)
@@ -2379,7 +2384,7 @@ async def clear_saved_violation_addresses_click(call, state: FSMContext):
                            state='*')
 async def language_settings_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пороля емаила - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2391,7 +2396,7 @@ async def language_settings_click(call, state: FSMContext):
                            state='*')
 async def enter_personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода личных данных - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await ask_for_sender_info(call.message,
@@ -2403,7 +2408,7 @@ async def enter_personal_info_click(call, state: FSMContext):
                            state='*')
 async def verify_email_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки верификации почты - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
@@ -2438,7 +2443,7 @@ async def verify_email_click(call, state: FSMContext):
                            state='*')
 async def delete_personal_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки удаления личных данных - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await cmd_reset(call.message, state)
@@ -2450,7 +2455,7 @@ async def sender_info_forward(call, state: FSMContext):
     current_form = await state.get_state()
 
     logger.info(f'Кнопка вперед {current_form} - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     next_form = get_next_item(SENDER_INFO, current_form)
@@ -2463,7 +2468,7 @@ async def sender_info_forward(call, state: FSMContext):
     current_form = await state.get_state()
 
     logger.info(f'Кнопка назад {current_form} - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     next_form = get_next_item(REVERSED_SENDER_INFO, current_form)
@@ -2474,7 +2479,7 @@ async def sender_info_forward(call, state: FSMContext):
                            state='*')
 async def change_language_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки смены языка бота - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2502,13 +2507,13 @@ async def change_language_click(call, state: FSMContext):
                            state=Form.operational_mode)
 async def police_response_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ответГАИ - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
     if too_early_police_button(call.message.date):
         logger.info('Слишком рано нажата кнопка ответГАИ - ' +
-                    str(call.from_user.id))
+                    f'{str(call.from_user.id)}:{call.from_user.username}')
 
         language = await get_ui_lang(state=state)
         await tell_that_too_early(call.message.chat.id, language)
@@ -2525,7 +2530,7 @@ async def police_response_click(call, state: FSMContext):
                            state='*')
 async def change_language_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки смены языка писем - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2563,7 +2568,7 @@ async def change_language_click(call, state: FSMContext):
                                   Form.sender_zipcode])
 async def finish_entering_personal_data(call, state: FSMContext):
     logger.info('Кнопка завершения ввода личных данных - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await show_private_info_summary(call.message.chat.id, state)
@@ -2573,7 +2578,7 @@ async def finish_entering_personal_data(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def current_time_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода текущего времени - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2587,7 +2592,7 @@ async def current_time_click(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def yesterday_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки вчера - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2601,7 +2606,7 @@ async def yesterday_click(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def before_yesterday_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки позавчера - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2615,7 +2620,7 @@ async def before_yesterday_click(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def violation_address_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода адреса нарушения - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2627,7 +2632,7 @@ async def violation_address_click(call, state: FSMContext):
                            state=Form.violation_datetime)
 async def recipient_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода реципиента - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
@@ -2662,7 +2667,7 @@ async def recipient_click(call, state: FSMContext):
                            state=Form.recipient)
 async def recipient_minsk_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки в подрегионы - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
@@ -2691,7 +2696,8 @@ async def recipient_minsk_click(call, state: FSMContext):
     lambda call: locales.text_exists('choose_recipient', call.message.text),
     state=Form.recipient)
 async def recipient_choosen_click(call, state: FSMContext):
-    logger.info('Выбрал реципиента - ' + str(call.from_user.id))
+    logger.info('Выбрал реципиента - ' +
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2708,7 +2714,7 @@ async def recipient_choosen_click(call, state: FSMContext):
                                   Form.sending_approvement])
 async def enter_violation_info_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода инфы о нарушении - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2722,7 +2728,7 @@ async def enter_violation_info_click(call, state: FSMContext):
                            state=[Form.sending_approvement])
 async def add_caption_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода примечания - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2745,7 +2751,7 @@ async def add_caption_click(call, state: FSMContext):
                            state=Form.vehicle_number)
 async def numberplates_entered_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки завершения ввода гос. номера - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     async with state.proxy() as data:
         current_numberplates: str = \
@@ -2767,7 +2773,7 @@ async def numberplates_entered_click(call, state: FSMContext):
                            state=Form.vehicle_number)
 async def stop_recognition_magic_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки остановки распознавания - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await photo_manager.cancel_recognition_task(call.from_user.id)
@@ -2777,7 +2783,7 @@ async def stop_recognition_magic_click(call, state: FSMContext):
                            state='*')
 async def reply_to_user_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ответа на сообщение - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await states_stack.add(call.message.chat.id)
@@ -2804,7 +2810,7 @@ async def reply_to_user_click(call, state: FSMContext):
                            state=Form.vehicle_number)
 async def select_numberplate(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки выбора распознанного номера - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
     await bot.answer_callback_query(call.id)
     numberplate = call.data.replace('/numberplate', '')
     numberplate = prepare_registration_number(numberplate)
@@ -2830,7 +2836,7 @@ async def select_numberplate(call, state: FSMContext):
                                   Form.short_address_check])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2856,7 +2862,7 @@ async def cancel_violation_input(call, state: FSMContext):
                                   Form.police_response])
 async def cancel_input(call, state: FSMContext):
     logger.info('Отмена, возврат в предыдущий режим - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await pop_saved_state(call.message.chat.id, call.message.from_user.id)
@@ -2866,7 +2872,7 @@ async def cancel_input(call, state: FSMContext):
                            state=[Form.entering_captcha])
 async def cancel_captcha_input(call, state: FSMContext):
     logger.info('Отмена, возврат в предыдущий режим - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
 
@@ -2889,6 +2895,9 @@ async def cancel_captcha_input(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.entering_captcha)
 async def send_appeal_in_progress(call, state: FSMContext):
+    logger.info('Нажатие кнопки отправки когда уже отправляется - ' +
+                f'{str(call.from_user.id)}:{call.from_user.username}')
+
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
 
@@ -2900,6 +2909,9 @@ async def send_appeal_in_progress(call, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == '/approve_sending',
                            state=Form.operational_mode)
 async def send_appeal_again(call, state: FSMContext):
+    logger.info('Кнопка отправки еще раз - ' +
+                f'{str(call.from_user.id)}:{call.from_user.username}')
+
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
 
@@ -2931,7 +2943,7 @@ async def send_appeal_again(call, state: FSMContext):
                            state=Form.sending_approvement)
 async def send_appeal_click(call, state: FSMContext):
     logger.info('Нажата кнопка отправки в ГАИ - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     await Form.entering_captcha.set()
@@ -2954,7 +2966,7 @@ async def send_appeal_click(call, state: FSMContext):
 
     elif not await verified_email(state):
         logger.info('Обращение не отправлено, email не подтвержден - ' +
-                    str(call.from_user.id))
+                    f'{str(call.from_user.id)}:{call.from_user.username}')
 
         async with state.proxy() as data:
             await invite_to_confirm_email(data, call.message.chat.id)
@@ -2979,9 +2991,9 @@ async def send_appeal_click(call, state: FSMContext):
                            state=Form.operational_mode)
 async def send_letter_again_click(call, state: FSMContext):
     logger.info('Нажата кнопка повторной отправки в ГАИ - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
-    it_is_reply, appeal_id = get_original_appeal_id(call.message)
+    _, appeal_id = get_original_appeal_id(call.message)
     await send_appeal(call.message.chat.id, appeal_id)
     await bot.answer_callback_query(call.id)
 
@@ -3001,7 +3013,7 @@ async def send_letter_again_click_wrong_mode(call, state: FSMContext):
 @dp.callback_query_handler(state='*')
 async def reject_button_click(call, state: FSMContext):
     logger.info('Беспорядочно кликает на кнопки - ' +
-                str(call.from_user.id))
+                f'{str(call.from_user.id)}:{call.from_user.username}')
 
     await bot.answer_callback_query(call.id)
     language = await get_ui_lang(state)
@@ -3018,7 +3030,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
     """
     Conversation's entry point
     """
-    logger.info('Старт работы бота - ' + str(message.from_user.id))
+    logger.info('Старт работы бота - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
     text = locales.text(language, 'greeting')
@@ -3033,7 +3046,7 @@ async def cmd_broadcast(message: types.Message, state: FSMContext):
     Send message to all users and social networks
     """
     logger.info('Сообщение широковещательное - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     if message.from_user.id != config.ADMIN_ID:
         logger.info('A нет, не сообщение - ' + str(message.from_user.id))
@@ -3056,7 +3069,8 @@ async def cmd_admin_message(message: types.Message, state: FSMContext):
     """
     Send message to user
     """
-    logger.info('Админ пишет - ' + str(message.from_user.id))
+    logger.info('Админ пишет - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     if message.from_user.id != config.ADMIN_ID:
         logger.info('A нет, не пишет - ' + str(message.from_user.id))
@@ -3082,7 +3096,9 @@ async def cmd_statistic(message: types.Message, state: FSMContext):
     """
     Show bot's statistic
     """
-    logger.info('Показ статистики - ' + str(message.from_user.id))
+    logger.info('Показ статистики - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     statistic = await get_statistic()
     language = await get_ui_lang(state)
     total_users_count_text = locales.text(language, 'total_users')
@@ -3113,7 +3129,9 @@ async def cmd_statistic(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['settings'], state='*')
 async def show_settings_command(message: types.Message, state: FSMContext):
-    logger.info('Показ настроек команда - ' + str(message.from_user.id))
+    logger.info('Показ настроек команда - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     await show_settings(message, state)
 
 
@@ -3122,7 +3140,9 @@ async def banlist_user_command(message: types.Message):
     if message.chat.id != config.ADMIN_ID:
         return
 
-    logger.info('Банлист - ' + str(message.from_user.id))
+    logger.info('Банлист - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     bans = await bot_storage.get_bans()
 
     await bot.send_message(message.chat.id,
@@ -3137,7 +3157,9 @@ async def unban_user_command(message: types.Message, state: FSMContext):
         return
 
     language = await get_ui_lang(state)
-    logger.info('Разбанил человека - ' + str(message.from_user.id))
+
+    logger.info('Разбанил человека - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     user_id = message.text.replace('/unban', '', 1).strip()
 
@@ -3160,7 +3182,9 @@ async def ban_user_command(message: types.Message, state: FSMContext):
         return
 
     language = await get_ui_lang(state)
-    logger.info('Забанил человека - ' + str(message.from_user.id))
+
+    logger.info('Забанил человека - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     try:
         user_id: str
@@ -3181,7 +3205,9 @@ async def ban_user_command(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['reset'], state='*')
 async def cmd_reset(message: types.Message, state: FSMContext):
-    logger.info('Сброс бота - ' + str(message.from_user.id))
+    logger.info('Сброс бота - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     language = await get_ui_lang(state)
 
     await state.finish()
@@ -3194,7 +3220,8 @@ async def cmd_reset(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['help'], state='*')
 async def cmd_help(message: types.Message, state: FSMContext):
-    logger.info('Вызов помощи - ' + str(message.from_user.id))
+    logger.info('Вызов помощи - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
     changelog = "https://github.com/parkun-by/parkun-bot/blob/master/README.md"
@@ -3224,7 +3251,8 @@ async def cmd_help(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['feedback'], state='*')
 async def write_feedback(message: types.Message, state: FSMContext):
-    logger.info('Хочет написать фидбэк - ' + str(message.from_user.id))
+    logger.info('Хочет написать фидбэк - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         current_state = await state.get_state()
@@ -3249,7 +3277,7 @@ async def write_feedback(message: types.Message, state: FSMContext):
                     state=Form.violation_address)
 async def use_saved_address_command(message: types.Message, state: FSMContext):
     logger.info('Команда предыдущего адреса - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
 
@@ -3290,13 +3318,14 @@ async def use_saved_address_command(message: types.Message, state: FSMContext):
             previous_address = message.text
 
     logger.info(f'Выбрался адрес: {previous_address} - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     await set_violation_address(message.chat.id, previous_address, state)
 
     if maybe_no_city_in_address(previous_address):
-        logger.info(f'Адрес без города: {previous_address} - ' +
-                    str(message.from_user.id))
+        logger.info(
+            f'Адрес без города: {previous_address} - ' +
+            f'{str(message.from_user.id)}:{message.from_user.username}')
 
         await ask_about_short_address(state, message.chat.id)
     else:
@@ -3307,7 +3336,7 @@ async def use_saved_address_command(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.feedback)
 async def catch_feedback(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод фидбэка - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
 
@@ -3334,7 +3363,7 @@ async def catch_feedback(message: types.Message, state: FSMContext):
                     state=Form.message_to_user)
 async def catch_message_to_user(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем сообщение для пользователя - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         feedback_chat_id = pop_value(data, 'user_to_reply')
@@ -3365,7 +3394,8 @@ async def catch_message_to_user(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.email_verifying)
 async def catch_secret_code(message: types.Message, state: FSMContext):
-    logger.info('Ввод секретного кода - ' + str(message.from_user.id))
+    logger.info('Ввод секретного кода - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         secret_code = get_value(data, 'secret_code')
@@ -3395,7 +3425,9 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_first_name)
 async def catch_sender_first_name(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод имени - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод имени - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.first_name, message, language):
@@ -3412,7 +3444,7 @@ async def catch_sender_first_name(message: types.Message, state: FSMContext):
                     state=Form.sender_patronymic)
 async def catch_sender_patronymic(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод отчества - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
 
@@ -3432,7 +3464,7 @@ async def catch_sender_patronymic(message: types.Message, state: FSMContext):
                     state=Form.sender_last_name)
 async def catch_sender_last_name(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод фамилии - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
 
@@ -3449,14 +3481,18 @@ async def catch_sender_last_name(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_email)
 async def catch_sender_email(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод email - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод email - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
 
     try:
         if message.text.split('@')[1] in blocklist:
-            logger.info('Временный email - ' + str(message.from_user.id))
+            logger.info(
+                'Временный email - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
             text = locales.text(language, 'no_temporary_email')
             await bot.send_message(message.chat.id, text)
             await ask_for_sender_info(message, state, Form.sender_email.state)
@@ -3476,7 +3512,8 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_phone)
 async def catch_sender_city(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод телефона - ' + str(message.chat.id))
+    logger.info('Обрабатываем ввод телефона - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         data['sender_phone'] = message.text
@@ -3488,7 +3525,7 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
                     state=Form.sender_city)
 async def catch_sender_city(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод города - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -3507,7 +3544,7 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
                     state=Form.sender_street)
 async def catch_sender_street(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод улицы - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -3526,7 +3563,7 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
                     state=Form.sender_house)
 async def catch_sender_house(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод дома - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)
@@ -3545,7 +3582,7 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
                     state=Form.sender_block)
 async def catch_sender_block(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод корпуса - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         data['sender_block'] = message.text
@@ -3557,7 +3594,7 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
                     state=Form.sender_flat)
 async def catch_sender_flat(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод квартиры - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         data['sender_flat'] = message.text
@@ -3569,7 +3606,7 @@ async def catch_sender_flat(message: types.Message, state: FSMContext):
                     state=Form.sender_zipcode)
 async def catch_sender_zipcode(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод индекса - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.zipcode, message, language):
@@ -3585,7 +3622,7 @@ async def catch_sender_zipcode(message: types.Message, state: FSMContext):
                     state=Form.police_response)
 async def police_response_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку фотки ответа ГАИ - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         response_violation_post_url = get_value(data, 'responsed_post_url')
@@ -3619,7 +3656,7 @@ async def police_response_photo(message: types.Message, state: FSMContext):
                     state=Form.police_response)
 async def police_response_text(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку текста ответа ГАИ - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         response_violation_post_url = get_value(data, 'responsed_post_url')
@@ -3647,7 +3684,7 @@ async def police_response_text(message: types.Message, state: FSMContext):
                     state=Form.broadcasting)
 async def message_to_broadcast(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем широковещательный текстопост - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         receiver = pop_value(data, 'broadcast_receiver')
@@ -3669,7 +3706,7 @@ async def message_to_broadcast(message: types.Message, state: FSMContext):
                     state=Form.broadcasting)
 async def message_to_broadcast(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем широковещательный фотопост - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         receiver = pop_value(data, 'broadcast_receiver')
@@ -3691,7 +3728,7 @@ async def message_to_broadcast(message: types.Message, state: FSMContext):
                     state=Form.broadcasting)
 async def message_to_broadcast(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем широковещательный ANY - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         receiver = pop_value(data, 'broadcast_receiver')
@@ -3714,7 +3751,7 @@ async def message_to_broadcast(message: types.Message, state: FSMContext):
                     state=Form.operational_mode)
 async def initial_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку первой фотки - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
 
@@ -3733,7 +3770,7 @@ async def initial_violation_photo(message: types.Message, state: FSMContext):
                     state=Form.violation_photo)
 async def process_violation_photo(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем посылку еще фотки нарушения - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
 
@@ -3767,7 +3804,7 @@ async def process_violation_photo(message: types.Message, state: FSMContext):
                     state=Form.vehicle_number)
 async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод гос. номера - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
         if current_enter := get_value(data, 'violation_vehicle_number', ''):
@@ -3786,7 +3823,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                     state=Form.caption)
 async def catch_vehicle_number(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод примечания - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     await pop_saved_state(message.chat.id, message.from_user.id)
 
@@ -3799,7 +3836,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
                     state=Form.email_password)
 async def catch_email_password(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод пароля email - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
     password = message.text.strip()
 
     async with state.proxy() as data:
@@ -3825,7 +3862,8 @@ async def catch_email_password(message: types.Message, state: FSMContext):
                     state=Form.short_address_check)
 async def catch_violation_city(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод города нарушения - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     await set_violation_city(state, message.chat.id, message.text)
 
 
@@ -3833,14 +3871,15 @@ async def catch_violation_city(message: types.Message, state: FSMContext):
                     state=Form.violation_address)
 async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     await set_violation_address(message.chat.id, message.text, state)
     language = await get_ui_lang(state)
 
     if maybe_no_city_in_address(message.text):
-        logger.info(f'Адрес без города: {message.text} - ' +
-                    str(message.from_user.id))
+        logger.info(
+            f'Адрес без города: {message.text} - ' +
+            f'{str(message.from_user.id)}:{message.from_user.username}')
 
         await ask_about_short_address(state, message.chat.id)
     else:
@@ -3853,7 +3892,7 @@ async def catch_violation_location(message: types.Message, state: FSMContext):
 async def catch_gps_violation_location(message: types.Message,
                                        state: FSMContext):
     logger.info('Обрабатываем ввод локации адреса нарушения - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     coordinates = [message.location.longitude, message.location.latitude]
 
@@ -3870,8 +3909,9 @@ async def catch_gps_violation_location(message: types.Message,
         region = get_value(data, 'recipient')
 
     if address is None:
-        logger.info('Не распознал локацию - ' +
-                    str(message.from_user.id))
+        logger.info(
+            'Не распознал локацию - ' +
+            f'{str(message.from_user.id)}:{message.from_user.username}')
 
         text = locales.text(language, 'cant_locate')
         await bot.send_message(message.chat.id, text)
@@ -3888,7 +3928,7 @@ async def catch_gps_violation_location(message: types.Message,
                     state=Form.violation_datetime)
 async def catch_violation_time(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод даты и времени нарушения - ' +
-                str(message.from_user.id))
+                f'{str(message.chat.id)}:{message.chat.username}')
 
     async with state.proxy() as data:
         datetime = datetime_parser.get_violation_datetime(
@@ -3896,8 +3936,9 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
             message.text)
 
         if not datetime:
-            logger.info('Неправильно ввел датовремя - ' +
-                        str(message.from_user.id))
+            logger.info(
+                'Неправильно ввел датовремя - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
             language = await get_ui_lang(data=data)
             text = locales.text(language, 'invalid_datetime')
@@ -3912,7 +3953,8 @@ async def catch_violation_time(message: types.Message, state: FSMContext):
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.entering_captcha)
 async def catch_captcha(message: types.Message, state: FSMContext):
-    logger.info('Обрабатываем ввод капчи - ' + str(message.from_user.id))
+    logger.info('Обрабатываем ввод капчи - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     await Form.operational_mode.set()
 
@@ -3936,7 +3978,7 @@ async def ignore_initial_input(message: types.Message, state: FSMContext):
                     state=Form.operational_mode)
 async def reject_wrong_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не фотку, а что-то другое - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
     text = locales.text(language, Form.operational_mode.state)
@@ -3988,7 +4030,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.short_address_check])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +
-                str(message.from_user.id))
+                f'{str(message.from_user.id)}:{message.from_user.username}')
 
     language = await get_ui_lang(state)
     text = locales.text(language, 'text_only')
@@ -4000,7 +4042,9 @@ async def reject_non_text_input(message: types.Message, state: FSMContext):
                     state=[Form.sending_approvement,
                            Form.recipient])
 async def ask_for_button_press(message: types.Message, state: FSMContext):
-    logger.info('Нужно нажать на кнопку - ' + str(message.from_user.id))
+    logger.info('Нужно нажать на кнопку - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     language = await get_ui_lang(state)
     text = locales.text(language, 'buttons_only')
     await bot.send_message(message.chat.id, text)
@@ -4008,7 +4052,9 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=None)
 async def ask_for_button_press(message: types.Message, state: FSMContext):
-    logger.info('Нет стейта - ' + str(message.from_user.id))
+    logger.info('Нет стейта - ' +
+                f'{str(message.from_user.id)}:{message.from_user.username}')
+
     await cmd_start(message, state)
 
 
