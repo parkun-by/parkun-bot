@@ -2306,7 +2306,7 @@ async def address_is_full_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: '/change_receiver' in call.data,
                            state=Form.broadcasting)
-async def settings_click(call, state: FSMContext):
+async def change_receiver_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки выбора получателя броадкаста - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
 
@@ -2350,7 +2350,7 @@ async def personal_info_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/enter_password',
                            state='*')
-async def personal_info_click(call, state: FSMContext):
+async def enter_password_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки ввода email пароля - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
 
@@ -2360,7 +2360,7 @@ async def personal_info_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/delete_password',
                            state='*')
-async def personal_info_click(call, state: FSMContext):
+async def delete_password_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки удаления email пароля - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
 
@@ -2403,7 +2403,7 @@ async def clear_saved_violation_addresses_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/appeal_email',
                            state='*')
-async def language_settings_click(call, state: FSMContext):
+async def appeal_email_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки пороля емаила - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
 
@@ -2485,7 +2485,7 @@ async def sender_info_forward(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/back_button',
                            state=SENDER_INFO)
-async def sender_info_forward(call, state: FSMContext):
+async def sender_info_back(call, state: FSMContext):
     current_form = await state.get_state()
 
     logger.info(f'Кнопка назад {current_form} - ' +
@@ -2498,7 +2498,7 @@ async def sender_info_forward(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/change_ui_language',
                            state='*')
-async def change_language_click(call, state: FSMContext):
+async def change_ui_language_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки смены языка бота - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
 
@@ -2549,7 +2549,7 @@ async def police_response_click(call, state: FSMContext):
 
 @dp.callback_query_handler(lambda call: call.data == '/change_letter_language',
                            state='*')
-async def change_language_click(call, state: FSMContext):
+async def change_letter_language_click(call, state: FSMContext):
     logger.info('Обрабатываем нажатие кнопки смены языка писем - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
 
@@ -3562,7 +3562,7 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.sender_phone)
-async def catch_sender_city(message: types.Message, state: FSMContext):
+async def catch_sender_phone(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод телефона - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
@@ -3733,7 +3733,7 @@ async def police_response_text(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.broadcasting)
-async def message_to_broadcast(message: types.Message, state: FSMContext):
+async def text_to_broadcast(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем широковещательный текстопост - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
@@ -3755,7 +3755,7 @@ async def message_to_broadcast(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.PHOTO,
                     state=Form.broadcasting)
-async def message_to_broadcast(message: types.Message, state: FSMContext):
+async def photo_to_broadcast(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем широковещательный фотопост - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
@@ -3872,7 +3872,7 @@ async def catch_vehicle_number(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.caption)
-async def catch_vehicle_number(message: types.Message, state: FSMContext):
+async def catch_caption(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод примечания - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
@@ -4103,7 +4103,7 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=None)
-async def ask_for_button_press(message: types.Message, state: FSMContext):
+async def no_state(message: types.Message, state: FSMContext):
     logger.info('Нет стейта - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
