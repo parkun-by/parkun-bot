@@ -2158,9 +2158,14 @@ async def user_banned(language: str, user_id: int) -> bool:
     key = str(user_id)
 
     if key in bans:
-        text = locales.text(language, 'you_are_banned') + ' ' + bans[key]
-        await bot.send_message(user_id, text)
-        return True
+        logger.info(f'User id {key} found in bans {str(bans)}')
+
+        try:
+            text = locales.text(language, 'you_are_banned') + ' ' + bans[key]
+            await bot.send_message(user_id, text)
+            return True
+        except Exception:
+            logger.exception("Failed to apply ban")
 
     return False
 
