@@ -44,12 +44,15 @@ class StorageRedis:
     @safe_redis
     async def get_value(self, key: str, default: Any = dict()) -> Any:
         key = self.PREFIX + key
+        logger.info(f"get_value key: {key}, default: {default}")
 
         if await self._redis.exists(key):
             raw_value = await self._redis.get(key)
             value: dict = json.loads(raw_value)
+            logger.info(f"get_value got value: {value}")
             return value or default
         else:
+            logger.info(f"get_value return default: {default}")
             return default
 
     @safe_redis
