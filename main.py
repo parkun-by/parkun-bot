@@ -13,6 +13,7 @@ from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
 from aiogram.dispatcher.filters.state import State
 from aiogram.dispatcher.storage import FSMContextProxy
+from aiogram.types.inline_keyboard import InlineKeyboardMarkup
 from aiogram.types.photo_size import PhotoSize
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
@@ -1179,10 +1180,14 @@ def already_entered(entered_number: str, current_enter: str) -> bool:
     return entered_number in current_enter
 
 
-async def get_cancel_keyboard(data: FSMContextProxy):
+async def get_cancel_keyboard(
+    data: FSMContextProxy,
+    keyboard: types.InlineKeyboardMarkup = None) \
+        -> types.InlineKeyboardMarkup:
     language = await get_ui_lang(data=data)
 
-    keyboard = types.InlineKeyboardMarkup()
+    if not keyboard:
+        keyboard = types.InlineKeyboardMarkup()
 
     cancel = types.InlineKeyboardButton(
         text=locales.text(language, 'cancel_button'),
@@ -1190,6 +1195,22 @@ async def get_cancel_keyboard(data: FSMContextProxy):
 
     keyboard.add(cancel)
 
+    return keyboard
+
+
+def get_saved_adresses_keyboard(
+        items: list) -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup()
+    buttons = []
+
+    for number, _ in enumerate(items):
+        buttons.append(
+            types.InlineKeyboardButton(
+                text=f'{number+1}',
+                callback_data=f'{config.PREVIOUS_ADDRESS_PREFIX}{number}')
+        )
+
+    keyboard.add(*buttons)
     return keyboard
 
 
@@ -1341,11 +1362,16 @@ async def ask_for_violation_address(chat_id, data):
     keyboard = await get_cancel_keyboard(data)
 
     if get_value(data, 'previous_violation_addresses'):
+        saved_adresses: list = get_value(data, 'previous_violation_addresses')
+        saved_adresses_text = get_saved_addresses_list(saved_adresses)
+
         text += locales.text(language, 'previous_violation_addresses') + \
             '\n' + \
             '\n' + \
-            get_saved_addresses_list(
-                get_value(data, 'previous_violation_addresses'))
+            saved_adresses_text
+
+        keyboard = get_saved_adresses_keyboard(saved_adresses)
+        keyboard = await get_cancel_keyboard(data, keyboard)
 
     await bot.send_message(chat_id,
                            text,
@@ -1359,8 +1385,7 @@ def get_saved_addresses_list(addresses: list) -> str:
     addresses_list = ''
 
     for number, address in enumerate(addresses):
-        addresses_list += f'📍 {address} - ' + \
-            f'{config.PREVIOUS_ADDRESS_PREFIX}{number}\n'
+        addresses_list += f'{number + 1}. {address}\n'
 
     return addresses_list
 
@@ -3031,6 +3056,67 @@ async def send_letter_again_click_wrong_mode(call, state: FSMContext):
     await bot.send_message(call.message.chat.id, text)
 
 
+@dp.callback_query_handler(
+    lambda call: config.PREVIOUS_ADDRESS_PREFIX in call.data,
+    state=Form.violation_address)
+async def use_saved_address_button(call, state: FSMContext):
+    await bot.answer_callback_query(call.id)
+    logger.info(
+        'Кнопка предыдущего адреса - ' +
+        f'{str(call.message.from_user.id)}:{call.message.from_user.username}')
+
+    language = await get_ui_lang(state)
+
+    try:
+        address_index = int(
+            call.data.replace(config.PREVIOUS_ADDRESS_PREFIX, ''))
+    except ValueError:
+        # сказать, что что-то пошло не так
+        logger.info(f'Какая-то хрень вместо предыдущего адреса: ' +
+                    f'{call.message.text} - {str(call.message.from_user.id)}')
+
+        text = locales.text(language, 'invalid_address')
+
+        await bot.send_message(call.message.from_user.id,
+                               text,
+                               reply_to_message_id=call.message.message_id)
+
+        async with state.proxy() as data:
+            await ask_for_violation_address(call.message.from_user.id, data)
+
+        return
+
+    async with state.proxy() as data:
+        addresses = get_value(data, 'previous_violation_addresses')
+
+        try:
+            previous_address = addresses[int(address_index)]
+        except KeyError:
+            logger.error('Ошибка при вводе предыдущего адреса' +
+                         f'{str(call.message.from_user.id)}.\n' +
+                         f'Адреса: {addresses}\n' +
+                         f'Индекс: {address_index}')
+
+            previous_address = call.message.text
+
+    logger.info(f'Выбрался адрес: {previous_address} - ' +
+                f'{str(call.message.from_user.id)}:' +
+                f'{call.message.from_user.username}')
+
+    await set_violation_address(call.message.chat.id, previous_address, state)
+
+    if maybe_no_city_in_address(previous_address):
+        logger.info(
+            f'Адрес без города: {previous_address} - ' +
+            f'{str(call.message.from_user.id)}:' +
+            f'{call.message.from_user.username}')
+
+        await ask_about_short_address(state, call.message.chat.id)
+    else:
+        await print_violation_address_info(state, call.message.chat.id)
+        await ask_for_violation_time(call.message.chat.id, language)
+
+
 @dp.callback_query_handler(state='*')
 async def reject_button_click(call, state: FSMContext):
     logger.info('Беспорядочно кликает на кнопки - ' +
@@ -3316,66 +3402,6 @@ async def write_feedback(message: types.Message, state: FSMContext):
     await bot.send_message(user_id, text, reply_markup=keyboard)
     await Form.feedback.set()
     await schedule_auto_cancel(user_id, state)
-
-
-@dp.message_handler(regexp=config.PREVIOUS_ADDRESS_REGEX,
-                    state=Form.violation_address)
-async def use_saved_address_command(message: types.Message, state: FSMContext):
-    logger.info('Команда предыдущего адреса - ' +
-                f'{str(message.from_user.id)}:{message.from_user.username}')
-
-    language = await get_ui_lang(state)
-
-    # бывает, что пользователь вместо того, чтобы нажать на команду рядом с
-    # адресом копирует прямо все сообщение и присылает его боту
-    # в таком случае мы отругаемся на это и попросим прислать адрес еще раз
-
-    try:
-        address_index = int(
-            message.text.replace(config.PREVIOUS_ADDRESS_PREFIX, ''))
-    except ValueError:
-        # сказать, что что-то пошло не так
-        logger.info(f'Какая-то хрень вместо предыдущего адреса: ' +
-                    f'{message.text} - {str(message.from_user.id)}')
-
-        text = locales.text(language, 'invalid_address')
-
-        await bot.send_message(message.from_user.id,
-                               text,
-                               reply_to_message_id=message.message_id)
-
-        async with state.proxy() as data:
-            await ask_for_violation_address(message.from_user.id, data)
-
-        return
-
-    async with state.proxy() as data:
-        addresses = get_value(data, 'previous_violation_addresses')
-
-        try:
-            previous_address = addresses[int(address_index)]
-        except KeyError:
-            logger.error('Ошибка при вводе предыдущего адреса' +
-                         f'{str(message.from_user.id)}.\n' +
-                         f'Адреса: {addresses}\n' +
-                         f'Индекс: {address_index}')
-
-            previous_address = message.text
-
-    logger.info(f'Выбрался адрес: {previous_address} - ' +
-                f'{str(message.from_user.id)}:{message.from_user.username}')
-
-    await set_violation_address(message.chat.id, previous_address, state)
-
-    if maybe_no_city_in_address(previous_address):
-        logger.info(
-            f'Адрес без города: {previous_address} - ' +
-            f'{str(message.from_user.id)}:{message.from_user.username}')
-
-        await ask_about_short_address(state, message.chat.id)
-    else:
-        await print_violation_address_info(state, message.chat.id)
-        await ask_for_violation_time(message.chat.id, language)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.feedback)
