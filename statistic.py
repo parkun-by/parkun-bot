@@ -68,7 +68,7 @@ class Statistic():
         total_users_count = 0
         registered_users_count = 0
 
-        async for user_data in users.every(id_only=False):
+        async for user_data in users.every():
             total_users_count += 1
             user_verified = user_data.get('verified', False)
 

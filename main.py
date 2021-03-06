@@ -1067,7 +1067,7 @@ def get_photos_links(data):
     return text.strip()
 
 
-def get_appeal_text(data: FSMContextProxy,
+def get_appeal_text(data: Union[FSMContextProxy, dict],
                     user_id: int,
                     appeal_id: int) -> str:
     violation_data = {
@@ -1250,7 +1250,7 @@ async def get_sender_param_keyboard(language):
 
 async def ask_for_sender_info(message: types.Message,
                               state: FSMContext,
-                              next_state: State,
+                              next_state: str,
                               edit=False) -> None:
     storage_key = next_state.replace('Form:', '')
 
@@ -1734,7 +1734,9 @@ async def react_to_time_button(user_id: int,
         pass
 
 
-async def send_form_message(form: str, user_id: int, language: str) -> None:
+async def send_form_message(form: Optional[str],
+                            user_id: int,
+                            language: str) -> None:
     text = locales.text(language, 'continue_work') + '\n\n' + \
         locales.text(language, form)
 
@@ -1776,7 +1778,7 @@ async def get_social_data_from_post(
 
 
 async def share_to_users(message: types.Message):
-    async for user_id in users.every():
+    async for user_id in users.every_id():
         try:
             await message.send_copy(user_id, disable_notification=True)
         except CantTalkWithBots:
@@ -2427,7 +2429,7 @@ async def enter_personal_info_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     await ask_for_sender_info(call.message,
                               state,
-                              Form.sender_first_name.state)
+                              str(Form.sender_first_name.state))
 
 
 @dp.callback_query_handler(lambda call: call.data == '/verify_email',
@@ -3487,13 +3489,17 @@ async def catch_sender_first_name(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.first_name, message, language):
-        await ask_for_sender_info(message, state, Form.sender_first_name.state)
+        await ask_for_sender_info(message,
+                                  state,
+                                  str(Form.sender_first_name.state))
         return
 
     async with state.proxy() as data:
         data['sender_first_name'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_patronymic.state)
+    await ask_for_sender_info(message,
+                              state,
+                              str(Form.sender_patronymic.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3507,13 +3513,13 @@ async def catch_sender_patronymic(message: types.Message, state: FSMContext):
     if not await check_validity(validator.patronymic, message, language):
         await ask_for_sender_info(message,
                                   state,
-                                  Form.sender_patronymic.state)
+                                  str(Form.sender_patronymic.state))
         return
 
     async with state.proxy() as data:
         data['sender_patronymic'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_last_name.state)
+    await ask_for_sender_info(message, state, str(Form.sender_last_name.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3525,13 +3531,15 @@ async def catch_sender_last_name(message: types.Message, state: FSMContext):
     language = await get_ui_lang(state)
 
     if not await check_validity(validator.last_name, message, language):
-        await ask_for_sender_info(message, state, Form.sender_last_name.state)
+        await ask_for_sender_info(message,
+                                  state,
+                                  str(Form.sender_last_name.state))
         return
 
     async with state.proxy() as data:
         data['sender_last_name'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_email.state)
+    await ask_for_sender_info(message, state, str(Form.sender_email.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3551,7 +3559,9 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
 
             text = locales.text(language, 'no_temporary_email')
             await bot.send_message(message.chat.id, text)
-            await ask_for_sender_info(message, state, Form.sender_email.state)
+            await ask_for_sender_info(message,
+                                      state,
+                                      str(Form.sender_email.state))
 
             return
     except IndexError:
@@ -3562,7 +3572,7 @@ async def catch_sender_email(message: types.Message, state: FSMContext):
         data['sender_email_password'] = ''
         data['verified'] = False
 
-    await ask_for_sender_info(message, state, Form.sender_phone.state)
+    await ask_for_sender_info(message, state, str(Form.sender_phone.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3574,7 +3584,7 @@ async def catch_sender_phone(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_phone'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_city.state)
+    await ask_for_sender_info(message, state, str(Form.sender_city.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3587,13 +3597,13 @@ async def catch_sender_city(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     if not await check_validity(validator.city, message, language):
-        await ask_for_sender_info(message, state, Form.sender_city.state)
+        await ask_for_sender_info(message, state, str(Form.sender_city.state))
         return
 
     async with state.proxy() as data:
         data['sender_city'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_street.state)
+    await ask_for_sender_info(message, state, str(Form.sender_street.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3606,13 +3616,15 @@ async def catch_sender_street(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     if not await check_validity(validator.street, message, language):
-        await ask_for_sender_info(message, state, Form.sender_street.state)
+        await ask_for_sender_info(message,
+                                  state,
+                                  str(Form.sender_street.state))
         return
 
     async with state.proxy() as data:
         data['sender_street'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_block.state)
+    await ask_for_sender_info(message, state, str(Form.sender_block.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3625,13 +3637,13 @@ async def catch_sender_house(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     if not await check_validity(validator.building, message, language):
-        await ask_for_sender_info(message, state, Form.sender_house.state)
+        await ask_for_sender_info(message, state, str(Form.sender_house.state))
         return
 
     async with state.proxy() as data:
         data['sender_house'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_flat.state)
+    await ask_for_sender_info(message, state, str(Form.sender_flat.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3643,7 +3655,7 @@ async def catch_sender_block(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_block'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_house.state)
+    await ask_for_sender_info(message, state, str(Form.sender_house.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3655,7 +3667,7 @@ async def catch_sender_flat(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['sender_flat'] = message.text
 
-    await ask_for_sender_info(message, state, Form.sender_zipcode.state)
+    await ask_for_sender_info(message, state, str(Form.sender_zipcode.state))
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
@@ -3747,7 +3759,7 @@ async def text_to_broadcast(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     if receiver == SOCIAL_NETWORKS:
-        await share_to_social_networks(message, types.ContentType.TEXT)
+        await share_to_social_networks(message, str(types.ContentType.TEXT))
     elif receiver == USERS:
         await share_to_users(message)
 
@@ -3769,7 +3781,7 @@ async def photo_to_broadcast(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     if receiver == SOCIAL_NETWORKS:
-        await share_to_social_networks(message, types.ContentType.PHOTO)
+        await share_to_social_networks(message, str(types.ContentType.PHOTO))
     elif receiver == USERS:
         await share_to_users(message)
 

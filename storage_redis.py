@@ -3,6 +3,7 @@ import logging
 from typing import Any, Callable
 
 import aioredis
+from aioredis import Redis
 
 import config
 
@@ -39,7 +40,7 @@ class StorageRedis:
 
     def __init__(self, prefix: str):
         self.PREFIX = prefix
-        self._redis: aioredis = None
+        self._redis: Redis
 
     @safe_redis
     async def get_value(self, key: str, default: Any = dict()) -> Any:

@@ -8,7 +8,7 @@ class Locales:
         with open('localization.json') as file:
             self.__localization = json.load(file)
 
-    def text(self, locale: str, text_id: str) -> str:
+    def text(self, locale: str, text_id: Optional[str]) -> str:
         try:
             return self.__localization[locale][text_id]
         except KeyError:

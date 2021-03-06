@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 class Locator:
     def __init__(self, loop: AbstractEventLoop):
-        self._timeout = aiohttp.ClientTimeout(connect=5)
         self._boundaries = {}
         self.loop = loop
         self.scheduler: Scheduler
@@ -35,8 +34,7 @@ class Locator:
         try:
             async with aiohttp.ClientSession() as http_session:
                 async with http_session.get(url,
-                                            params=params,
-                                            timeout=self._timeout) as response:
+                                            params=params) as response:
                     if response.status != 200:
                         return None
 

@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 class Telegraph():
     def __init__(self, loop: AbstractEventLoop):
-        self.__api = TelegraphAPIClient()
-        self.__api.ACCESS_TOKEN = config.TPH_ACCESS_TOKEN
-        self.__api.loop = loop
+        self.__api = TelegraphAPIClient(config.TPH_ACCESS_TOKEN)
 
     async def create_page(self, photos: list, text: str) -> Optional[str]:
         title = self._get_title()
