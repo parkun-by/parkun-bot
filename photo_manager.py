@@ -7,6 +7,8 @@ import time
 from asyncio.events import AbstractEventLoop
 from contextlib import contextmanager
 from typing import Any, Awaitable, List, Union
+from aiogram.types.photo_size import PhotoSize
+from aiogram import Bot
 
 import aiohttp
 
@@ -21,11 +23,12 @@ STORAGE_PREFIX = "photo_manager"
 
 
 class PhotoManager:
-    def __init__(self, loop: AbstractEventLoop):
+    def __init__(self, loop: AbstractEventLoop, bot: Bot):
         self.files_dir = config.TEMP_FILES_PATH
         self.task_storage = dict()
         self.data_storage: UserStorage
         self.telegraph = Telegraph(loop)
+        self._bot = bot
 
         try:
             os.makedirs(self.files_dir)
@@ -33,8 +36,8 @@ class PhotoManager:
             pass
 
     @classmethod
-    async def create(cls, loop: AbstractEventLoop):
-        self = PhotoManager(loop)
+    async def create(cls, loop: AbstractEventLoop, bot: Bot):
+        self = PhotoManager(loop, bot)
         self.data_storage = await UserStorage.create(STORAGE_PREFIX)
         return self
 
@@ -53,7 +56,7 @@ class PhotoManager:
         except Exception:
             return False
 
-    def stash_photo(self, user_id: int, temp_url: str):
+    def stash_photo(self, user_id: int, photo_tg_object: PhotoSize):
         tasks: list
 
         with self.tasks(self.task_storage,
@@ -62,7 +65,7 @@ class PhotoManager:
                         CURRENT,
                         'store_photo_tasks') as tasks:
             storing_task = asyncio.create_task(
-                self.store_photo(user_id, temp_url)
+                self.store_photo(user_id, photo_tg_object)
             )
 
             tasks.append(storing_task)
@@ -84,20 +87,20 @@ class PhotoManager:
                         CURRENT,
                         'upload_to_cloud_tasks') as tasks:
             upload_to_cloud_task = asyncio.create_task(
-                self.upload_to_cloud(user_id, temp_url, storing_task)
+                self.upload_to_cloud(user_id, storing_task)
             )
 
             tasks.append(upload_to_cloud_task)
 
     async def store_photo(self,
                           user_id: int,
-                          temp_url: str,
+                          photo_tg_object: PhotoSize,
                           stash_id: Union[int, str] = CURRENT) -> str:
         folder_path = self._get_user_dir(user_id, stash_id)
-        file_name = temp_url.split('/')[-1]
+        photo_file = await self._bot.get_file(photo_tg_object['file_id'])
+        file_name = photo_file.file_path.split('/')[-1]
         file_path = self.get_unique_file_path(folder_path, file_name)
-
-        await self._save_photo_to_disk(file_path, temp_url)
+        await photo_tg_object.download(file_path)
 
         await self.data_storage.add_set_member(user_id,
                                                key=f'{stash_id}:file_paths',
@@ -106,11 +109,10 @@ class PhotoManager:
 
     async def upload_to_cloud(self,
                               user_id: int,
-                              temp_url: str,
                               photo_file_path: Awaitable,
                               stash_id: Union[int, str] = CURRENT) -> str:
         file_path = await photo_file_path
-        permanent_url = await self._upload_photo(file_path, temp_url)
+        permanent_url = await self._upload_photo(file_path)
 
         await self.data_storage.add_set_member(user_id,
                                                key=f'{stash_id}:urls',
@@ -365,13 +367,14 @@ class PhotoManager:
             user_id,
             pattern=f'{str(appeal_id)}:*')
 
-    async def _upload_photo(self, file_path: str, temp_url: str) -> str:
+    async def _upload_photo(self, file_path: str) -> str:
         file_id = await self._upload_file(file_path)
 
         if file_id:
             full_path = 'https://telegra.ph' + file_id
         else:
-            full_path = temp_url
+            # TODO upload photo to another services
+            full_path = ""
 
         return full_path
 
@@ -406,14 +409,6 @@ class PhotoManager:
                 file_id = result[0]['src']
 
         return file_id
-
-    async def _save_photo_to_disk(self, file_path: str, url: str):
-        async with aiohttp.ClientSession() as http_session:
-            async with http_session.get(url) as resp:
-                raw_file = await resp.content.read()
-
-        with open(file_path, 'wb') as file:
-            file.write(raw_file)
 
     @contextmanager
     def tasks(self, storage: dict, default: Any, path: str, *paths) -> Any:

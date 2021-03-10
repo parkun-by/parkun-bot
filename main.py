@@ -867,14 +867,7 @@ async def add_photo_to_attachments(photo: PhotoSize,
                                    user_id: int) -> None:
     ensure_attachments_availability(data)
     data['violation_photo_ids'].append(photo['file_id'])
-
-    url = await get_temp_photo_url(photo['file_id'])
-    photo_manager.stash_photo(user_id, url)
-
-
-async def get_temp_photo_url(photo_id: str) -> str:
-    file = await bot.get_file(photo_id)
-    return config.URL_BASE + file.file_path
+    photo_manager.stash_photo(user_id, photo)
 
 
 async def get_prepared_photos(data: FSMContextProxy,
@@ -1790,10 +1783,8 @@ async def get_social_data_from_post(
 
     if post_type == str(types.ContentType.PHOTO):
         photo_id = message.photo[-1]['file_id']
-        photo_url = await get_temp_photo_url(photo_id)
-
         photo_path = await photo_manager.store_photo(message.chat.id,
-                                                     photo_url,
+                                                     message.photo[-1],
                                                      message.message_id)
 
         photo_ids.append(photo_id)
@@ -3723,10 +3714,9 @@ async def police_response_photo(message: types.Message, state: FSMContext):
         language = await get_ui_lang(data=data)
 
     photo_id = message.photo[-1]['file_id']
-    photo_url = await get_temp_photo_url(photo_id)
 
     photo_path = await photo_manager.store_photo(message.chat.id,
-                                                 photo_url,
+                                                 message.photo[-1],
                                                  message.message_id)
 
     text = locales.text(language, 'response_sended').format(config.CHANNEL)
@@ -4174,7 +4164,7 @@ async def create_global_objects():
     statistic = Statistic(bot_storage)
 
     global photo_manager
-    photo_manager = await PhotoManager.create(loop)
+    photo_manager = await PhotoManager.create(loop, bot)
 
 
 async def startup(dispatcher: Dispatcher):
