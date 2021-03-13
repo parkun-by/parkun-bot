@@ -7,15 +7,16 @@ import time
 from asyncio.events import AbstractEventLoop
 from contextlib import contextmanager
 from typing import Any, Awaitable, List, Union
-from aiogram.types.photo_size import PhotoSize
-from aiogram import Bot
 
 import aiohttp
+import pyimgbox
+from aiogram import Bot
+from aiogram.types.photo_size import PhotoSize
 
 import config
+from numberplates import recognize_numberplates
 from telegraph import Telegraph
 from user_storage import UserStorage
-from numberplates import recognize_numberplates
 
 logger = logging.getLogger(__name__)
 CURRENT = "current"
@@ -368,17 +369,19 @@ class PhotoManager:
             pattern=f'{str(appeal_id)}:*')
 
     async def _upload_photo(self, file_path: str) -> str:
-        file_id = await self._upload_file(file_path)
+        return await self._upload_photo_to_telegraph(file_path) or \
+            await self._upload_photo_to_imgbox(file_path)
 
-        if file_id:
-            full_path = 'https://telegra.ph' + file_id
+    async def _upload_photo_to_imgbox(self, file_path: str) -> str:
+        async with pyimgbox.Gallery(title="parkun_by_bot") as gallery:
+            submission = await gallery.upload(file_path)
+
+        if submission.get("success", False):
+            return submission.get("image_url", "")
         else:
-            # TODO upload photo to another services
-            full_path = ""
+            return ""
 
-        return full_path
-
-    async def _upload_file(self, file_path: str) -> str:
+    async def _upload_photo_to_telegraph(self, file_path: str) -> str:
         uploaded = False
         tries = 5
         file_id = ''
@@ -408,7 +411,10 @@ class PhotoManager:
                 uploaded = True
                 file_id = result[0]['src']
 
-        return file_id
+        if file_id:
+            return 'https://telegra.ph' + file_id
+        else:
+            return ""
 
     @contextmanager
     def tasks(self, storage: dict, default: Any, path: str, *paths) -> Any:
