@@ -4132,7 +4132,11 @@ async def ask_for_button_press(message: types.Message, state: FSMContext):
 
     language = await get_ui_lang(state)
     text = locales.text(language, 'buttons_only')
-    await bot.send_message(message.chat.id, text)
+
+    async with state.proxy() as data:
+        keyboard = await get_cancel_keyboard(data)
+
+    await bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=None)
