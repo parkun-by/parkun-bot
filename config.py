@@ -147,7 +147,7 @@ TPH_AUTHOR_URL = "author_url"
 TPH_AUTH_URL = "author_auth_url"
 
 # Pause before task execution
-DEFAULT_SCHEDULER_PAUSE = 1  # hours
+DEFAULT_SCHEDULER_PAUSE = 0.16  # hours (10 minutes)
 
 # text styles
 BOLD = 'bold'
