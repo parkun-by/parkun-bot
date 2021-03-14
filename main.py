@@ -11,9 +11,7 @@ from typing import Any, List, Optional, Tuple, Union
 from aiogram import Bot, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage2
 from aiogram.dispatcher import Dispatcher, FSMContext
-from aiogram.dispatcher.filters.state import State
 from aiogram.dispatcher.storage import FSMContextProxy
-from aiogram.types.inline_keyboard import InlineKeyboardMarkup
 from aiogram.types.photo_size import PhotoSize
 from aiogram.utils import executor
 from aiogram.utils.exceptions import BadRequest as AiogramBadRequest
@@ -26,18 +24,18 @@ import config
 import datetime_parser
 import territory
 import users
-from rabbit_amqp import Rabbit as AMQPRabbit
 from appeal_summary import AppealSummary
 from appeal_text import AppealText
 from bot_storage import BotStorage
-from rabbit_http import Rabbit as HTTPRabbit
 from imap_email import Email
 from locales import Locales
 from locator import Locator
 from mail_verifier import MailVerifier
 from photo_manager import PhotoManager
 from photoitem import PhotoItem
-from scheduler import Scheduler, CANCEL_ON_IDLE, RELOAD_BOUNDARY
+from rabbit_amqp import Rabbit as AMQPRabbit
+from rabbit_http import Rabbit as HTTPRabbit
+from scheduler import CANCEL_ON_IDLE, RELOAD_BOUNDARY, Scheduler
 from states import Form
 from states_stack import StatesStack
 from statistic import Statistic
@@ -157,7 +155,8 @@ async def maybe_return_to_state(expected_state: str,
         return
 
     language = await get_ui_lang(state)
-    text = locales.text(language, state_to_set)
+    text = locales.text(language, "cancel_on_idle")
+    text += "\n\n" + locales.text(language, state_to_set)
     await bot.send_message(user_id, text, disable_notification=True)
 
 
@@ -1937,12 +1936,20 @@ async def ask_for_police_response(state: FSMContext,
 
 
 async def schedule_auto_cancel(user_id: int, state: FSMContext):
+    await schedule_auto_back(user_id,
+                             str(await state.get_state()),
+                             str(Form.operational_mode.state))
+
+
+async def schedule_auto_back(user_id: int,
+                             current_state: str,
+                             state_to_back: str):
     task_to_cancel = {
         'user_id': user_id,
         'executor': CANCEL_ON_IDLE,
         'kvargs': {
-            'expected_state': await state.get_state(),
-            'state_to_set': Form.operational_mode.state,
+            'expected_state': current_state,
+            'state_to_set': state_to_back,
             'user_id': user_id,
         },
         'execute_time': datetime_parser.get_current_datetime_str(
@@ -3377,7 +3384,6 @@ async def write_feedback(message: types.Message, state: FSMContext):
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
     async with state.proxy() as data:
-        current_state = await state.get_state()
         language = await get_ui_lang(data=data)
         text = locales.text(language, Form.feedback.state)
         keyboard = await get_cancel_keyboard(data)
@@ -3386,13 +3392,18 @@ async def write_feedback(message: types.Message, state: FSMContext):
             'message_to_reply': get_value(data, 'message_to_reply'),
         }
 
+    current_state = await state.get_state()
+
     if current_state != Form.feedback.state:
         await states_stack.add(message.chat.id, data_to_save)
 
     user_id = message.chat.id
     await bot.send_message(user_id, text, reply_markup=keyboard)
     await Form.feedback.set()
-    await schedule_auto_cancel(user_id, state)
+
+    await schedule_auto_back(user_id,
+                             str(Form.feedback.state),
+                             str(current_state))
 
 
 @dp.message_handler(content_types=types.ContentTypes.ANY, state=Form.feedback)
