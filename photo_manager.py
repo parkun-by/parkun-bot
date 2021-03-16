@@ -6,7 +6,7 @@ import shutil
 import time
 from asyncio.events import AbstractEventLoop
 from contextlib import contextmanager
-from typing import Any, Awaitable, List, Union
+from typing import Any, Awaitable, List, Optional, Union
 
 import aiohttp
 import pyimgbox
@@ -397,11 +397,17 @@ class PhotoManager:
 
                 upload_url = 'https://telegra.ph/upload'
 
-                async with aiohttp.ClientSession() as http_session:
-                    async with http_session.post(upload_url, data=form) as r:
-                        result = await r.json()
+                try:
+                    async with aiohttp.ClientSession() as http_session:
+                        async with http_session.post(upload_url,
+                                                     data=form) as r:
+                            result = await r.json()
+                except Exception:
+                    logger.exception("Error while upload photo to telegraph")
+                    result = None
 
-            if isinstance(result, dict) and 'error' in result:
+            if (not result) \
+                    or (isinstance(result, dict) and 'error' in result):
                 if tries != 0:
                     await asyncio.sleep(1)
                     tries -= 1
@@ -409,7 +415,8 @@ class PhotoManager:
                     uploaded = True
             else:
                 uploaded = True
-                file_id = result[0]['src']
+                result: Optional[dict] = result[0]
+                file_id = result.get("src", "")
 
         if file_id:
             return 'https://telegra.ph' + file_id
