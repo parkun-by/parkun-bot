@@ -121,3 +121,5 @@ env_docker/parkun_bot/config/config.py
 
 # macos
 .DS_Store
+
+logs
