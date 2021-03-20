@@ -118,3 +118,6 @@ dmypy.json
 .vscode/
 .idea/
 env_docker/parkun_bot/config/config.py
+
+# macos
+.DS_Store
