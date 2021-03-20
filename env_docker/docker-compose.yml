@@ -3,6 +3,7 @@ version: '3.5'
 volumes:
   wiremock-data:
   rabbit-data:
+  redis-data:
 
 networks:
   proxynet:
@@ -18,7 +19,7 @@ services:
     ports:
       - 16379:6379
     volumes:
-      - /home/parkun/redis_data:/data
+      - redis-data:/data
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
     restart: always
     networks:
@@ -35,7 +36,7 @@ services:
       context: ./rabbitmq
       dockerfile: Dockerfile
     volumes:
-      - /home/parkun/rabbit_data:/var/lib/rabbitmq
+      - rabbit-data:/var/lib/rabbitmq
     restart: always
     hostname: parkun_rabbit
     healthcheck:
@@ -60,3 +61,14 @@ services:
       - FLASK_DEBUG=0
       - 'RUN=flask run --host=0.0.0.0 --port=80'
     command: flask run --host=0.0.0.0 --port=80
+
+  wiremock:
+    container_name: parkun_wiremock
+    image: rodolpheche/wiremock:2.25.0-alpine
+    networks:
+      - proxynet
+    ports:
+      - 18080:8080
+    volumes:
+      - wiremock-data:/home/wiremock
+      - ./wiremock/mappings:/home/wiremock/mappings

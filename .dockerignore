@@ -23,3 +23,6 @@
 **/secrets.dev.yaml
 **/values.dev.yaml
 README.md
+
+# macos
+.DS_Store

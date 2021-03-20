@@ -11,16 +11,10 @@ py_env:
 	)
 
 start_dev:
-	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-dev-env.yml up -d --build
+	docker-compose -f env_docker/docker-compose.yml up -d --build
 
 stop_dev:
-	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-dev-env.yml down
-
-start_prod:
-	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-bot.yml up -d --build
-
-stop_prod:
-	docker-compose -f env_docker/docker-compose-prod-env.yml -f env_docker/docker-compose-bot.yml down
+	docker-compose -f env_docker/docker-compose.yml down
 
 give_rights:
 	sudo chmod 777 /tmp/temp_files_parkun
