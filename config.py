@@ -162,3 +162,6 @@ POLICE_RESPONSE = 'police_response'
 # numberplates recognizer
 NUMBERPLATES_RECOGNIZER_ENABLED = True
 NUMBERPLATES_RECOGNIZER_URL = 'http://localhost:5001/recognize'
+
+# how many previos addresses should we save
+ADDRESS_AMOUNT_TO_SAVE = 5

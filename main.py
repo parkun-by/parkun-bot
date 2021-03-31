@@ -923,9 +923,7 @@ def save_entered_address(data: FSMContextProxy, address: str):
     else:  # move element to first position
         addresses.insert(0, addresses.pop(addresses.index(address)))
 
-    limit = 5
-
-    while len(addresses) > limit:
+    while len(addresses) > config.ADDRESS_AMOUNT_TO_SAVE:
         addresses.pop()
 
     data['previous_violation_addresses'] = addresses
@@ -2137,6 +2135,53 @@ def initial_asking_for_numberplate(existed_message_id: Optional[int]) -> bool:
     return not existed_message_id
 
 
+def get_previos_address_number(text: str) -> Optional[int]:
+    try:
+        number = int(text)
+    except ValueError:
+        return None
+
+    if number > 0 and number <= config.ADDRESS_AMOUNT_TO_SAVE:
+        return number
+
+    return None
+
+
+async def use_saved_address(address_index: int,
+                            message: types.Message,
+                            state: FSMContext):
+    async with state.proxy() as data:
+        addresses = get_value(data, 'previous_violation_addresses')
+
+        try:
+            previous_address = addresses[int(address_index)]
+        except KeyError:
+            logger.error('Ошибка при вводе предыдущего адреса' +
+                         f'{str(message.from_user.id)}.\n' +
+                         f'Адреса: {addresses}\n' +
+                         f'Индекс: {address_index}')
+
+            previous_address = message.text
+
+    logger.info(f'Выбрался адрес: {previous_address} - ' +
+                f'{str(message.from_user.id)}:' +
+                f'{message.from_user.username}')
+
+    await set_violation_address(message.chat.id, previous_address, state)
+
+    if maybe_no_city_in_address(previous_address):
+        logger.info(
+            f'Адрес без города: {previous_address} - ' +
+            f'{str(message.from_user.id)}:' +
+            f'{message.from_user.username}')
+
+        await ask_about_short_address(state, message.chat.id)
+    else:
+        await print_violation_address_info(state, message.chat.id)
+        language = await get_ui_lang(state)
+        await ask_for_violation_time(message.chat.id, language)
+
+
 async def ask_to_choose_numberplates(user_id: int,
                                      data: FSMContextProxy,
                                      numberplates: List[str],
@@ -3100,35 +3145,7 @@ async def use_saved_address_button(call, state: FSMContext):
 
         return
 
-    async with state.proxy() as data:
-        addresses = get_value(data, 'previous_violation_addresses')
-
-        try:
-            previous_address = addresses[int(address_index)]
-        except KeyError:
-            logger.error('Ошибка при вводе предыдущего адреса' +
-                         f'{str(call.message.from_user.id)}.\n' +
-                         f'Адреса: {addresses}\n' +
-                         f'Индекс: {address_index}')
-
-            previous_address = call.message.text
-
-    logger.info(f'Выбрался адрес: {previous_address} - ' +
-                f'{str(call.message.from_user.id)}:' +
-                f'{call.message.from_user.username}')
-
-    await set_violation_address(call.message.chat.id, previous_address, state)
-
-    if maybe_no_city_in_address(previous_address):
-        logger.info(
-            f'Адрес без города: {previous_address} - ' +
-            f'{str(call.message.from_user.id)}:' +
-            f'{call.message.from_user.username}')
-
-        await ask_about_short_address(state, call.message.chat.id)
-    else:
-        await print_violation_address_info(state, call.message.chat.id)
-        await ask_for_violation_time(call.message.chat.id, language)
+    await use_saved_address(address_index, call.message, state)
 
 
 @dp.callback_query_handler(state='*')
@@ -3983,6 +4000,10 @@ async def catch_violation_city(message: types.Message, state: FSMContext):
 async def catch_violation_location(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
+
+    if option := get_previos_address_number(message.text):
+        await use_saved_address(option, message, state)
+        return
 
     await set_violation_address(message.chat.id, message.text, state)
     language = await get_ui_lang(state)
