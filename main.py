@@ -1353,7 +1353,18 @@ async def show_private_info_summary(chat_id, state):
     await Form.operational_mode.set()
 
 
-async def ask_for_violation_address(chat_id, data):
+async def message_about_short_address(chat_id: int, data: FSMContextProxy):
+    language = await get_ui_lang(data=data)
+
+    text = locales.text(language, 'short_address') + '\n' +\
+        '\n' +\
+        locales.text(language,
+                     f'{Form.violation_address.state}_example')
+
+    await bot.send_message(chat_id, text, parse_mode='HTML')
+
+
+async def ask_for_violation_address(chat_id: int, data: FSMContextProxy):
     language = await get_ui_lang(data=data)
 
     text = locales.text(language, Form.violation_address.state) + '\n' +\
@@ -1605,7 +1616,7 @@ async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
         language = await get_ui_lang(data=data)
         user_city = get_value(data, 'sender_city')
 
-    question = locales.text(language, 'short_address_check')
+    question = locales.text(language, 'no_city_in_address')
 
     keyboard = types.InlineKeyboardMarkup(row_width=2)
 
@@ -1637,7 +1648,7 @@ async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
                            reply_markup=keyboard,
                            parse_mode='HTML')
 
-    await Form.short_address_check.set()
+    await Form.no_city_in_address.set()
 
 
 async def set_violation_address(chat_id: int,
@@ -2135,13 +2146,17 @@ def initial_asking_for_numberplate(existed_message_id: Optional[int]) -> bool:
     return not existed_message_id
 
 
+def address_too_short(address_line: str) -> bool:
+    return len(address_line) <= config.MIN_ADDRESS_LENGTH
+
+
 def get_previos_address_number(text: str) -> Optional[int]:
     try:
-        number = int(text)
+        number = int(text) - 1
     except ValueError:
         return None
 
-    if number > 0 and number <= config.ADDRESS_AMOUNT_TO_SAVE:
+    if number >= 0 and number < config.ADDRESS_AMOUNT_TO_SAVE:
         return number
 
     return None
@@ -2371,7 +2386,7 @@ async def show_appel_text_template(call, state: FSMContext):
 
 @dp.callback_query_handler(
     lambda call: call.data == '/user_city_as_violations',
-    state=Form.short_address_check)
+    state=Form.no_city_in_address)
 async def choose_users_city(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     logger.info('Нажал на кнопку своего города как города нарушения - '
@@ -2384,7 +2399,7 @@ async def choose_users_city(call, state: FSMContext):
 
 
 @dp.callback_query_handler(lambda call: call.data == '/confirm_button',
-                           state=Form.short_address_check)
+                           state=Form.no_city_in_address)
 async def address_is_full_click(call, state: FSMContext):
     await bot.answer_callback_query(call.id)
     logger.info('Подтвердил, что адрес с городом - ' +
@@ -2938,7 +2953,7 @@ async def select_numberplate(call, state: FSMContext):
                                   Form.violation_address,
                                   Form.sending_approvement,
                                   Form.recipient,
-                                  Form.short_address_check])
+                                  Form.no_city_in_address])
 async def cancel_violation_input(call, state: FSMContext):
     logger.info('Отмена, возврат в рабочий режим - ' +
                 f'{str(call.from_user.id)}:{call.from_user.username}')
@@ -3987,7 +4002,7 @@ async def catch_email_password(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
-                    state=Form.short_address_check)
+                    state=Form.no_city_in_address)
 async def catch_violation_city(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод города нарушения - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
@@ -3997,9 +4012,20 @@ async def catch_violation_city(message: types.Message, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT,
                     state=Form.violation_address)
-async def catch_violation_location(message: types.Message, state: FSMContext):
+async def catch_violation_address(message: types.Message, state: FSMContext):
     logger.info('Обрабатываем ввод адреса нарушения - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
+
+    if address_too_short(message.text):
+        logger.info(
+            'Слишком короткий адрес - ' +
+            f'{str(message.from_user.id)}:{message.from_user.username}')
+
+        async with state.proxy() as data:
+            await message_about_short_address(message.from_user.id, data)
+            await ask_for_violation_address(message.from_user.id, data)
+
+        return
 
     if option := get_previos_address_number(message.text):
         await use_saved_address(option, message, state)
@@ -4159,7 +4185,7 @@ async def reject_wrong_violation_photo_input(message: types.Message,
                            Form.sender_zipcode,
                            Form.entering_captcha,
                            Form.email_password,
-                           Form.short_address_check,
+                           Form.no_city_in_address,
                            Form.user_id_input])
 async def reject_non_text_input(message: types.Message, state: FSMContext):
     logger.info('Посылает не текст, а что-то другое - ' +

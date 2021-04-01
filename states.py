@@ -29,6 +29,6 @@ class Form(StatesGroup):
     email_verifying = State()
     entering_captcha = State()
     email_password = State()
-    short_address_check = State()
+    no_city_in_address = State()
     police_response = State()
     broadcasting = State()

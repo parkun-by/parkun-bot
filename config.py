@@ -165,3 +165,5 @@ NUMBERPLATES_RECOGNIZER_URL = 'http://localhost:5001/recognize'
 
 # how many previos addresses should we save
 ADDRESS_AMOUNT_TO_SAVE = 5
+
+MIN_ADDRESS_LENGTH = 10
