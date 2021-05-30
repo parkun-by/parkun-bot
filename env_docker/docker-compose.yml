@@ -1,4 +1,4 @@
-version: '3.5'
+version: "3.5"
 
 volumes:
   wiremock-data:
@@ -10,7 +10,7 @@ networks:
     name: parkun
 
 services:
-  redis:
+  parkun_redis:
     container_name: parkun_redis
     image: redis:5.0.7-alpine
     command:
@@ -25,7 +25,7 @@ services:
     networks:
       - proxynet
 
-  rabbit:
+  parkun_rabbit:
     container_name: parkun_rabbit
     networks:
       - proxynet
@@ -45,7 +45,7 @@ services:
       timeout: 10s
       retries: 5
 
-  numberplate:
+  parkun_numberplate:
     container_name: parkun_numberplate
     image: skaborik/numberplate_by
     networks:
@@ -59,10 +59,10 @@ services:
     environment:
       - FLASK_APP=main.py
       - FLASK_DEBUG=0
-      - 'RUN=flask run --host=0.0.0.0 --port=80'
+      - "RUN=flask run --host=0.0.0.0 --port=80"
     command: flask run --host=0.0.0.0 --port=80
 
-  wiremock:
+  parkun_wiremock:
     container_name: parkun_wiremock
     image: rodolpheche/wiremock:2.25.0-alpine
     networks:
