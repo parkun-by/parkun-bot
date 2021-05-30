@@ -1,5 +1,15 @@
+from os import getenv
+from os.path import join, dirname
+from dotenv import load_dotenv
+
+# Create .env file path.
+dotenv_path = join(dirname(__file__), ".env")
+
+# Load file from the path.
+load_dotenv(dotenv_path)
+
 # telegram bot token. Get it here https://t.me/BotFather
-API_TOKEN = 'PUT_TOKEN_HERE'
+API_TOKEN = getenv("API_TOKEN", "")
 URL_BASE = 'https://api.telegram.org/file/bot' + API_TOKEN + '/'
 
 # violation photos count upper bound in single appeal
@@ -74,41 +84,43 @@ OSM_REGIONS = {
 }
 
 # redis
-REDIS_HOST = 'localhost'
-REDIS_PORT = '16379'
-REDIS_PASSWORD = 'redis'
+REDIS_HOST = getenv("REDIS_HOST", "localhost")
+REDIS_PORT = getenv("REDIS_PORT", "16379")
+REDIS_PASSWORD = getenv("REDIS_PASSWORD", "redis")
 
 # bot owner's telegram id to receive feedback
-ADMIN_ID = 00000000
+ADMIN_ID = int(getenv("ADMIN_ID", "00000000"))
 
 # yandex maps
-YANDEX_MAPS_API_KEY = 'UNNECESSARY_FOR_DEV'
-BASE_YANDEX_MAPS_URL = 'http://localhost:18080/yandex_maps/?'
-ADDRESS_FAIL = 'no_address'
+YANDEX_MAPS_API_KEY = getenv("YANDEX_MAPS_API_KEY", "UNNECESSARY_FOR_DEV")
+
+BASE_YANDEX_MAPS_URL = getenv("BASE_YANDEX_MAPS_URL",
+                              "http://localhost:18080/yandex_maps/?")
 
 # to post into channel bot needs to be admin there
-CHANNEL = '@channel_name'
-TRASH_CHANNEL = '@channel_name'
+CHANNEL = getenv("CHANNEL", "@channel_name")
+TRASH_CHANNEL = getenv("TRASH_CHANNEL", "@channel_name")
 RESPONSE_HASHTAG = '#ответГАИ'
 RESPONSE_EXAMPLE = 'https://t.me/parkun/24390'
 
-# email verifier url
-MAIL_VERIFIER_URL = 'http://localhost:18080/validate'  # response 111
+# email verifier url (default response 111)
+MAIL_VERIFIER_URL = getenv("MAIL_VERIFIER_URL",
+                           "http://localhost:18080/validate")
 VERIFYING_FAIL = '42'
 
 # Twitter
-TWI_URL = 'twitter.com/SOME_TWITTER_ACCOUNT'
+TWI_URL = getenv("TWI_URL", "twitter.com/SOME_TWITTER_ACCOUNT")
 
 # VK
-VK_URL = 'vk.com/SOME_VK_ACCOUNT'
+VK_URL = getenv("VK_URL", "vk.com/SOME_VK_ACCOUNT")
 
 # RabbitMQ
-RABBIT_HOST = 'localhost'
-RABBIT_HTTP_PORT = '15672'
-RABBIT_AMQP_PORT = '5672'
+RABBIT_HOST = getenv("RABBIT_HOST", "localhost")
+RABBIT_HTTP_PORT = getenv("RABBIT_HTTP_PORT", "15672")
+RABBIT_AMQP_PORT = getenv("RABBIT_AMQP_PORT", "5672")
 
-RABBIT_LOGIN = 'parkun_bot'
-RABBIT_PASSWORD = 'parkun_bot'
+RABBIT_LOGIN = getenv("RABBIT_LOGIN", "parkun_bot")
+RABBIT_PASSWORD = getenv("RABBIT_PASSWORD", "parkun_bot")
 
 RABBIT_HTTP_ADDRESS = \
     f'http://{RABBIT_LOGIN}:{RABBIT_PASSWORD}@{RABBIT_HOST}:{RABBIT_HTTP_PORT}'
@@ -138,16 +150,14 @@ OK = 'ok'
 BAD_EMAIL = 'bad_email'
 
 # Telegra.ph
-TPH_ACCESS_TOKEN = "put_token_here"
+TPH_ACCESS_TOKEN = getenv("TPH_ACCESS_TOKEN", "some_token")
+TPH_SHORT_NAME = getenv("TPH_SHORT_NAME", "author_nickname")
+TPH_AUTHOR_NAME = getenv("TPH_AUTHOR_NAME", "author_name")
+TPH_AUTHOR_URL = getenv("TPH_AUTHOR_URL", "author_url")
+TPH_AUTH_URL = getenv("TPH_AUTH_URL", "author_auth_url")
 
-TPH_SHORT_NAME = "author_nickname"
-TPH_AUTHOR_NAME = "author_name"
-TPH_AUTHOR_URL = "author_url"
-
-TPH_AUTH_URL = "author_auth_url"
-
-# Pause before task execution
-DEFAULT_SCHEDULER_PAUSE = 0.16  # hours (10 minutes)
+# Pause before task execution (in hours, 10 min default)
+DEFAULT_SCHEDULER_PAUSE = float(getenv("DEFAULT_SCHEDULER_PAUSE", "0.16"))
 
 # text styles
 BOLD = 'bold'
@@ -161,7 +171,9 @@ POLICE_RESPONSE = 'police_response'
 
 # numberplates recognizer
 NUMBERPLATES_RECOGNIZER_ENABLED = True
-NUMBERPLATES_RECOGNIZER_URL = 'http://localhost:5001/recognize'
+
+NUMBERPLATES_RECOGNIZER_URL = getenv("NUMBERPLATES_RECOGNIZER_URL",
+                                     "http://localhost:5001/recognize")
 
 # how many previos addresses should we save
 ADDRESS_AMOUNT_TO_SAVE = 5
