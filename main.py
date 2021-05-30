@@ -1486,7 +1486,7 @@ async def print_violation_address_info(state: FSMContext,
 async def save_violation_address(address: str,
                                  coordinates: Optional[List[float]],
                                  data: FSMContextProxy):
-    address = format_address_input(address)
+    address = format_input(address)
     data['violation_address'] = address
     data['violation_location'] = coordinates
 
@@ -1494,8 +1494,8 @@ async def save_violation_address(address: str,
     save_entered_address(data, address)
 
 
-def format_address_input(raw_address: str) -> str:
-    parts = raw_address.split("\n")
+def format_input(raw_input: str) -> str:
+    parts = raw_input.split("\n")
 
     parts = map(
         lambda part: part.strip(" ,;"),
@@ -1594,13 +1594,14 @@ def get_channel_post_url_by_id(post_id: int) -> str:
 
 
 def prepare_registration_number(number: str):
-    """replace all cyrillyc to latin"""
+    number = format_input(number)
 
     kyrillic = 'АВСЕНКМОРТХУІ'
     latin = 'ABCEHKMOPTXYI'
 
     up_number = number.upper().strip()
 
+    # replace all cyrillyc to latin
     for num, symbol in enumerate(kyrillic):
         up_number = up_number.replace(symbol, latin[num])
 
