@@ -3544,7 +3544,11 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
         text = locales.text(language, 'reply_verification') + '\n' +\
             locales.text(language, 'press_feedback')
 
-    await bot.send_message(message.chat.id, text, parse_mode='HTML')
+    await bot.send_message(message.chat.id,
+                           text,
+                           parse_mode='HTML',
+                           disable_web_page_preview=True)
+    
     await Form.operational_mode.set()
 
     async with state.proxy() as data:
