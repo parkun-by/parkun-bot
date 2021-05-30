@@ -1495,7 +1495,14 @@ async def save_violation_address(address: str,
 
 
 def format_address_input(raw_address: str) -> str:
-    return raw_address.replace("\n", ", ")
+    parts = raw_address.split("\n")
+
+    parts = map(
+        lambda part: part.strip(" ,;"),
+        parts
+    )
+
+    return ", ".join(parts)
 
 
 async def ask_for_violation_time(user_id: int, language: str):
