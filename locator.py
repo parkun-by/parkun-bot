@@ -11,6 +11,8 @@ import datetime_parser
 
 logger = logging.getLogger(__name__)
 
+ADDRESS_FAIL = 'no_address'
+
 
 class Locator:
     def __init__(self, loop: AbstractEventLoop):
@@ -180,7 +182,7 @@ class Locator:
                     address = address_bottom['name'] + ', ' +\
                         address_bottom['description']
                 except IndexError:
-                    address = config.ADDRESS_FAIL
+                    address = ADDRESS_FAIL
 
                 return address
 

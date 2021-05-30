@@ -30,7 +30,7 @@ from appeal_text import AppealText
 from bot_storage import BotStorage
 from imap_email import Email
 from locales import Locales
-from locator import Locator
+from locator import ADDRESS_FAIL, Locator
 from mail_verifier import MailVerifier
 from photo_manager import PhotoManager
 from photoitem import PhotoItem
@@ -4078,7 +4078,7 @@ async def catch_gps_violation_location(message: types.Message,
         address = await locator.get_address(coordinates,
                                             get_value(data, 'letter_lang'))
 
-        if address == config.ADDRESS_FAIL:
+        if address == ADDRESS_FAIL:
             address = locales.text(language, 'no_address_detected')
 
         region = await locator.get_region(coordinates)
