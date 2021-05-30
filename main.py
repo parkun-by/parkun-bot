@@ -2383,6 +2383,9 @@ async def show_appel_text_template(call, state: FSMContext):
                                            'sender_patronymic',
                                            placeholder=empty_input),
 
+            "letter_lang": get_value(data,
+                                     "letter_lang",
+                                     placeholder=config.BY)
         }
 
         fake_appeal_id = 12345
