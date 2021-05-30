@@ -1486,12 +1486,16 @@ async def print_violation_address_info(state: FSMContext,
 async def save_violation_address(address: str,
                                  coordinates: Optional[List[float]],
                                  data: FSMContextProxy):
+    address = format_address_input(address)
     data['violation_address'] = address
     data['violation_location'] = coordinates
 
-    # в этом месте сохраним адрес нарушения для использования в
-    # следующем обращении
+    # saving for "remembering previous input" feature
     save_entered_address(data, address)
+
+
+def format_address_input(raw_address: str) -> str:
+    return raw_address.replace("\n", ", ")
 
 
 async def ask_for_violation_time(user_id: int, language: str):
@@ -1651,8 +1655,7 @@ async def ask_about_short_address(state: FSMContext, chat_id: int) -> None:
     await Form.no_city_in_address.set()
 
 
-async def set_violation_address(chat_id: int,
-                                address: str,
+async def set_violation_address(address: str,
                                 state: FSMContext) -> None:
     coordinates = await locator.get_coordinates(address)
     recipient = await locator.get_region(coordinates)
@@ -2182,7 +2185,7 @@ async def use_saved_address(address_index: int,
                 f'{str(message.from_user.id)}:' +
                 f'{message.from_user.username}')
 
-    await set_violation_address(message.chat.id, previous_address, state)
+    await set_violation_address(previous_address, state)
 
     if maybe_no_city_in_address(previous_address):
         logger.info(
@@ -2300,7 +2303,7 @@ async def set_violation_city(state: FSMContext, user_id: int, city: str):
 
         language = await get_ui_lang(data=data)
 
-    await set_violation_address(user_id, violation_address, state)
+    await set_violation_address(violation_address, state)
     await print_violation_address_info(state, user_id)
     await ask_for_violation_time(user_id, language)
 
@@ -3548,7 +3551,7 @@ async def catch_secret_code(message: types.Message, state: FSMContext):
                            text,
                            parse_mode='HTML',
                            disable_web_page_preview=True)
-    
+
     await Form.operational_mode.set()
 
     async with state.proxy() as data:
@@ -4031,11 +4034,12 @@ async def catch_violation_address(message: types.Message, state: FSMContext):
 
         return
 
+    # user entered number instead of pressing button
     if option := get_previos_address_number(message.text):
         await use_saved_address(option, message, state)
         return
 
-    await set_violation_address(message.chat.id, message.text, state)
+    await set_violation_address(message.text, state)
     language = await get_ui_lang(state)
 
     if maybe_no_city_in_address(message.text):
