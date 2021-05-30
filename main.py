@@ -574,7 +574,7 @@ async def ask_to_enter_captcha(user_id: int,
                            reply_markup=keyboard,
                            reply_to_message_id=appeal_id)
 
-    await state.set_state(Form.entering_captcha)
+    await state.set_state(Form.entering_captcha.state)
 
 
 async def send_appeal(user_id: int, appeal_id: int) -> None:
