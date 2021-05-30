@@ -1,4 +1,4 @@
-FROM python:3.8.6-buster
+FROM python:3.9.5-buster
 
 WORKDIR /usr/src/app
 
