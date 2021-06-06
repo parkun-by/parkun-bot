@@ -8,4 +8,4 @@ RUN pip install --upgrade pip && \
 
 COPY . .
 
-CMD [ "./env_docker/parkun_bot/entrypoint.sh" ]
+CMD ["python", "./main.py"]

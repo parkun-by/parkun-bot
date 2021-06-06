@@ -1,0 +1,20 @@
+version: "3.5"
+
+networks:
+  parkun:
+
+services:
+  parkun_bot:
+    container_name: parkun_bot
+    networks:
+      - parkun
+    # image: skaborik/parkun_bot:3.2.2
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - ./.env
+    volumes:
+      - ${HOME_FOLDER}/logs:/usr/src/app/logs
+      - /tmp/temp_files_parkun:/tmp/temp_files_parkun
