@@ -30,7 +30,7 @@ from appeal_text import AppealText
 from bot_storage import BotStorage
 from imap_email import Email
 from locales import Locales
-from locator import ADDRESS_FAIL, Locator
+from locator import ADDRESS_FAIL, Locator, coordinates
 from mail_verifier import MailVerifier
 from photo_manager import PhotoManager
 from photoitem import PhotoItem
@@ -1484,7 +1484,7 @@ async def print_violation_address_info(state: FSMContext,
 
 
 async def save_violation_address(address: str,
-                                 coordinates: Optional[List[float]],
+                                 coordinates: Optional[coordinates],
                                  data: FSMContextProxy):
     address = format_input(address)
     data['violation_address'] = address
@@ -4071,7 +4071,7 @@ async def catch_gps_violation_location(message: types.Message,
     logger.info('Обрабатываем ввод локации адреса нарушения - ' +
                 f'{str(message.from_user.id)}:{message.from_user.username}')
 
-    coordinates = [message.location.longitude, message.location.latitude]
+    coordinates = (message.location.longitude, message.location.latitude)
 
     async with state.proxy() as data:
         language = await get_ui_lang(data=data)

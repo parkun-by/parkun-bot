@@ -1,7 +1,9 @@
-from typing import Iterator, Union
-import aioredis
-import config
 import json
+from typing import AsyncGenerator
+
+import aioredis
+
+import config
 
 
 async def verified():
@@ -26,7 +28,7 @@ async def verified():
     redis.close()
 
 
-async def every_id() -> Iterator[int]:
+async def every_id() -> AsyncGenerator[int, int]:
     redis = await aioredis.create_redis(
         f'redis://{config.REDIS_HOST}:{config.REDIS_PORT}',
         password=config.REDIS_PASSWORD)
@@ -46,7 +48,7 @@ async def every_id() -> Iterator[int]:
     redis.close()
 
 
-async def every() -> Iterator[dict]:
+async def every() -> AsyncGenerator[dict, dict]:
     redis = await aioredis.create_redis(
         f'redis://{config.REDIS_HOST}:{config.REDIS_PORT}',
         password=config.REDIS_PASSWORD)

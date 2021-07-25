@@ -1,17 +1,21 @@
-from asyncio.events import AbstractEventLoop
 import asyncio
-import aiohttp
-import config
 import json
-import territory
 import logging
-from scheduler import Scheduler, RELOAD_BOUNDARY
-import datetime_parser
+from asyncio.events import AbstractEventLoop
+from typing import Generator, Optional
 
+import aiohttp
+
+import config
+import datetime_parser
+import territory
+from scheduler import RELOAD_BOUNDARY, Scheduler
 
 logger = logging.getLogger(__name__)
 
 ADDRESS_FAIL = 'no_address'
+
+coordinates = tuple[float, float]
 
 
 class Locator:
@@ -74,7 +78,7 @@ class Locator:
             logger.info(f"Загружены границы региона {region}")
             self._boundaries[region] = boundary
 
-    async def download_boundary_later(self, region: str):
+    async def download_boundary_later(self, region: str) -> None:
         task = {
             'user_id': self.bot_id,
             'executor': RELOAD_BOUNDARY,
@@ -87,7 +91,7 @@ class Locator:
 
         await self.scheduler.add_task(task)
 
-    async def download_boundaries(self):
+    async def download_boundaries(self) -> None:
         tasks = []
 
         for region in config.OSM_REGIONS:
@@ -97,7 +101,9 @@ class Locator:
 
         asyncio.gather(*tasks)
 
-    def __point_is_in_polygon(self, boundary, longitude, latitude):
+    def __point_is_in_polygon(self, boundary: list[list],
+                              longitude: float,
+                              latitude: float) -> bool:
         overlap = False
         vertices_amount = len(boundary)
         j = vertices_amount - 1
@@ -115,7 +121,7 @@ class Locator:
 
         return overlap
 
-    def __areas_in_region(self, boundaries):
+    def __areas_in_region(self, boundaries: list[list]) -> Generator:
         """Если регион разбит на части, то будем возвращать каждую"""
         try:
             if isinstance(boundaries[0][0], list):
@@ -129,8 +135,10 @@ class Locator:
         except IndexError:
             yield []
 
-    async def get_region(self, coordinates, region=None):
-        if not isinstance(coordinates, list):
+    async def get_region(self,
+                         coordinates: Optional[coordinates],
+                         region: str = None) -> Optional[str]:
+        if not isinstance(coordinates, tuple):
             return None
 
         for region in territory.regions(region):
@@ -148,8 +156,10 @@ class Locator:
                     else:
                         return region
 
-    async def get_address(self, coordinates, language=config.RU):
-        coordinates = (str(coordinates[0]) + ', ' + str(coordinates[1]))
+    async def get_address(self,
+                          coordinates: coordinates,
+                          language=config.RU) -> Optional[str]:
+        str_coordinates = f"{str(coordinates[0])}, {str(coordinates[1])}"
 
         if language == config.RU:
             lang = 'ru_RU'
@@ -159,7 +169,7 @@ class Locator:
             lang = 'ru_RU'
 
         params = (
-            ('geocode', coordinates),
+            ('geocode', str_coordinates),
             ('kind', 'house'),
             ('format', 'json'),
             ('apikey', config.YANDEX_MAPS_API_KEY),
@@ -186,7 +196,7 @@ class Locator:
 
                 return address
 
-    async def get_coordinates(self, address):
+    async def get_coordinates(self, address: str) -> Optional[coordinates]:
         params = (
             ('apikey', config.YANDEX_MAPS_API_KEY),
             ('geocode', address),
@@ -210,8 +220,8 @@ class Locator:
                     str_coordinates = address_bottom['Point']['pos']
                     str_coordinates = str_coordinates.split(' ')
 
-                    coordinates = [float(str_coordinates[0]),
-                                   float(str_coordinates[1])]
+                    coordinates = (float(str_coordinates[0]),
+                                   float(str_coordinates[1]))
                 except IndexError:
                     return None
 

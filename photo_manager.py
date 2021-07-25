@@ -62,7 +62,7 @@ class PhotoManager:
 
         with self.tasks(self.task_storage,
                         list(),
-                        user_id,
+                        str(user_id),
                         CURRENT,
                         'store_photo_tasks') as tasks:
             storing_task = asyncio.create_task(
@@ -73,7 +73,7 @@ class PhotoManager:
 
         with self.tasks(self.task_storage,
                         list(),
-                        user_id,
+                        str(user_id),
                         CURRENT,
                         'numberplate_tasks') as tasks:
             numberplate_task = asyncio.create_task(
@@ -84,7 +84,7 @@ class PhotoManager:
 
         with self.tasks(self.task_storage,
                         list(),
-                        user_id,
+                        str(user_id),
                         CURRENT,
                         'upload_to_cloud_tasks') as tasks:
             upload_to_cloud_task = asyncio.create_task(
@@ -144,7 +144,7 @@ class PhotoManager:
 
         with self.tasks(self.task_storage,
                         list(),
-                        user_id, CURRENT, 'page_tasks') as page_tasks:
+                        str(user_id), CURRENT, 'page_tasks') as page_tasks:
             storing_task = asyncio.create_task(
                 self._create_page(user_id, title)
             )
@@ -226,7 +226,7 @@ class PhotoManager:
                                     value=page_url)
 
         # rename key in task storage
-        with self.tasks(self.task_storage, dict(), user_id) as user_stash:
+        with self.tasks(self.task_storage, dict(), str(user_id)) as user_stash:
             appeal_stash: dict = user_stash.get(CURRENT, {})
             user_stash[appeal_id] = appeal_stash
             user_stash.pop(CURRENT, None)
@@ -263,7 +263,7 @@ class PhotoManager:
             appeal_id: Union[int, str] = CURRENT) -> bool:
         with self.tasks(self.task_storage,
                         list(),
-                        user_id,
+                        str(user_id),
                         appeal_id,
                         'numberplate_tasks') as tasks:
             for task in tasks:
@@ -278,7 +278,7 @@ class PhotoManager:
             appeal_id: Union[int, str] = CURRENT):
         with self.tasks(self.task_storage,
                         list(),
-                        user_id,
+                        str(user_id),
                         appeal_id,
                         'numberplate_tasks') as tasks:
             for task in tasks:
@@ -302,7 +302,7 @@ class PhotoManager:
                              tasks_group_name: str):
         with self.tasks(self.task_storage,
                         list(),
-                        user_id, appeal_id, tasks_group_name) as tasks:
+                        str(user_id), appeal_id, tasks_group_name) as tasks:
             for task in tasks:
                 if not task.done():
                     await task
@@ -315,7 +315,7 @@ class PhotoManager:
                             tasks_group_name: str):
         with self.tasks(self.task_storage,
                         list(),
-                        user_id, appeal_id, tasks_group_name) as tasks:
+                        str(user_id), appeal_id, tasks_group_name) as tasks:
             for task in tasks:
                 if not task.cancelled():
                     task.cancel()
@@ -416,7 +416,9 @@ class PhotoManager:
             else:
                 uploaded = True
                 result: Optional[dict] = result[0]
-                file_id = result.get("src", "")
+
+                if result:
+                    file_id = result.get("src", "")
 
         if file_id:
             return 'https://telegra.ph' + file_id
