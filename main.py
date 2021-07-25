@@ -30,7 +30,7 @@ from appeal_text import AppealText
 from bot_storage import BotStorage
 from imap_email import Email
 from locales import Locales
-from locator import ADDRESS_FAIL, Locator, coordinates
+from locator import ADDRESS_FAIL, Locator, Coordinates
 from mail_verifier import MailVerifier
 from photo_manager import PhotoManager
 from photoitem import PhotoItem
@@ -477,7 +477,7 @@ async def share_post(user_id: int,
                      body_formatting: list = [],
                      photo_paths: list = [],
                      photo_ids: list = [],
-                     coordinates: list = [None, None]):
+                     coordinates: tuple = None):
     title = {
         'text': title_text,
         'formatting': title_formatting,
@@ -1484,7 +1484,7 @@ async def print_violation_address_info(state: FSMContext,
 
 
 async def save_violation_address(address: str,
-                                 coordinates: Optional[coordinates],
+                                 coordinates: Optional[Coordinates],
                                  data: FSMContextProxy):
     address = format_input(address)
     data['violation_address'] = address

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 ADDRESS_FAIL = 'no_address'
 
-coordinates = tuple[float, float]
+Coordinates = tuple[float, float]
 
 
 class Locator:
@@ -136,7 +136,7 @@ class Locator:
             yield []
 
     async def get_region(self,
-                         coordinates: Optional[coordinates],
+                         coordinates: Optional[Coordinates],
                          region: str = None) -> Optional[str]:
         if not isinstance(coordinates, tuple):
             return None
@@ -157,7 +157,7 @@ class Locator:
                         return region
 
     async def get_address(self,
-                          coordinates: coordinates,
+                          coordinates: Coordinates,
                           language=config.RU) -> Optional[str]:
         str_coordinates = f"{str(coordinates[0])}, {str(coordinates[1])}"
 
@@ -196,7 +196,7 @@ class Locator:
 
                 return address
 
-    async def get_coordinates(self, address: str) -> Optional[coordinates]:
+    async def get_coordinates(self, address: str) -> Optional[Coordinates]:
         params = (
             ('apikey', config.YANDEX_MAPS_API_KEY),
             ('geocode', address),
