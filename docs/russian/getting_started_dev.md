@@ -63,7 +63,7 @@ https://api.telegra.ph/createAccount?short_name=Sandbox&author_name=Anonymous
 Разворачиваем питонье окружение магической [командой](../../Makefile). Она создаст окружение и установит зависимости:
 
 ```sh
-make py_env
+make venv
 ```
 
 Активируем питонье окружение:
@@ -109,7 +109,7 @@ git checkout -b my-new-feature
 Разворачиваем питонье окружение магической командой. Она создаст окружение и установит зависимости:
 
 ```sh
-make py_env
+make venv
 ```
 
 Активируем питонье окружение:
