@@ -10,10 +10,10 @@ venv:
 		pip install -r requirements.txt; \
 	)
 
-start_dev:
+start_env:
 	docker-compose -f env_docker/docker-compose.yml up -d --build
 
-stop_dev:
+stop_env:
 	docker-compose -f env_docker/docker-compose.yml down
 
 give_rights:
