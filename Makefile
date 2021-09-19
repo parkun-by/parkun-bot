@@ -18,3 +18,13 @@ stop_env:
 
 give_rights:
 	sudo chmod 777 /tmp/temp_files_parkun
+
+NAME   := skaborik/parkun_bot
+TAG    := $$(git describe --tags --abbrev=0)
+IMG    := ${NAME}:${TAG}
+
+build:
+	@docker build -t ${IMG} .
+
+push:
+	@docker push ${IMG}
